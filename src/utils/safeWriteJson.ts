@@ -33,7 +33,7 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 				minTimeout: 100, // Minimum time to wait before the first retry (in ms)
 				maxTimeout: 1000, // Maximum time to wait for any single retry (in ms)
 			},
-			onCompromised: (err) => {
+			onCompromised: (err: any) => {
 				console.error(`Lock at ${absoluteFilePath} was compromised:`, err)
 				throw err
 			},

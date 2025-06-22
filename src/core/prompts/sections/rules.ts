@@ -1,5 +1,5 @@
 import { DiffStrategy } from "../../../shared/tools"
-import { CodeIndexManager } from "../../../services/code-index/manager"
+import { CodeIndexManager } from "../../../services/code-index/manager-riddler"
 
 function getEditingInstructions(diffStrategy?: DiffStrategy): string {
 	const instructions: string[] = []

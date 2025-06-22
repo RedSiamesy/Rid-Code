@@ -2,6 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { parseMentions } from "./index"
 import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
+
 import { Task } from "../task/Task"
 
 /**

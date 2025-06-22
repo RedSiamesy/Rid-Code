@@ -134,6 +134,7 @@ export const StyledPre = styled.div<{
 		width: 100%;
 		box-sizing: border-box;
 	}
+
 	pre,
 	code {
 		/* Undefined wordwrap defaults to true (pre-wrap) behavior. */
@@ -152,7 +153,6 @@ export const StyledPre = styled.div<{
 		
 		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'code-chinese', 'Courier New', monospace, var(--vscode-font-family);
 	}
-
 
 	pre > code {
 		.hljs-deletion {

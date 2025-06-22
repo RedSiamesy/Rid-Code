@@ -1,5 +1,5 @@
 import { EXPERIMENT_IDS, experiments } from "../../../shared/experiments"
-import { CodeIndexManager } from "../../../services/code-index/manager"
+import { CodeIndexManager } from "../../../services/code-index/manager-riddler"
 
 export function getObjectiveSection(
 	codeIndexManager?: CodeIndexManager,

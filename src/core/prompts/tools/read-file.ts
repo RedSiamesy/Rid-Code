@@ -1,7 +1,7 @@
 import { ToolArgs } from "./types"
 
 export function getReadFileDescription(args: ToolArgs): string {
-	const maxConcurrentReads = args.settings?.maxConcurrentFileReads ?? 15
+	const maxConcurrentReads = args.settings?.maxConcurrentFileReads ?? 5
 	const isMultipleReadsEnabled = maxConcurrentReads > 1
 
 	return `## read_file
@@ -32,7 +32,7 @@ Examples:
 <args>
   <file>
     <path>src/app.ts</path>
-    ${args.partialReadsEnabled ? `<line_range>1-100</line_range>` : ""}
+    ${args.partialReadsEnabled ? `<line_range>1-1000</line_range>` : ""}
   </file>
 </args>
 </read_file>

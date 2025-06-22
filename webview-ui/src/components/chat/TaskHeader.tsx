@@ -19,7 +19,6 @@ import Thumbnails from "../common/Thumbnails"
 import { TaskActions } from "./TaskActions"
 import { ContextWindowProgress } from "./ContextWindowProgress"
 import { Mention } from "./Mention"
-import { Markdown } from "./Markdown"
 
 export interface TaskHeaderProps {
 	task: ClineMessage
@@ -137,7 +136,6 @@ const TaskHeader = ({
 									WebkitBoxOrient: "vertical",
 								}}>
 								<Mention text={task.text} />
-								{/* <Markdown markdown={task.text} /> */}
 							</div>
 						</div>
 						{task.images && task.images.length > 0 && <Thumbnails images={task.images} />}

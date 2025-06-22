@@ -89,16 +89,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				)
 			case ContextMenuOptionType.Problems:
 				return <span>Problems</span>
-			case ContextMenuOptionType.Codebase:
-				return <span>Codebase</span>
-			case ContextMenuOptionType.Summary:
-				return <span>Summary</span>
 			case ContextMenuOptionType.Terminal:
 				return <span>Terminal</span>
 			case ContextMenuOptionType.URL:
 				return <span>Paste URL to fetch contents</span>
 			case ContextMenuOptionType.NoResults:
 				return <span>No results found</span>
+			case ContextMenuOptionType.Codebase:
+				return <span>Codebase</span>
+			case ContextMenuOptionType.Summary:
+				return <span>Summary</span>
 			case ContextMenuOptionType.Git:
 				if (option.value) {
 					return (

@@ -64,7 +64,7 @@ export async function askFollowupQuestionTool(
 				await cline.say("user_feedback", text ?? "", images)
 				pushToolResult(formatResponse.toolResult(`<feedback>\n${text}\n</feedback>`, images))
 			}
-
+			
 			return
 		}
 	} catch (error) {
