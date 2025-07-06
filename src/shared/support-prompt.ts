@@ -132,7 +132,7 @@ Please provide:
 3. Expected output and behavior\n`,
 	},
 	NEW_TASK: {
-		template: `\${userInput}`,
+		template: `\${userInput}\n`,
 	},
 } as const
 

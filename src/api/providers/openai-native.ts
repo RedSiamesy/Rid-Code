@@ -20,7 +20,7 @@ import { getModelParams } from "../transform/model-params"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
-import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools"
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-riddler"
 
 export type OpenAiNativeModel = ReturnType<OpenAiNativeHandler["getModel"]>
 

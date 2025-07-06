@@ -13,7 +13,7 @@ import { SetCachedStateField, SetExperimentEnabled } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { ExperimentalFeature } from "./ExperimentalFeature"
-import { CodeIndexSettings } from "./CodeIndexSettings"
+import { CodeIndexSettings } from "./CodeIndexSettings-riddler"
 
 type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	experiments: Experiments

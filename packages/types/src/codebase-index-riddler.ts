@@ -10,6 +10,17 @@ export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexEmbedderProvider: z.enum(["openai", "ollama", "openai-compatible"]).optional(),
 	codebaseIndexEmbedderBaseUrl: z.string().optional(),
 	codebaseIndexEmbedderModelId: z.string().optional(),
+
+	embeddingBaseUrl: z.string().optional(),
+	embeddingModelID: z.string().optional(),
+	enhancementBaseUrl: z.string().optional(),
+	enhancementModelID: z.string().optional(),
+	rerankBaseUrl: z.string().optional(),
+	rerankModelID: z.string().optional(),
+	
+	ragPath: z.string().optional(),
+	llmFilter: z.boolean().optional(),
+	codeBaseLogging: z.boolean().optional(),
 })
 
 export type CodebaseIndexConfig = z.infer<typeof codebaseIndexConfigSchema>
@@ -36,12 +47,10 @@ export const codebaseIndexProviderSchema = z.object({
 	codebaseIndexOpenAiCompatibleBaseUrl: z.string().optional(),
 	codebaseIndexOpenAiCompatibleApiKey: z.string().optional(),
 	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
-	enhancementBaseUrl: z.string().optional(),
-	enhancementApiKey: z.string().optional(),
-	enhancementModelID: z.string().optional(),
-	rerankBaseUrl: z.string().optional(),
+
+	embeddingApiKey: z.string().optional(),
 	rerankApiKey: z.string().optional(),
-	rerankModelID: z.string().optional(),
+	enhancementApiKey: z.string().optional(),
 })
 
 export type CodebaseIndexProvider = z.infer<typeof codebaseIndexProviderSchema>

@@ -63,7 +63,7 @@ export function getToolsForMode(groups: readonly GroupEntry[]): string[] {
 export const modes: readonly ModeConfig[] = [
 	{
 		slug: "code",
-		name: "Code",
+		name: "💻 Code",
 		roleDefinition:
 			"You are Roo, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.",
 		whenToUse:
@@ -72,7 +72,7 @@ export const modes: readonly ModeConfig[] = [
 	},
 	{
 		slug: "architect",
-		name: "Architect",
+		name: "🏗️ Architect",
 		roleDefinition:
 			"You are Roo, an experienced technical leader who is inquisitive and an excellent planner. Your goal is to gather information and get context to create a detailed plan for accomplishing the user's task, which the user will review and approve before they switch into another mode to implement the solution.",
 		whenToUse:
@@ -83,7 +83,7 @@ export const modes: readonly ModeConfig[] = [
 	},
 	{
 		slug: "ask",
-		name: "Ask",
+		name: "❓ Ask",
 		roleDefinition:
 			"You are Roo, a knowledgeable technical assistant focused on answering questions and providing information about software development, technology, and related topics.",
 		whenToUse:
@@ -94,7 +94,7 @@ export const modes: readonly ModeConfig[] = [
 	},
 	{
 		slug: "debug",
-		name: "Debug",
+		name: "🪲 Debug",
 		roleDefinition:
 			"You are Roo, an expert software debugger specializing in systematic problem diagnosis and resolution.",
 		whenToUse:
@@ -105,7 +105,7 @@ export const modes: readonly ModeConfig[] = [
 	},
 	{
 		slug: "orchestrator",
-		name: "Orchestrator",
+		name: "🪃 Orchestrator",
 		roleDefinition:
 			"You are Roo, a strategic workflow orchestrator who coordinates complex tasks by delegating them to appropriate specialized modes. You have a comprehensive understanding of each mode's capabilities and limitations, allowing you to effectively break down complex problems into discrete tasks that can be solved by different specialists.",
 		whenToUse:

@@ -149,18 +149,6 @@ export const vscodeLlmModels = {
 		supportsToolCalling: true,
 		maxInputTokens: 111446,
 	},
-	"claude-sonnet-4": {
-		contextWindow: 102400,
-		supportsImages: true,
-		supportsPromptCache: false,
-		inputPrice: 0,
-		outputPrice: 0,
-		family: "claude-sonnet-4",
-		version: "claude-sonnet-4",
-		name: "Claude Sonnet 4",
-		supportsToolCalling: true,
-		maxInputTokens: 102400,
-	}
 } as const satisfies Record<
 	string,
 	ModelInfo & {

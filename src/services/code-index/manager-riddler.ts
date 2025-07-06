@@ -16,7 +16,7 @@ import { z } from "zod"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
-import { aF } from "vitest/dist/chunks/reporters.d.DL9pg5DB.js"
+import { testEmbeddingApiAvailable, testOpenAIApiAvailable, testRerankApiAvailable } from "./manager-test-riddler"
 
 
 
@@ -115,11 +115,11 @@ export class CodeIndexManager {
 		// Load configuration once to get current state and restart requirements
 		const { requiresRestart } = await this._configManager.loadConfiguration()
 
+		this._stateManager.setSystemState("Indexing", "Checking configuration.")
+
 		// 2. 创建一个独立的 MCP 客户端（不依赖 McpHub）
 		// 这里以 code_context 配置为例，实际可根据需要动态生成
 		const config = this._configManager.getConfig()
-		const args = []
-		args.push("-m", "code_context_mcp")
 
 		// --- 三个服务可用性校验并发执行 ---
 		let enhancementPromise: Promise<boolean> = Promise.resolve(false)
@@ -140,11 +140,11 @@ export class CodeIndexManager {
 				baseUrl: config.rerankOptions?.baseUrl || ""
 			})
 		}
-		if (config.openAiCompatibleOptions && config.openAiCompatibleOptions.baseUrl) {
+		if (config.embeddingOptions && config.embeddingOptions.baseUrl) {
 			embeddingPromise = testEmbeddingApiAvailable({
-				apiKey: config.openAiCompatibleOptions?.apiKey || "",
-				model: config.modelId || "",
-				baseUrl: config.openAiCompatibleOptions?.baseUrl || ""
+				apiKey: config.embeddingOptions?.apiKey || "",
+				model: config.embeddingOptions?.modelID || "",
+				baseUrl: config.embeddingOptions?.baseUrl || ""
 			})
 		}
 
@@ -152,15 +152,34 @@ export class CodeIndexManager {
 		const [enhancementEnabled, rerankEnabled, embeddingEnabled] = await Promise.all([
 			enhancementPromise,
 			rerankPromise,
-			embeddingPromise
+			embeddingPromise,
 		])
 		this._isEnhancementEnabled = enhancementEnabled
 		this._isRerankEnabled = rerankEnabled
 		this._isEmbeddingEnabled = embeddingEnabled
 
+		this.startIndexing()
+
+		return { requiresRestart }
+	}
+
+	public async _startIndexing(): Promise<void> {
+		if (!this._configManager) {
+			this._stateManager.setSystemState("Error", "Config error.")
+			return
+		}
+
+		if (this._mcpClient !== undefined) {
+			this._stateManager.setSystemState("Indexed", `Codebase client initialized successfully. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
+			return
+		}
+
+		const config = this._configManager.getConfig()
+		const args = []
+		args.push("-m", "code_context_mcp")
+
 		if (!this._isEmbeddingEnabled) {
 			this._stateManager.setSystemState("Error", "Embedding service is not enabled.")
-			return { requiresRestart }
 		}
 		if (config.enhancementOptions && this._isEnhancementEnabled) {
 			args.push("--is-enhancement")
@@ -173,10 +192,16 @@ export class CodeIndexManager {
 			args.push("--rerank-model", config.rerankOptions.modelID || "BAAI/bge-reranker-v2-m3")
 			args.push("--rerank-url", config.rerankOptions.baseUrl || "http://localhost:6123/rerank/v1")
 		}
-		if (config.openAiCompatibleOptions && this._isEmbeddingEnabled) {
-			args.push("--embedding-key", config.openAiCompatibleOptions.apiKey || "key")
-			args.push("--embedding-model", config.modelId || "BAAI/bge-m3")
-			args.push("--embedding-url", config.openAiCompatibleOptions.baseUrl || "http://localhost:6123/embedding/v1")
+		if (config.embeddingOptions && this._isEmbeddingEnabled) {
+			args.push("--embedding-key", config.embeddingOptions.apiKey || "key")
+			args.push("--embedding-model", config.embeddingOptions.modelID || "BAAI/bge-m3")
+			args.push("--embedding-url", config.embeddingOptions.baseUrl || "http://localhost:6123/embedding/v1")
+		}
+		if (config.ragPath) {
+			args.push("--rag-path", config.ragPath)
+		}
+		if (config.codeBaseLogging) {
+			args.push("--log")
 		}
 
 		const mcpConfig = {
@@ -196,15 +221,12 @@ export class CodeIndexManager {
 			await client.connect(transport)
 			// 你可以将 client 实例保存到 this._mcpClient 以便后续调用
 			this._mcpClient = client
-			this._stateManager.setSystemState("Indexed", `Codebase client initialized successfully. ${this._isRerankEnabled? "\n✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n✔ Enhancement service enabled." : ""}`)
+			this._stateManager.setSystemState("Indexed", `Codebase client initialized successfully. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
 		} catch (error) {
 			console.error("[CodeIndexManager] Failed to initialize MCP client:", error)
-			this._stateManager.setSystemState("Error", `Codebase client initialization failed. `)
+			this._stateManager.setSystemState("Error", `Codebase client initialization failed. ${error}`)
 			// throw new Error("Failed to initialize MCP client")
-			return { requiresRestart }
 		}
-
-		return { requiresRestart }
 	}
 
 	/**
@@ -221,17 +243,19 @@ export class CodeIndexManager {
 			console.warn("[CodeIndexOrchestrator] Start rejected: Missing configuration.")
 			return
 		}
+		this._stateManager.setSystemState("Indexing", "Start Indexing...")
+		this._startIndexing()
 		// this._stateManager.setSystemState("Indexing", "Initializing services...")
-		this._stateManager.setSystemState("Indexed", `File watcher started. ${this._isRerankEnabled? "\n✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n✔ Enhancement service enabled." : ""}`)
+		// this._stateManager.setSystemState("Indexed", `File watcher started. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
 	}
 
 	/**
 	 * Stops the file watcher and potentially cleans up resources.
 	 */
 	public stopWatcher(): void {
-		if (!this.isFeatureEnabled) {
-			return
-		}
+		// if (!this.isFeatureEnabled) {
+		// 	return
+		// }
 		this._stateManager.setSystemState("Standby", "File watcher stopped.")
 		if (this._mcpClient) {
 			this._mcpClient.close() // Disconnect the MCP client
@@ -256,8 +280,41 @@ export class CodeIndexManager {
 			return
 		}
 		this.assertInitialized()
-		// await this._orchestrator!.clearIndexData()
-		// await this._cacheManager!.clearCacheFile()
+
+		if (!this._mcpClient) {
+			throw new Error("MCP client not initialized")
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "delete_index",
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
+				}
+			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP delete_index error:" + results.join(", "))
+				throw new Error("MCP delete_index returned an error:" + results.join(", "))
+			}
+		} catch (error) {
+			console.error("[CodeIndexManager] searchSummary exception:", error)
+			throw error
+		}
+
+		await this.stopWatcher()
 	}
 
 	// --- Private Helpers ---
@@ -270,30 +327,107 @@ export class CodeIndexManager {
 		if (!this._mcpClient) {
 			throw new Error("MCP client not initialized")
 		}
-		const params: Record<string, any> = { queries: [query], json_format: true , rerank: this._isRerankEnabled}
-		if (directoryPrefix) {
-			params.directoryPrefix = directoryPrefix
-		}
-		const response = await this._mcpClient.request(
-			{
-				method: "tools/call",
-				params: {
-					name: "search_code",
-					arguments: params
-				}
-			},
-			CallToolResultSchema
-		)
 
-		const results: string[] = []
-		if (response && Array.isArray(response.content)) {
-			for (const item of response.content) {
-				if (item && typeof item.text === "string") {
-					results.push(item.text)
+		
+		if (!this._configManager) {
+			this._stateManager.setSystemState("Error", "Config error.")
+			throw new Error("Config error.")
+		}
+
+		const config = this._configManager.getConfig()
+
+		
+
+		// const params: Record<string, any> = { queries: [query], json_format: true , rerank_enable: this._isRerankEnabled}
+		const params: Record<string, any> = { 
+			queries: query.split("|").map(q => q.trim()), 
+			json_format: true, 
+			rerank_enable: this._isRerankEnabled 
+		}
+
+		if (config.llmFilter) {
+			params.llm_filter = config.llmFilter
+		}
+
+		if (directoryPrefix) {
+			params.paths = [directoryPrefix]
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "search_code",
+						arguments: params
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
 				}
 			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP search_code error:" + results.join(", "))
+				throw new Error("MCP search_code returned an error:" + results.join(", "))
+			}
+
+			return results
+		} catch (error) {
+			console.error("[CodeIndexManager] searchIndex exception:", error)
+			throw error
 		}
-		return results
+	}
+
+	public async searchSummary(directoryPrefix: string): Promise<string[]> {
+		if (!this._mcpClient) {
+			throw new Error("MCP client not initialized")
+		}
+
+		// const params: Record<string, any> = { queries: [query], json_format: true , rerank_enable: this._isRerankEnabled}
+		const params: Record<string, any> = { 
+			json_format: true, 
+			paths: [directoryPrefix],
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "get_summary",
+						arguments: params
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
+				}
+			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP get_summary error:" + results.join(", "))
+				throw new Error("MCP get_summary returned an error:" + results.join(", "))
+			}
+
+			return results
+		} catch (error) {
+			console.error("[CodeIndexManager] searchSummary exception:", error)
+			throw error
+		}
 	}
 
 	/**
@@ -314,149 +448,11 @@ export class CodeIndexManager {
 				this.stopWatcher()
 				const contextProxy = await ContextProxy.getInstance(this.context)
 				await this.initialize(contextProxy)
-				await this.startIndexing()
+				// await this.startIndexing()
+			} else if (!isFeatureEnabled) {
+				this._stateManager.setSystemState("Standby", "File watcher stopped.")
+				this.stopWatcher()
 			}
 		}
 	}
-}
-
-/**
- * 使用 OpenAI 官方 API 协议，发送“你好”测试大模型服务可用性。
- * @param apiKey OpenAI API Key
- * @param model OpenAI 模型名称（如 'gpt-3.5-turbo'）
- * @param baseUrl OpenAI API Base URL，默认为 https://api.openai.com/v1
- * @returns Promise<boolean>，可用返回 true，否则 false
- */
-export async function testOpenAIApiAvailable({ apiKey, model, baseUrl }: { apiKey: string; model: string; baseUrl: string }): Promise<boolean> {
-    try {
-        const response = await fetch(`${baseUrl}/chat/completions`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    { role: "user", content: "hello" }
-                ],
-                max_tokens: 16
-            })
-        });
-        
-        // 无论响应状态如何，都先尝试读取 body，避免 body 被重复读取
-        let data;
-        try {
-            data = await response.json();
-        } catch (parseError) {
-            console.error("[CodeIndexManager] Failed to parse OpenAI response JSON:", parseError);
-            return false;
-        }
-        
-        // 检查响应状态和数据结构
-        if (!response.ok) {
-            console.error("[CodeIndexManager] OpenAI API returned error:", response.status, data);
-            return false;
-        }
-        
-        // 判断返回内容是否包含 expected 字段
-        return !!(data && data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content);
-    } catch (error) {
-        console.error("[CodeIndexManager] OpenAI API test failed:", error);
-        return false;
-    }
-}
-
-/**
- * 使用 SiliconFlow Rerank API 协议，发送测试请求判断 rerank 服务可用性（新版协议，返回 results/relevance_score）。
- * @param apiKey Rerank API Key
- * @param model Rerank 模型名称（如 'BAAI/bge-reranker-v2-m3'）
- * @param baseUrl Rerank API Base URL，默认为 https://api.siliconflow.cn/v1/rerank
- * @returns Promise<boolean>，可用返回 true，否则 false
- */
-export async function testRerankApiAvailable({ apiKey, model, baseUrl = "https://api.siliconflow.cn/v1" }: { apiKey: string; model: string; baseUrl?: string }): Promise<boolean> {
-    try {
-        const response = await fetch(`${baseUrl}/rerank`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model,
-                query: "Apple",
-                documents: ["apple", "banana", "fruit", "vegetable"],
-                top_n: 4,
-                return_documents: false,
-                max_chunks_per_doc: 1024,
-                overlap_tokens: 80
-            })
-        });
-        
-        // 无论响应状态如何，都先尝试读取 body，避免 body 被重复读取
-        let data;
-        try {
-            data = await response.json();
-        } catch (parseError) {
-            console.error("[CodeIndexManager] Failed to parse response JSON:", parseError);
-            return false;
-        }
-        
-        // 检查响应状态和数据结构
-        if (!response.ok) {
-            console.error("[CodeIndexManager] Rerank API returned error:", response.status, data);
-            return false;
-        }
-        
-        // 判断返回内容是否包含 results 且有 relevance_score 字段
-        return !!(data && Array.isArray(data.results) && data.results.length > 0 && typeof data.results[0].relevance_score === "number");
-    } catch (error) {
-		console.error("[CodeIndexManager] Rerank API test failed:", error);
-        return false;
-    }
-}
-
-/**
- * 使用 OpenAI Embedding API 协议，发送测试请求判断 embedding 服务可用性。
- * @param apiKey OpenAI API Key
- * @param model Embedding 模型名称（如 'text-embedding-ada-002'）
- * @param baseUrl OpenAI API Base URL，默认为 https://api.openai.com/v1
- * @returns Promise<boolean>，可用返回 true，否则 false
- */
-export async function testEmbeddingApiAvailable({ apiKey, model, baseUrl = "https://api.openai.com/v1" }: { apiKey: string; model: string; baseUrl?: string }): Promise<boolean> {
-    try {
-        const response = await fetch(`${baseUrl}/embeddings`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model,
-                input: "test embedding",
-                encoding_format: "float"
-            })
-        });
-        
-        // 无论响应状态如何，都先尝试读取 body，避免 body 被重复读取
-        let data;
-        try {
-            data = await response.json();
-        } catch (parseError) {
-            console.error("[CodeIndexManager] Failed to parse embedding response JSON:", parseError);
-            return false;
-        }
-        
-        // 检查响应状态和数据结构
-        if (!response.ok) {
-            console.error("[CodeIndexManager] Embedding API returned error:", response.status, data);
-            return false;
-        }
-        
-        // 判断返回内容是否包含 data 且有 embedding 字段
-        return !!(data && Array.isArray(data.data) && data.data.length > 0 && Array.isArray(data.data[0].embedding) && data.data[0].embedding.length > 0);
-    } catch (error) {
-        console.error("[CodeIndexManager] Embedding API test failed:", error);
-        return false;
-    }
 }

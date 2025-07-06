@@ -19,8 +19,6 @@ import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 
-import { Task } from "../task/Task"
-
 export async function openMention(mention?: string): Promise<void> {
 	if (!mention) {
 		return
@@ -56,7 +54,6 @@ export async function parseMentions(
 	fileContextTracker?: FileContextTracker,
 	rooIgnoreController?: RooIgnoreController,
 	showRooIgnoredFiles: boolean = true,
-	cline?:Task,
 ): Promise<string> {
 	const mentions: Set<string> = new Set()
 	let parsedText = text.replace(mentionRegexGlobal, (match, mention) => {
@@ -76,13 +73,18 @@ export async function parseMentions(
 			return `Git commit '${mention}' (see below for commit info)`
 		} else if (mention === "terminal") {
 			return `Terminal Output (see below for output)`
-		} else if (mention === "codebase") {
-			return ""
+		} else if (mention.startsWith("codebase")) {
+			if (mention.includes(":")) {
+				const path = mention.slice(9)
+				return `As the first step, use the 'codebase_search' tool to search for relevant information needed for the task, using "${path}" as the search path.`
+			}
+			return "As the first step, use the 'codebase_search' tool to search for relevant information needed for the task."
 		} else if (mention.startsWith("summary")) {
 			if (mention.includes(":")) {
-				return mention.slice(8)
+				const path = mention.slice(8)
+				return `As the first step, use the 'codebase_search' tool to get a summary for '${path}'.`
 			}
-			return ""
+			return "As the first step, use the 'codebase_search' tool to get a summary of the relevant information needed for the task."
 		}
 		return match
 	})
@@ -160,18 +162,10 @@ export async function parseMentions(
 			} catch (error) {
 				parsedText += `\n\n<terminal_output>\nError fetching terminal output: ${error.message}\n</terminal_output>`
 			}
-		} else if (mention === "codebase") {
-			if (cline) {
-				cline.codebase_enable = true
-			}
+		} else if (mention.startsWith("codebase")) {
+			
 		} else if (mention.startsWith("summary")) {
-			if (cline) {
-				cline.summary_enable = true
-				if (mention.includes(":")) {
-					const mentionPath = mention.slice(8)
-					cline.summary_path = mentionPath
-				}
-			}
+			
 		}
 	}
 

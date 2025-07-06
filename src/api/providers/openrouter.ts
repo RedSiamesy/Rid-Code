@@ -26,7 +26,7 @@ import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler } from "../index"
 
-import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools"
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-riddler"
 
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {

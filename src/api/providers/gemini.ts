@@ -6,7 +6,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import { getModelParams } from "../transform/model-params"
 
 
-import { RiddlerHandler } from "./riddler"
+import { RiddlerHandler } from "./providers-riddler"
 import type { ApiStreamUsageChunk } from "../transform/stream"
 
 export class GeminiHandler extends RiddlerHandler {

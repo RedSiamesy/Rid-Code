@@ -3,8 +3,6 @@ import { parseMentions } from "./index"
 import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
-import { Task } from "../task/Task"
-
 /**
  * Process mentions in user content, specifically within task and feedback tags
  */
@@ -15,15 +13,13 @@ export async function processUserContentMentions({
 	fileContextTracker,
 	rooIgnoreController,
 	showRooIgnoredFiles = true,
-	cline,
 }: {
 	userContent: Anthropic.Messages.ContentBlockParam[]
 	cwd: string
 	urlContentFetcher: UrlContentFetcher
 	fileContextTracker: FileContextTracker
 	rooIgnoreController?: any
-	showRooIgnoredFiles?: boolean,
-	cline?: Task
+	showRooIgnoredFiles?: boolean
 }) {
 	// Process userContent array, which contains various block types:
 	// TextBlockParam, ImageBlockParam, ToolUseBlockParam, and ToolResultBlockParam.
@@ -50,7 +46,6 @@ export async function processUserContentMentions({
 							fileContextTracker,
 							rooIgnoreController,
 							showRooIgnoredFiles,
-							cline,
 						),
 					}
 				}
@@ -68,7 +63,6 @@ export async function processUserContentMentions({
 								fileContextTracker,
 								rooIgnoreController,
 								showRooIgnoredFiles,
-								cline,
 							),
 						}
 					}
@@ -87,7 +81,6 @@ export async function processUserContentMentions({
 										fileContextTracker,
 										rooIgnoreController,
 										showRooIgnoredFiles,
-										cline,
 									),
 								}
 							}

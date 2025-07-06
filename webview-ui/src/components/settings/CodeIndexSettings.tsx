@@ -366,85 +366,6 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-4 font-bold">
-								<div>{"enhancementBaseUrl"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									value={apiConfiguration.enhancementBaseUrl || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("enhancementBaseUrl", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-							<div className="flex items-center gap-4 font-bold">
-								<div>{"enhancementApiKey"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="password"
-									value={apiConfiguration.enhancementApiKey || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("enhancementApiKey", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-							<div className="flex items-center gap-4 font-bold">
-								<div>{"enhancementModelID"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									value={apiConfiguration.enhancementModelID || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("enhancementModelID", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-						</div>
-					)}
-
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
-								<div>{"rerankBaseUrl"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									value={apiConfiguration.rerankBaseUrl || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("rerankBaseUrl", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-							<div className="flex items-center gap-4 font-bold">
-								<div>{"rerankApiKey"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="password"
-									value={apiConfiguration.rerankApiKey || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("rerankApiKey", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-							<div className="flex items-center gap-4 font-bold">
-								<div>{"rerankModelID"}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									value={apiConfiguration.rerankModelID || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("rerankModelID", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-						</div>
-					)}
-					
-
-					{/* {codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
 								<div>{t("settings:codeIndex.openaiCompatibleModelDimensionLabel")}</div>
 							</div>
 							<div>
@@ -477,7 +398,7 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 								</p>
 							</div>
 						</div>
-					)} */}
+					)}
 
 					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "ollama" && (
 						<div className="flex flex-col gap-3">
@@ -498,39 +419,35 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 						</div>
 					)}
 
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider !== "openai-compatible" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.qdrantUrlLabel")}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									value={codebaseIndexConfig.codebaseIndexQdrantUrl || "http://localhost:6333"}
-									onInput={(e: any) =>
-										setCachedStateField("codebaseIndexConfig", {
-											...codebaseIndexConfig,
-											codebaseIndexQdrantUrl: e.target.value,
-										})
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
+					<div className="flex flex-col gap-3">
+						<div className="flex items-center gap-4 font-bold">
+							<div>{t("settings:codeIndex.qdrantUrlLabel")}</div>
 						</div>
-					)}
+						<div>
+							<VSCodeTextField
+								value={codebaseIndexConfig.codebaseIndexQdrantUrl || "http://localhost:6333"}
+								onInput={(e: any) =>
+									setCachedStateField("codebaseIndexConfig", {
+										...codebaseIndexConfig,
+										codebaseIndexQdrantUrl: e.target.value,
+									})
+								}
+								style={{ width: "100%" }}></VSCodeTextField>
+						</div>
+					</div>
 
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider !== "openai-compatible" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.qdrantKeyLabel")}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="password"
-									value={apiConfiguration.codeIndexQdrantApiKey}
-									onInput={(e: any) => setApiConfigurationField("codeIndexQdrantApiKey", e.target.value)}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
+					<div className="flex flex-col gap-3">
+						<div className="flex items-center gap-4 font-bold">
+							<div>{t("settings:codeIndex.qdrantKeyLabel")}</div>
 						</div>
-					)}
+						<div>
+							<VSCodeTextField
+								type="password"
+								value={apiConfiguration.codeIndexQdrantApiKey}
+								onInput={(e: any) => setApiConfigurationField("codeIndexQdrantApiKey", e.target.value)}
+								style={{ width: "100%" }}></VSCodeTextField>
+						</div>
+					</div>
 
 					{(!areSettingsCommitted || !validateIndexingConfig(codebaseIndexConfig, apiConfiguration)) && (
 						<p className="text-sm text-vscode-descriptionForeground mb-2">

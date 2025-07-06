@@ -15,8 +15,6 @@ export interface CodeIndexConfig {
 	qdrantUrl?: string
 	qdrantApiKey?: string
 	searchMinScore?: number
-	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
-	rerankOptions?: { baseUrl: string; apiKey: string; modelID: string }
 }
 
 /**
@@ -34,12 +32,4 @@ export type PreviousConfigSnapshot = {
 	openAiCompatibleModelDimension?: number
 	qdrantUrl?: string
 	qdrantApiKey?: string
-
-	enhancementbaseUrl?: string
-	enhancementApiKey?: string
-	enhancementModelID?: string
-	
-	rerankBaseUrl?: string
-	rerankApiKey?: string
-	rerankModelID?: string
 }

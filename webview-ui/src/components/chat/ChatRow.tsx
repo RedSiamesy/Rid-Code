@@ -195,13 +195,13 @@ export const ChatRowContent = ({
 					<span style={{ color: successColor, fontWeight: "bold" }}>{t("chat:taskCompleted")}</span>,
 				]
 			case "user_feedback":
-				return [
-					<span
-						className="codicon codicon-account"
-						style={{ color: "var(--vscode-charts-blue)", marginBottom: "-1.5px" }}></span>,
-					<span style={{ color: "var(--vscode-charts-blue)", fontWeight: "bold" }}>{"用户反馈"}</span>,
-				]
-			case "api_req_retry_delayed":
+	return [
+		<span
+			className="codicon codicon-account"
+			style={{ color: "var(--vscode-charts-blue)", marginBottom: "-1.5px" }}></span>,
+		<span style={{ color: "var(--vscode-charts-blue)", fontWeight: "bold" }}>{"用户反馈"}</span>,
+	]
+	case "api_req_retry_delayed":
 				return []
 			case "api_req_started":
 				const getIconSpan = (iconName: string, color: string) => (

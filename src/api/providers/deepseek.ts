@@ -5,7 +5,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import type { ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
-import { RiddlerHandler } from "./riddler"
+import { RiddlerHandler } from "./providers-riddler"
 
 export class DeepSeekHandler extends RiddlerHandler {
 	constructor(options: ApiHandlerOptions) {
