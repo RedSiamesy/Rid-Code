@@ -30,7 +30,7 @@ import { checkpointSave } from "../checkpoints"
 import { formatResponse } from "../prompts/responses"
 import { validateToolUse } from "../tools/validateToolUse"
 import { Task } from "../task/Task"
-import { codebaseSearchTool } from "../tools/codebaseSearchTool-riddler"
+import { codebaseSearchTool } from "../tools/codebaseSearchTool"
 import { experiments, EXPERIMENT_IDS } from "../../shared/experiments"
 import { applyDiffToolLegacy } from "../tools/applyDiffTool"
 

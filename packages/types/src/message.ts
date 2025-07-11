@@ -104,9 +104,6 @@ export const clineSays = [
 	"rooignore_error",
 	"diff_error",
 	"condense_context",
-	"save_memory",
-	"save_memory_error",
-	"save_memory_tag",
 	"condense_context_error",
 	"codebase_search_result",
 ] as const

@@ -1,4 +1,4 @@
-import { CodeIndexManager } from "../../../services/code-index/manager-riddler"
+import { CodeIndexManager } from "../../../services/code-index/manager"
 
 export function getObjectiveSection(
 	codeIndexManager?: CodeIndexManager,

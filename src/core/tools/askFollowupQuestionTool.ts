@@ -57,16 +57,9 @@ export async function askFollowupQuestionTool(
 
 			cline.consecutiveMistakeCount = 0
 			const { text, images } = await cline.ask("followup", JSON.stringify(follow_up_json), false)
-			// await cline.say("user_feedback", text ?? "", images)
-			// pushToolResult(formatResponse.toolResult(`<answer>\n${text}\n</answer>`, images))
-			if (follow_up?.includes(`<suggest>${text}</suggest>`)) {
-				await cline.say("user_feedback", text ?? "", images)
-				pushToolResult(formatResponse.toolResult(`<answer>\n${text}\n</answer>`, images))
-			} else {
-				await cline.say("user_feedback", text ?? "", images)
-				pushToolResult(formatResponse.toolResult(`<feedback>\n${text}\n</feedback>`, images))
-			}
-			
+			await cline.say("user_feedback", text ?? "", images)
+			pushToolResult(formatResponse.toolResult(`<answer>\n${text}\n</answer>`, images))
+
 			return
 		}
 	} catch (error) {

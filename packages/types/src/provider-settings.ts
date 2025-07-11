@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { reasoningEffortsSchema, modelInfoSchema } from "./model.js"
-import { codebaseIndexProviderSchema } from "./codebase-index-riddler.js"
+import { codebaseIndexProviderSchema } from "./codebase-index.js"
 
 /**
  * ProviderName

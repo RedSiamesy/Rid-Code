@@ -1,6 +1,6 @@
 import { DiffStrategy } from "../../../shared/tools"
 import { McpHub } from "../../../services/mcp/McpHub"
-import { CodeIndexManager } from "../../../services/code-index/manager-riddler"
+import { CodeIndexManager } from "../../../services/code-index/manager"
 
 export function getCapabilitiesSection(
 	cwd: string,

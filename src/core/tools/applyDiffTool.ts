@@ -99,7 +99,7 @@ export async function applyDiffToolLegacy(
 			}
 
 			// Release the original content from memory as it's no longer needed
-			// originalContent = null
+			originalContent = null
 
 			if (!diffResult.success) {
 				cline.consecutiveMistakeCount++
@@ -167,18 +167,6 @@ export async function applyDiffToolLegacy(
 
 			// Call saveChanges to update the DiffViewProvider properties
 			await cline.diffViewProvider.saveChanges()
-
-			let newContent: string | null = await fs.readFile(absolutePath, "utf-8")
-
-			const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent)
-			const say: ClineSayTool = {
-				tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
-				path: getReadablePath(cline.cwd, relPath),
-				diff: `# agentEdits\n${agentEdits}\n`,
-			}
-
-			// Send the user feedback
-			await cline.say("user_feedback_diff", JSON.stringify(say))
 
 			// Track file edit operation
 			if (relPath) {

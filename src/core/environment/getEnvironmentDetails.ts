@@ -17,19 +17,7 @@ import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 
-import { EditorUtils } from "../../integrations/editor/EditorUtils"
-import { readLines } from "../../integrations/misc/read-lines"
-import { addLineNumbers } from "../../integrations/misc/extract-text"
-
 import { Task } from "../task/Task"
-
-const generateDiagnosticText = (diagnostics?: any[]) => {
-	if (!diagnostics?.length) return ""
-	return `\nCurrent problems detected:\n${diagnostics
-		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
-		.join("\n")}`
-}
-
 
 export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
 	let details = ""
@@ -281,33 +269,6 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 			)
 
 			details += result
-		}
-	}
-
-	let filePath: string
-	let selectedText: string
-	let startLine: number | undefined
-	let endLine: number | undefined
-	let diagnostics: any[] | undefined
-	const context = EditorUtils.getEditorContext()
-	if (context) {
-		;({ filePath, selectedText, startLine, endLine, diagnostics } = context)
-		const fullPath = path.resolve(cline.cwd, filePath)
-		if (endLine !== undefined && startLine != undefined) {
-			try {
-				// Check if file is readable
-				await vscode.workspace.fs.stat(vscode.Uri.file(fullPath))
-				details += `\n\n# The File Where The Cursor In\n${fullPath}\n`
-				const content = addLineNumbers(
-					await readLines(fullPath, endLine + 5, startLine - 5),
-					startLine - 4 > 1 ? startLine - 4: 1,
-				)
-				details += `\n# Line near the Cursor\n${content}\n`
-				if (diagnostics) {
-					const diagno = generateDiagnosticText(diagnostics)
-					details += `\n# Issues near the Cursor\n${diagno}\n`
-				}
-			} catch (error) {}
 		}
 	}
 

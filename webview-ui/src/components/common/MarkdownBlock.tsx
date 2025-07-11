@@ -79,16 +79,7 @@ const remarkUrlToLink = () => {
 
 const StyledMarkdown = styled.div`
 	code:not(pre > code) {
-		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
-    
-		@font-face {
-			font-family: 'code-chinese';
-			src: local('Microsoft YaHei'), local('PingFang SC'), local('SimHei');
-			unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF;
-			size-adjust: 90%;
-		}
-		
-		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'code-chinese', 'Courier New', monospace, var(--vscode-font-family);
+		font-family: var(--vscode-editor-font-family, monospace);
 		filter: saturation(110%) brightness(95%);
 		color: var(--vscode-textPreformat-foreground) !important;
 		background-color: var(--vscode-textPreformat-background) !important;

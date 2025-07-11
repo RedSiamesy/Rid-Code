@@ -38,7 +38,6 @@ import { getModels, flushModels } from "../../api/providers/fetchers/modelCache"
 import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { getCommand } from "../../utils/commands"
-import { saveMemory } from "./Memory-riddler"
 
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
@@ -1128,10 +1127,6 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
-		case "saveMemory":
-			// 调用保存记忆函数，函数内部会发送相应的消息
-			await saveMemory(provider, message.text??"")
-			break
 		case "enhancePrompt":
 			if (message.text) {
 				try {
@@ -1501,17 +1496,6 @@ export const webviewMessageHandler = async (
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
-
-				embeddingBaseUrl: "",
-				embeddingModelID: "",
-				enhancementBaseUrl: "",
-				enhancementModelID: "",
-				rerankBaseUrl: "",
-				rerankModelID: "",
-
-				ragPath: "",
-				llmFilter: false,
-				codeBaseLogging: false,
 			}
 			await updateGlobalState("codebaseIndexConfig", codebaseIndexConfig)
 

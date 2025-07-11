@@ -96,8 +96,6 @@ export interface WebviewMessage {
 		| "updateMcpTimeout"
 		| "fuzzyMatchThreshold"
 		| "writeDelayMs"
-		| "saveMemory"
-		| "savedMemory"
 		| "enhancePrompt"
 		| "enhancedPrompt"
 		| "draggedImages"
