@@ -45,8 +45,6 @@ interface ChatTextAreaProps {
 	mode: Mode
 	setMode: (value: Mode) => void
 	modeShortcutText: string
-	isSavingMemory: boolean
-	setIsSavingMemory: (value: boolean) => void
 }
 
 const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -66,8 +64,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			mode,
 			setMode,
 			modeShortcutText,
-			isSavingMemory,
-			setIsSavingMemory,
 		},
 		ref,
 	) => {
@@ -182,23 +178,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 		}, [selectedType, searchQuery])
 
-		const handleSavingMemory = useCallback(() => {
-			if (sendingDisabled) {
-				return
-			}
-
-			const trimmedInput = inputValue.trim()
-
-			if (trimmedInput) {
-				setIsSavingMemory(true)
-				vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
-			} else {
-				setIsSavingMemory(true)
-				vscode.postMessage({ type: "saveMemory" as const, text: "" })
-			}
-			setInputValue("")
-		}, [inputValue, sendingDisabled, setInputValue])
-
 		const handleEnhancePrompt = useCallback(() => {
 			if (sendingDisabled) {
 				return
@@ -218,9 +197,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			return [
 				{ type: ContextMenuOptionType.Problems, value: "problems" },
 				{ type: ContextMenuOptionType.Terminal, value: "terminal" },
-				{ type: ContextMenuOptionType.Codebase, value: "codebase" },
-				{ type: ContextMenuOptionType.Summary, value: "summary" },
-				{ type: ContextMenuOptionType.Memory, value: "memory" },
 				...gitCommits,
 				...openedTabs
 					.filter((tab) => tab.path)
@@ -301,12 +277,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						insertValue = "terminal"
 					} else if (type === ContextMenuOptionType.Git) {
 						insertValue = value || ""
-					} else if (type === ContextMenuOptionType.Codebase) {
-						insertValue = "codebase"
-					} else if (type === ContextMenuOptionType.Summary) {
-						insertValue = "summary"
-					} else if (type === ContextMenuOptionType.Memory) {
-					   insertValue = "memory"
 					}
 
 					const { newValue, mentionIndex } = insertMention(
@@ -1177,13 +1147,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 					<div className={cn("flex", "items-center", "gap-0.5", "shrink-0")}>
 						{codebaseIndexConfig?.codebaseIndexEnabled && <IndexingStatusDot />}
-						<IconButton
-							iconClass={isSavingMemory ? "codicon-loading" : "codicon-database"}
-							title={"保留永久记忆"}
-							disabled={sendingDisabled}
-							isLoading={isSavingMemory}
-							onClick={handleSavingMemory}
-						/>
 						<IconButton
 							iconClass={isEnhancingPrompt ? "codicon-loading" : "codicon-sparkle"}
 							title={t("chat:enhancePrompt")}

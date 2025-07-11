@@ -1,5 +1,5 @@
 import { getToolUseGuidelinesSection } from "../tool-use-guidelines"
-import type { CodeIndexManager } from "../../../../services/code-index/manager-riddler"
+import type { CodeIndexManager } from "../../../../services/code-index/manager"
 
 describe("getToolUseGuidelinesSection", () => {
 	// Mock CodeIndexManager with codebase search available

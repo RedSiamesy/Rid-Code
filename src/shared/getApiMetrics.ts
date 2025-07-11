@@ -62,8 +62,6 @@ export function getApiMetrics(messages: ClineMessage[]) {
 			}
 		} else if (message.type === "say" && message.say === "condense_context") {
 			result.totalCost += message.contextCondense?.cost ?? 0
-		} else if (message.type === "say" && message.say === "save_memory") {
-			result.totalCost += message.contextCondense?.cost ?? 0
 		}
 	})
 
@@ -81,8 +79,6 @@ export function getApiMetrics(messages: ClineMessage[]) {
 				continue
 			}
 		} else if (message.type === "say" && message.say === "condense_context") {
-			result.contextTokens = message.contextCondense?.newContextTokens ?? 0
-		} else if (message.type === "say" && message.say === "save_memory") {
 			result.contextTokens = message.contextCondense?.newContextTokens ?? 0
 		}
 		if (result.contextTokens) {

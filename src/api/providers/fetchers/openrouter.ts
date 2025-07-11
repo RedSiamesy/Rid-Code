@@ -95,7 +95,7 @@ type OpenRouterModelEndpointsResponse = z.infer<typeof openRouterModelEndpointsR
 
 export async function getOpenRouterModels(options?: ApiHandlerOptions): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelsResponse>(`${baseURL}/models`)
@@ -135,7 +135,7 @@ export async function getOpenRouterModelEndpoints(
 	options?: ApiHandlerOptions,
 ): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelEndpointsResponse>(`${baseURL}/models/${modelId}/endpoints`)

@@ -8,7 +8,7 @@ import { DiffStrategy } from "../../shared/tools"
 import { formatLanguage } from "../../shared/language"
 
 import { McpHub } from "../../services/mcp/McpHub"
-import { CodeIndexManager } from "../../services/code-index/manager-riddler"
+import { CodeIndexManager } from "../../services/code-index/manager"
 
 import { PromptVariables, loadSystemPromptFile } from "./sections/custom-system-prompt"
 
