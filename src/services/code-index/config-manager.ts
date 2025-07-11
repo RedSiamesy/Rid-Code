@@ -20,6 +20,13 @@ export class CodeIndexConfigManager {
 	private qdrantApiKey?: string
 	private searchMinScore?: number
 
+	private embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	private enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	private rerankOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	private ragPath?: string
+	private llmFilter?: boolean
+	private codeBaseLogging?: boolean
+
 	constructor(private readonly contextProxy: ContextProxy) {
 		// Initialize with current configuration to avoid false restart triggers
 		this._loadAndSetConfiguration()
@@ -38,6 +45,16 @@ export class CodeIndexConfigManager {
 			codebaseIndexEmbedderProvider: "openai",
 			codebaseIndexEmbedderBaseUrl: "",
 			codebaseIndexEmbedderModelId: "",
+
+			embeddingBaseUrl: "",
+			embeddingModelID: "",
+			enhancementBaseUrl: "",
+			enhancementModelID: "",
+			rerankBaseUrl: "",
+			rerankModelID: "",
+			ragPath: "",
+			llmFilter: false,
+			codeBaseLogging: false,
 		}
 
 		const {
@@ -46,6 +63,16 @@ export class CodeIndexConfigManager {
 			codebaseIndexEmbedderProvider,
 			codebaseIndexEmbedderBaseUrl,
 			codebaseIndexEmbedderModelId,
+
+			embeddingBaseUrl,
+			embeddingModelID,
+			enhancementBaseUrl,
+			enhancementModelID,
+			rerankBaseUrl,
+			rerankModelID,
+			ragPath,
+			llmFilter,
+			codeBaseLogging,
 		} = codebaseIndexConfig
 
 		const openAiKey = this.contextProxy?.getSecret("codeIndexOpenAiKey") ?? ""
@@ -55,6 +82,10 @@ export class CodeIndexConfigManager {
 		const openAiCompatibleModelDimension = this.contextProxy?.getGlobalState(
 			"codebaseIndexOpenAiCompatibleModelDimension",
 		) as number | undefined
+
+		const embeddingApiKey = this.contextProxy?.getSecret("embeddingApiKey") ?? ""
+		const enhancementApiKey = this.contextProxy?.getSecret("enhancementApiKey") ?? ""
+		const rerankApiKey = this.contextProxy?.getSecret("rerankApiKey") ?? ""
 
 		// Update instance variables with configuration
 		this.isEnabled = codebaseIndexEnabled || false
@@ -78,14 +109,36 @@ export class CodeIndexConfigManager {
 			ollamaBaseUrl: codebaseIndexEmbedderBaseUrl,
 		}
 
-		this.openAiCompatibleOptions =
-			openAiCompatibleBaseUrl && openAiCompatibleApiKey
+		this.embeddingOptions =
+			embeddingBaseUrl && embeddingApiKey && embeddingModelID
 				? {
-						baseUrl: openAiCompatibleBaseUrl,
-						apiKey: openAiCompatibleApiKey,
-						modelDimension: openAiCompatibleModelDimension,
+						baseUrl: embeddingBaseUrl,
+						apiKey: embeddingApiKey,
+						modelID: embeddingModelID,
 					}
 				: undefined
+
+		this.enhancementOptions =
+			enhancementBaseUrl && enhancementApiKey && enhancementModelID
+				? {
+						baseUrl: enhancementBaseUrl,
+						apiKey: enhancementApiKey,
+						modelID: enhancementModelID,
+					}
+				: undefined
+
+		this.rerankOptions =
+			rerankBaseUrl && rerankApiKey && rerankModelID
+				? {
+						baseUrl: rerankBaseUrl,
+						apiKey: rerankApiKey,
+						modelID: rerankModelID,
+					}
+				: undefined
+
+		this.ragPath = ragPath ? ragPath : undefined
+		this.llmFilter = llmFilter ? llmFilter : false
+		this.codeBaseLogging = codeBaseLogging ? codeBaseLogging : false
 	}
 
 	/**
@@ -120,6 +173,22 @@ export class CodeIndexConfigManager {
 			openAiCompatibleModelDimension: this.openAiCompatibleOptions?.modelDimension,
 			qdrantUrl: this.qdrantUrl ?? "",
 			qdrantApiKey: this.qdrantApiKey ?? "",
+
+			embeddingApiKey: this.embeddingOptions?.apiKey ?? "",
+			embeddingBaseUrl: this.embeddingOptions?.baseUrl ?? "",
+			embeddingModelID: this.embeddingOptions?.modelID ?? "",
+
+			enhancementApiKey: this.enhancementOptions?.apiKey ?? "",
+			enhancementBaseUrl: this.enhancementOptions?.baseUrl ?? "",
+			enhancementModelID: this.enhancementOptions?.modelID ?? "",
+
+			rerankBaseUrl: this.rerankOptions?.baseUrl ?? "",
+			rerankApiKey: this.rerankOptions?.apiKey ?? "",
+			rerankModelID: this.rerankOptions?.modelID ?? "",
+
+			ragPath: this.ragPath ?? "",
+			llmFilter: this.llmFilter ?? false,
+			codeBaseLogging: this.codeBaseLogging ?? false
 		}
 
 		// Load new configuration from storage and update instance variables
@@ -161,10 +230,10 @@ export class CodeIndexConfigManager {
 			const isConfigured = !!(ollamaBaseUrl && qdrantUrl)
 			return isConfigured
 		} else if (this.embedderProvider === "openai-compatible") {
-			const baseUrl = this.openAiCompatibleOptions?.baseUrl
-			const apiKey = this.openAiCompatibleOptions?.apiKey
-			const qdrantUrl = this.qdrantUrl
-			return !!(baseUrl && apiKey && qdrantUrl)
+			const baseUrl = this.embeddingOptions?.baseUrl
+			const apiKey = this.embeddingOptions?.apiKey
+			const modelID = this.embeddingOptions?.modelID
+			return !!(baseUrl && apiKey && modelID)
 		}
 		return false // Should not happen if embedderProvider is always set correctly
 	}
@@ -187,6 +256,21 @@ export class CodeIndexConfigManager {
 		const prevOpenAiCompatibleModelDimension = prev?.openAiCompatibleModelDimension
 		const prevQdrantUrl = prev?.qdrantUrl ?? ""
 		const prevQdrantApiKey = prev?.qdrantApiKey ?? ""
+
+		const prevembeddingApiKey = prev?.embeddingApiKey ?? ""
+		const prevembeddingBaseUrl = prev?.embeddingBaseUrl ?? ""
+		const prevembeddingModelID = prev?.embeddingModelID ?? ""
+
+		const prevenhancementApiKey = prev?.enhancementApiKey ?? ""
+		const prevenhancementBaseUrl = prev?.enhancementBaseUrl ?? ""
+		const prevenhancementModelID = prev?.enhancementModelID ?? ""
+
+		const prevrerankBaseUrl = prev?.rerankBaseUrl ?? ""
+		const prevrerankApiKey = prev?.rerankApiKey ?? ""
+		const prevrerankModelID = prev?.rerankModelID ?? ""
+
+		const prevragPath = prev?.ragPath ?? ""
+		const prevcodeBaseLogging = prev?.codeBaseLogging ?? false
 
 		// 1. Transition from disabled/unconfigured to enabled+configured
 		if ((!prevEnabled || !prevConfigured) && this.isEnabled && nowConfigured) {
@@ -249,6 +333,61 @@ export class CodeIndexConfigManager {
 			if (prevQdrantUrl !== currentQdrantUrl || prevQdrantApiKey !== currentQdrantApiKey) {
 				return true
 			}
+
+			// Enhancement configuration changes
+			const currentEmbeddingApiKey = this.embeddingOptions?.apiKey ?? ""
+			const currentEmbeddingBaseUrl = this.embeddingOptions?.baseUrl ?? ""
+			const currentEmbeddingModelID = this.embeddingOptions?.modelID ?? ""
+
+			if (
+				prevembeddingApiKey !== currentEmbeddingApiKey ||
+				prevembeddingBaseUrl !== currentEmbeddingBaseUrl ||
+				prevembeddingModelID !== currentEmbeddingModelID
+			) {
+				return true
+			}
+
+			// Enhancement configuration changes
+			const currentEnhancementApiKey = this.enhancementOptions?.apiKey ?? ""
+			const currentEnhancementBaseUrl = this.enhancementOptions?.baseUrl ?? ""
+			const currentEnhancementModelID = this.enhancementOptions?.modelID ?? ""
+			
+
+			if (
+				prevenhancementApiKey !== currentEnhancementApiKey ||
+				prevenhancementBaseUrl !== currentEnhancementBaseUrl ||
+				prevenhancementModelID !== currentEnhancementModelID
+			) {
+				return true
+			}
+
+			// Rerank configuration changes
+			const currentRerankBaseUrl = this.rerankOptions?.baseUrl ?? ""
+			const currentRerankApiKey = this.rerankOptions?.apiKey ?? ""
+			const currentRerankModelID = this.rerankOptions?.modelID ?? ""
+
+			if (
+				prevrerankBaseUrl !== currentRerankBaseUrl ||
+				prevrerankApiKey !== currentRerankApiKey ||
+				prevrerankModelID !== currentRerankModelID
+			) {
+				return true
+			}
+
+			const currentRagPath = this.ragPath ?? ""
+			if (
+				prevragPath !== currentRagPath
+			) {
+				return true
+			}
+
+			const currentCodeBaseLogging = this.codeBaseLogging ?? false
+			if (
+				prevcodeBaseLogging !== currentCodeBaseLogging
+			) {
+				return true
+			}
+			
 		}
 
 		return false
@@ -295,6 +434,14 @@ export class CodeIndexConfigManager {
 			qdrantUrl: this.qdrantUrl,
 			qdrantApiKey: this.qdrantApiKey,
 			searchMinScore: this.searchMinScore,
+
+			embeddingOptions: this.embeddingOptions,
+			enhancementOptions: this.enhancementOptions,
+			rerankOptions: this.rerankOptions,
+
+			ragPath: this.ragPath,
+			llmFilter: this.llmFilter,
+			codeBaseLogging: this.codeBaseLogging,
 		}
 	}
 

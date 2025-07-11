@@ -420,7 +420,7 @@ Original error: ${errorMessage}`
 				}
 
 				// Release the original content from memory as it's no longer needed
-				originalContent = null
+				// originalContent = null
 
 				if (!diffResult.success) {
 					cline.consecutiveMistakeCount++
@@ -549,6 +549,20 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 
 				// Call saveChanges to update the DiffViewProvider properties
 				await cline.diffViewProvider.saveChanges()
+
+				
+				let newContent: string | null = await fs.readFile(absolutePath, "utf-8")
+				
+				const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent)
+				const say: ClineSayTool = {
+					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
+					path: getReadablePath(cline.cwd, relPath),
+					diff: `# agentEdits\n${agentEdits}\n`,
+				}
+	
+				// Send the user feedback
+				await cline.say("user_feedback_diff", JSON.stringify(say))
+				
 
 				// Track file edit operation
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)

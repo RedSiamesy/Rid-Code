@@ -121,51 +121,54 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 	function validateIndexingConfig(config: CodebaseIndexConfig | undefined, apiConfig: ProviderSettings): boolean {
 		if (!config) return false
 
-		const baseSchema = z.object({
-			codebaseIndexQdrantUrl: z.string().url("Qdrant URL must be a valid URL"),
-			codebaseIndexEmbedderModelId: z.string().min(1, "Model ID is required"),
-		})
+		if (!config.embeddingBaseUrl) return false
+		return true
 
-		const providerSchemas = {
-			openai: baseSchema.extend({
-				codebaseIndexEmbedderProvider: z.literal("openai"),
-				codeIndexOpenAiKey: z.string().min(1, "OpenAI key is required"),
-			}),
-			ollama: baseSchema.extend({
-				codebaseIndexEmbedderProvider: z.literal("ollama"),
-				codebaseIndexEmbedderBaseUrl: z.string().url("Ollama URL must be a valid URL"),
-			}),
-			"openai-compatible": baseSchema.extend({
-				codebaseIndexEmbedderProvider: z.literal("openai-compatible"),
-				codebaseIndexOpenAiCompatibleBaseUrl: z.string().url("Base URL must be a valid URL"),
-				codebaseIndexOpenAiCompatibleApiKey: z.string().min(1, "API key is required"),
-				codebaseIndexOpenAiCompatibleModelDimension: z
-					.number()
-					.int("Dimension must be an integer")
-					.positive("Dimension must be a positive number")
-					.optional(),
-			}),
-		}
+		// const baseSchema = z.object({
+		// 	codebaseIndexQdrantUrl: z.string().url("Qdrant URL must be a valid URL"),
+		// 	codebaseIndexEmbedderModelId: z.string().min(1, "Model ID is required"),
+		// })
 
-		try {
-			const schema =
-				config.codebaseIndexEmbedderProvider === "openai"
-					? providerSchemas.openai
-					: config.codebaseIndexEmbedderProvider === "ollama"
-						? providerSchemas.ollama
-						: providerSchemas["openai-compatible"]
+		// const providerSchemas = {
+		// 	openai: baseSchema.extend({
+		// 		codebaseIndexEmbedderProvider: z.literal("openai"),
+		// 		codeIndexOpenAiKey: z.string().min(1, "OpenAI key is required"),
+		// 	}),
+		// 	ollama: baseSchema.extend({
+		// 		codebaseIndexEmbedderProvider: z.literal("ollama"),
+		// 		codebaseIndexEmbedderBaseUrl: z.string().url("Ollama URL must be a valid URL"),
+		// 	}),
+		// 	"openai-compatible": baseSchema.extend({
+		// 		codebaseIndexEmbedderProvider: z.literal("openai-compatible"),
+		// 		codebaseIndexOpenAiCompatibleBaseUrl: z.string().url("Base URL must be a valid URL"),
+		// 		codebaseIndexOpenAiCompatibleApiKey: z.string().min(1, "API key is required"),
+		// 		codebaseIndexOpenAiCompatibleModelDimension: z
+		// 			.number()
+		// 			.int("Dimension must be an integer")
+		// 			.positive("Dimension must be a positive number")
+		// 			.optional(),
+		// 	}),
+		// }
 
-			schema.parse({
-				...config,
-				codeIndexOpenAiKey: apiConfig.codeIndexOpenAiKey,
-				codebaseIndexOpenAiCompatibleBaseUrl: apiConfig.codebaseIndexOpenAiCompatibleBaseUrl,
-				codebaseIndexOpenAiCompatibleApiKey: apiConfig.codebaseIndexOpenAiCompatibleApiKey,
-				codebaseIndexOpenAiCompatibleModelDimension: apiConfig.codebaseIndexOpenAiCompatibleModelDimension,
-			})
-			return true
-		} catch {
-			return false
-		}
+		// try {
+		// 	const schema =
+		// 		config.codebaseIndexEmbedderProvider === "openai"
+		// 			? providerSchemas.openai
+		// 			: config.codebaseIndexEmbedderProvider === "ollama"
+		// 				? providerSchemas.ollama
+		// 				: providerSchemas["openai-compatible"]
+
+		// 	schema.parse({
+		// 		...config,
+		// 		codeIndexOpenAiKey: apiConfig.codeIndexOpenAiKey,
+		// 		codebaseIndexOpenAiCompatibleBaseUrl: apiConfig.codebaseIndexOpenAiCompatibleBaseUrl,
+		// 		codebaseIndexOpenAiCompatibleApiKey: apiConfig.codebaseIndexOpenAiCompatibleApiKey,
+		// 		codebaseIndexOpenAiCompatibleModelDimension: apiConfig.codebaseIndexOpenAiCompatibleModelDimension,
+		// 	})
+		// 	return true
+		// } catch {
+		// 	return false
+		// }
 	}
 
 	const progressPercentage =
@@ -270,8 +273,6 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 									<SelectValue placeholder={t("settings:codeIndex.selectProviderPlaceholder")} />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="openai">{t("settings:codeIndex.openaiProvider")}</SelectItem>
-									<SelectItem value="ollama">{t("settings:codeIndex.ollamaProvider")}</SelectItem>
 									<SelectItem value="openai-compatible">
 										{t("settings:codeIndex.openaiCompatibleProvider")}
 									</SelectItem>
@@ -280,138 +281,48 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 						</div>
 					</div>
 
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.openaiKeyLabel")}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="password"
-									value={apiConfiguration.codeIndexOpenAiKey || ""}
-									onInput={(e: any) => setApiConfigurationField("codeIndexOpenAiKey", e.target.value)}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-						</div>
-					)}
-
 					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.openaiCompatibleBaseUrlLabel")}</div>
+								<div>{"基础 URL"}</div>
 							</div>
 							<div>
 								<VSCodeTextField
-									value={apiConfiguration.codebaseIndexOpenAiCompatibleBaseUrl || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("codebaseIndexOpenAiCompatibleBaseUrl", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.openaiCompatibleApiKeyLabel")}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="password"
-									value={apiConfiguration.codebaseIndexOpenAiCompatibleApiKey || ""}
-									onInput={(e: any) =>
-										setApiConfigurationField("codebaseIndexOpenAiCompatibleApiKey", e.target.value)
-									}
-									style={{ width: "100%" }}></VSCodeTextField>
-							</div>
-						</div>
-					)}
-
-					<div className="flex items-center gap-4 font-bold">
-						<div>{t("settings:codeIndex.modelLabel")}</div>
-					</div>
-					<div>
-						<div className="flex items-center gap-2">
-							{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" ? (
-								<VSCodeTextField
-									value={codebaseIndexConfig?.codebaseIndexEmbedderModelId || ""}
+									value={codebaseIndexConfig.embeddingBaseUrl || ""}
 									onInput={(e: any) =>
 										setCachedStateField("codebaseIndexConfig", {
 											...codebaseIndexConfig,
-											codebaseIndexEmbedderModelId: e.target.value,
+											embeddingBaseUrl: e.target.value,
 										})
 									}
-									placeholder="Enter custom model ID"
-									style={{ width: "100%" }}></VSCodeTextField>
-							) : (
-								<Select
-									value={codebaseIndexConfig?.codebaseIndexEmbedderModelId || ""}
-									onValueChange={(value) =>
-										setCachedStateField("codebaseIndexConfig", {
-											...codebaseIndexConfig,
-											codebaseIndexEmbedderModelId: value,
-										})
-									}>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder={t("settings:codeIndex.selectModelPlaceholder")} />
-									</SelectTrigger>
-									<SelectContent>
-										{availableModelIds.map((modelId) => (
-											<SelectItem key={modelId} value={modelId}>
-												{modelId}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							)}
-						</div>
-					</div>
-
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
-						<div className="flex flex-col gap-3">
-							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.openaiCompatibleModelDimensionLabel")}</div>
-							</div>
-							<div>
-								<VSCodeTextField
-									type="text"
-									value={
-										apiConfiguration.codebaseIndexOpenAiCompatibleModelDimension?.toString() || ""
-									}
-									onInput={(e: any) => {
-										const value = e.target.value
-										if (value === "") {
-											setApiConfigurationField(
-												"codebaseIndexOpenAiCompatibleModelDimension",
-												undefined,
-											)
-										} else {
-											const parsedValue = parseInt(value, 10)
-											if (!isNaN(parsedValue)) {
-												setApiConfigurationField(
-													"codebaseIndexOpenAiCompatibleModelDimension",
-													parsedValue,
-												)
-											}
-										}
-									}}
-									placeholder={t("settings:codeIndex.openaiCompatibleModelDimensionPlaceholder")}
-									style={{ width: "100%" }}></VSCodeTextField>
+									style={{ width: "100%" }}>
+								</VSCodeTextField>
 								<p className="text-vscode-descriptionForeground text-sm mt-1">
-									{t("settings:codeIndex.openaiCompatibleModelDimensionDescription")}
+									{"使用嵌入模型对源文件片段进行向量化"}
 								</p>
 							</div>
-						</div>
-					)}
-
-					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "ollama" && (
-						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-4 font-bold">
-								<div>{t("settings:codeIndex.ollamaUrlLabel")}</div>
+								<div>{"API 密钥"}</div>
 							</div>
 							<div>
 								<VSCodeTextField
-									value={codebaseIndexConfig.codebaseIndexEmbedderBaseUrl || ""}
+									type="password"
+									value={apiConfiguration.embeddingApiKey || ""}
+									onInput={(e: any) =>
+										setApiConfigurationField("embeddingApiKey", e.target.value)
+									}
+									style={{ width: "100%" }}></VSCodeTextField>
+							</div>
+							<div className="flex items-center gap-4 font-bold">
+								<div>{"模型 ID"}</div>
+							</div>
+							<div>
+								<VSCodeTextField
+									value={codebaseIndexConfig.embeddingModelID || ""}
 									onInput={(e: any) =>
 										setCachedStateField("codebaseIndexConfig", {
 											...codebaseIndexConfig,
-											codebaseIndexEmbedderBaseUrl: e.target.value,
+											embeddingModelID: e.target.value,
 										})
 									}
 									style={{ width: "100%" }}></VSCodeTextField>
@@ -419,35 +330,171 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 						</div>
 					)}
 
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center gap-4 font-bold">
-							<div>{t("settings:codeIndex.qdrantUrlLabel")}</div>
+					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
+						<div className="mt-8">
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"注解基础 URL"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									value={codebaseIndexConfig.enhancementBaseUrl || ""}
+									onInput={(e: any) =>
+										setCachedStateField("codebaseIndexConfig", {
+											...codebaseIndexConfig,
+											enhancementBaseUrl: e.target.value,
+										})
+									}
+									style={{ width: "100%" }}>
+								</VSCodeTextField>
+								<p className="text-vscode-descriptionForeground text-sm mt-1">
+									{"使用对话模型对源文件片段进行注解，帮助 Codebase Search 搜索代码上下文，也使用于 LLM 重排序"}
+								</p>
+							</div>
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"注解 API 密钥"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									type="password"
+									value={apiConfiguration.enhancementApiKey || ""}
+									onInput={(e: any) =>
+										setApiConfigurationField("enhancementApiKey", e.target.value)
+									}
+									style={{ width: "100%" }}></VSCodeTextField>
+							</div>
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"注解模型 ID"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									value={codebaseIndexConfig.enhancementModelID || ""}
+									onInput={(e: any) =>
+										setCachedStateField("codebaseIndexConfig", {
+											...codebaseIndexConfig,
+											enhancementModelID: e.target.value,
+										})
+									}
+									style={{ width: "100%" }}></VSCodeTextField>
+							</div>
 						</div>
-						<div>
-							<VSCodeTextField
-								value={codebaseIndexConfig.codebaseIndexQdrantUrl || "http://localhost:6333"}
-								onInput={(e: any) =>
-									setCachedStateField("codebaseIndexConfig", {
-										...codebaseIndexConfig,
-										codebaseIndexQdrantUrl: e.target.value,
-									})
-								}
-								style={{ width: "100%" }}></VSCodeTextField>
 						</div>
-					</div>
+					)}
 
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center gap-4 font-bold">
-							<div>{t("settings:codeIndex.qdrantKeyLabel")}</div>
+					{codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
+						<div className="mt-8">
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center gap-0 font-bold">
+									<div>{"存放位置"}</div>
+									<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+								</div>
+								<div>
+									<VSCodeTextField
+										value={codebaseIndexConfig.ragPath || ""}
+										onInput={(e: any) =>
+											setCachedStateField("codebaseIndexConfig", {
+												...codebaseIndexConfig,
+												ragPath: e.target.value,
+											})
+										}
+										style={{ width: "100%" }}>
+									</VSCodeTextField>
+									<p className="text-vscode-descriptionForeground text-sm mt-0">
+										{"向量数据库仅支持存放在本地硬盘，不支持存放在网络硬盘"}
+									</p>
+								</div>
+							</div>
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center gap-2">
+									<VSCodeCheckbox
+										checked={codebaseIndexConfig?.llmFilter || false}
+										onChange={(e: any) =>
+											setCachedStateField("codebaseIndexConfig", {
+												...codebaseIndexConfig,
+												llmFilter: e.target.checked,
+											})
+										}>
+										<span className="font-medium">{"启用 LLM 重排序"}</span>
+									</VSCodeCheckbox>
+								</div>
+								<p className="text-vscode-descriptionForeground text-sm mt-0">
+									{"使用对话模型对搜索结果进行筛选，提高检索准确性"}
+								</p>
+							</div>
+							<div className="flex flex-col gap-3">
+								<div className="flex items-center gap-2">
+									<VSCodeCheckbox
+										checked={codebaseIndexConfig?.codeBaseLogging || false}
+										onChange={(e: any) =>
+											setCachedStateField("codebaseIndexConfig", {
+												...codebaseIndexConfig,
+												codeBaseLogging: e.target.checked,
+											})
+										}>
+										<span className="font-medium">{"启用代码库日志记录"}</span>
+									</VSCodeCheckbox>
+								</div>
+							</div>
 						</div>
-						<div>
-							<VSCodeTextField
-								type="password"
-								value={apiConfiguration.codeIndexQdrantApiKey}
-								onInput={(e: any) => setApiConfigurationField("codeIndexQdrantApiKey", e.target.value)}
-								style={{ width: "100%" }}></VSCodeTextField>
+					)}
+
+
+					{/* {codebaseIndexConfig?.codebaseIndexEmbedderProvider === "openai-compatible" && (
+						<div className="mt-8">
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"重排序基础 URL"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									value={codebaseIndexConfig.rerankBaseUrl || ""}
+									onInput={(e: any) =>
+										setCachedStateField("codebaseIndexConfig", {
+											...codebaseIndexConfig,
+											rerankBaseUrl: e.target.value,
+										})
+									}
+									style={{ width: "100%" }}>
+								</VSCodeTextField>
+								<p className="text-vscode-descriptionForeground text-sm mt-1">
+									{"对 Codebase Search 搜索出的候选文档进行更精细的排序，从而提升检索结果的准确性"}
+								</p>
+							</div>
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"重排序 API 密钥"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									type="password"
+									value={apiConfiguration.rerankApiKey || ""}
+									onInput={(e: any) =>
+										setApiConfigurationField("rerankApiKey", e.target.value)
+									}
+									style={{ width: "100%" }}></VSCodeTextField>
+							</div>
+							<div className="flex items-center gap-0 font-bold">
+								<div>{"重排序模型 ID"}</div>
+								<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
+							</div>
+							<div>
+								<VSCodeTextField
+									value={codebaseIndexConfig.rerankModelID || ""}
+									onInput={(e: any) =>
+										setCachedStateField("codebaseIndexConfig", {
+											...codebaseIndexConfig,
+											rerankModelID: e.target.value,
+										})
+									}
+									style={{ width: "100%" }}></VSCodeTextField>
+							</div>
 						</div>
-					</div>
+						</div>
+					)} */}
 
 					{(!areSettingsCommitted || !validateIndexingConfig(codebaseIndexConfig, apiConfiguration)) && (
 						<p className="text-sm text-vscode-descriptionForeground mb-2">

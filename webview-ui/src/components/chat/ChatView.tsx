@@ -148,6 +148,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
 	const [showCheckpointWarning, setShowCheckpointWarning] = useState<boolean>(false)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
+	const [isSavingMemory, setIsSavingMemory] = useState<boolean>(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
 		new LRUCache({
 			max: 250,
@@ -690,6 +691,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						setIsCondensing(false)
 					}
 					break
+				case "savedMemory":
+					if (message.success !== undefined) {
+						setIsSavingMemory(false)
+						if (sendingDisabled) {
+							setSendingDisabled(false)
+						}
+					}
+					break
 			}
 			// textAreaRef.current is not explicitly required here since React
 			// guarantees that ref will be stable across re-renders, and we're
@@ -1073,8 +1082,18 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			})
 		}
 
+		if (isSavingMemory) {
+			// Show indicator after clicking save memory button
+			result.push({
+				type: "say",
+				say: "save_memory",
+				ts: Date.now(),
+				partial: true,
+			})
+		}
+
 		return result
-	}, [isCondensing, visibleMessages])
+	}, [isCondensing, isSavingMemory, visibleMessages])
 
 	// scrolling
 
@@ -1553,6 +1572,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				mode={mode}
 				setMode={setMode}
 				modeShortcutText={modeShortcutText}
+				isSavingMemory={isSavingMemory}
+				setIsSavingMemory={setIsSavingMemory}
 			/>
 
 			{isProfileDisabled && (

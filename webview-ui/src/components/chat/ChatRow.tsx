@@ -38,6 +38,7 @@ import { CommandExecution } from "./CommandExecution"
 import { CommandExecutionError } from "./CommandExecutionError"
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
 import { CondenseContextErrorRow, CondensingContextRow, ContextCondenseRow } from "./ContextCondenseRow"
+import { SaveMemoryErrorRow, SavingMemoryRow, SaveMemoryRow } from "./saveMemoryRow-rid"
 import CodebaseSearchResultsDisplay from "./CodebaseSearchResultsDisplay"
 
 interface ChatRowProps {
@@ -193,6 +194,20 @@ export const ChatRowContent = ({
 						className="codicon codicon-check"
 						style={{ color: successColor, marginBottom: "-1.5px" }}></span>,
 					<span style={{ color: successColor, fontWeight: "bold" }}>{t("chat:taskCompleted")}</span>,
+				]
+			case "user_feedback":
+				return [
+					<span
+						className="codicon codicon-account"
+						style={{ color: "var(--vscode-charts-blue)", marginBottom: "-1.5px" }}></span>,
+					<span style={{ color: "var(--vscode-charts-blue)", fontWeight: "bold" }}>{"用户反馈"}</span>,
+				]
+			case "save_memory_tag":
+				return [
+					<span
+						className="codicon codicon-save"
+						style={{ color: "var(--vscode-charts-yellow)", marginBottom: "-1.5px" }}></span>,
+					<span style={{ color: "var(--vscode-charts-yellow)", fontWeight: "bold" }}>{"记忆说明"}</span>,
 				]
 			case "api_req_retry_delayed":
 				return []
@@ -979,10 +994,16 @@ export const ChatRowContent = ({
 					)
 				case "user_feedback":
 					return (
-						<div className="bg-vscode-editor-background border rounded-xs p-1 overflow-hidden whitespace-pre-wrap">
+						// <div className="bg-vscode-editor-background border rounded-xs p-1 overflow-hidden whitespace-pre-wrap">
+						<div>
+							<div style={headerStyle}>
+								{icon}
+								{title}
+							</div>
 							<div className="flex justify-between">
-								<div className="flex-grow px-2 py-1 wrap-anywhere">
-									<Mention text={message.text} withShadow />
+								<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "var(--vscode-charts-blue)" , paddingTop: 10 }}>
+									{/* <Mention text={message.text} withShadow /> */}
+									<Markdown markdown={message.text} partial={message.partial} />
 								</div>
 								<Button
 									variant="ghost"
@@ -1049,6 +1070,25 @@ export const ChatRowContent = ({
 							checkpoint={message.checkpoint}
 						/>
 					)
+				case "save_memory":
+					if (message.partial) {
+						return <SavingMemoryRow />
+					}
+					return message.contextCondense ? <SaveMemoryRow {...message.contextCondense} /> : null
+				case "save_memory_error":
+					return <SaveMemoryErrorRow errorText={message.text} />
+				case "save_memory_tag":
+					return (<div>
+						<div style={headerStyle}>
+							{icon}
+							{title}
+						</div>
+						<div className="flex justify-between">
+							<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "var(--vscode-charts-yellow)" , paddingTop: 10 }}>
+								<Markdown markdown={message.text} partial={message.partial} />
+							</div>
+						</div>
+					</div>)
 				case "condense_context":
 					if (message.partial) {
 						return <CondensingContextRow />

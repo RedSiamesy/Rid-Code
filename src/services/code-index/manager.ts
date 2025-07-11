@@ -12,6 +12,13 @@ import { CacheManager } from "./cache-manager"
 import fs from "fs/promises"
 import ignore from "ignore"
 import path from "path"
+import { z } from "zod"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
+import { testEmbeddingApiAvailable, testOpenAIApiAvailable, testRerankApiAvailable } from "./manager-test-rid"
+
+
 
 export class CodeIndexManager {
 	// --- Singleton Implementation ---
@@ -20,10 +27,16 @@ export class CodeIndexManager {
 	// Specialized class instances
 	private _configManager: CodeIndexConfigManager | undefined
 	private readonly _stateManager: CodeIndexStateManager
-	private _serviceFactory: CodeIndexServiceFactory | undefined
-	private _orchestrator: CodeIndexOrchestrator | undefined
-	private _searchService: CodeIndexSearchService | undefined
-	private _cacheManager: CacheManager | undefined
+
+	private _mcpClient : Client | undefined
+	// private _serviceFactory: CodeIndexServiceFactory | undefined
+	// private _orchestrator: CodeIndexOrchestrator | undefined
+	// private _searchService: CodeIndexSearchService | undefined
+	// private _cacheManager: CacheManager | undefined
+
+	private _isEnhancementEnabled: boolean = false
+	private _isRerankEnabled: boolean = false
+	private _isEmbeddingEnabled: boolean = false
 
 	public static getInstance(context: vscode.ExtensionContext): CodeIndexManager | undefined {
 		const workspacePath = getWorkspacePath() // Assumes single workspace for now
@@ -62,26 +75,15 @@ export class CodeIndexManager {
 	}
 
 	private assertInitialized() {
-		if (!this._configManager || !this._orchestrator || !this._searchService || !this._cacheManager) {
+		if (!this._configManager) {
 			throw new Error("CodeIndexManager not initialized. Call initialize() first.")
 		}
 	}
 
 	public get state(): IndexingState {
-		if (!this.isFeatureEnabled) {
-			return "Standby"
-		}
-		this.assertInitialized()
-		return this._orchestrator!.state
+		return this._stateManager.state
 	}
 
-	public get isFeatureEnabled(): boolean {
-		return this._configManager?.isFeatureEnabled ?? false
-	}
-
-	public get isFeatureConfigured(): boolean {
-		return this._configManager?.isFeatureConfigured ?? false
-	}
 
 	public get isInitialized(): boolean {
 		try {
@@ -90,6 +92,14 @@ export class CodeIndexManager {
 		} catch (error) {
 			return false
 		}
+	}
+
+	public get isFeatureEnabled(): boolean {
+		return this._configManager?.isFeatureEnabled ?? false
+	}
+
+	public get isFeatureConfigured(): boolean {
+		return this._configManager?.isFeatureConfigured ?? false
 	}
 
 	/**
@@ -105,86 +115,118 @@ export class CodeIndexManager {
 		// Load configuration once to get current state and restart requirements
 		const { requiresRestart } = await this._configManager.loadConfiguration()
 
-		// 2. Check if feature is enabled
-		if (!this.isFeatureEnabled) {
-			if (this._orchestrator) {
-				this._orchestrator.stopWatcher()
-			}
-			return { requiresRestart }
+		this._stateManager.setSystemState("Indexing", "Checking configuration.")
+
+		// 2. 创建一个独立的 MCP 客户端（不依赖 McpHub）
+		// 这里以 code_context 配置为例，实际可根据需要动态生成
+		const config = this._configManager.getConfig()
+
+		// --- 三个服务可用性校验并发执行 ---
+		let enhancementPromise: Promise<boolean> = Promise.resolve(false)
+		let rerankPromise: Promise<boolean> = Promise.resolve(false)
+		let embeddingPromise: Promise<boolean> = Promise.resolve(false)
+
+		if (config.enhancementOptions && config.enhancementOptions.baseUrl) {
+			enhancementPromise = testOpenAIApiAvailable({
+				apiKey: config.enhancementOptions?.apiKey || "",
+				model: config.enhancementOptions?.modelID || "",
+				baseUrl: config.enhancementOptions?.baseUrl || ""
+			})
+		}
+		if (config.rerankOptions && config.rerankOptions.baseUrl) {
+			rerankPromise = testRerankApiAvailable({
+				apiKey: config.rerankOptions?.apiKey || "",
+				model: config.rerankOptions?.modelID || "",
+				baseUrl: config.rerankOptions?.baseUrl || ""
+			})
+		}
+		if (config.embeddingOptions && config.embeddingOptions.baseUrl) {
+			embeddingPromise = testEmbeddingApiAvailable({
+				apiKey: config.embeddingOptions?.apiKey || "",
+				model: config.embeddingOptions?.modelID || "",
+				baseUrl: config.embeddingOptions?.baseUrl || ""
+			})
 		}
 
-		// 3. CacheManager Initialization
-		if (!this._cacheManager) {
-			this._cacheManager = new CacheManager(this.context, this.workspacePath)
-			await this._cacheManager.initialize()
-		}
+		// 并发等待所有校验
+		const [enhancementEnabled, rerankEnabled, embeddingEnabled] = await Promise.all([
+			enhancementPromise,
+			rerankPromise,
+			embeddingPromise,
+		])
+		this._isEnhancementEnabled = enhancementEnabled
+		this._isRerankEnabled = rerankEnabled
+		this._isEmbeddingEnabled = embeddingEnabled
 
-		// 4. Determine if Core Services Need Recreation
-		const needsServiceRecreation = !this._serviceFactory || requiresRestart
-
-		if (needsServiceRecreation) {
-			// Stop watcher if it exists
-			if (this._orchestrator) {
-				this.stopWatcher()
-			}
-
-			// (Re)Initialize service factory
-			this._serviceFactory = new CodeIndexServiceFactory(
-				this._configManager,
-				this.workspacePath,
-				this._cacheManager,
-			)
-
-			const ignoreInstance = ignore()
-			const ignorePath = path.join(getWorkspacePath(), ".gitignore")
-			try {
-				const content = await fs.readFile(ignorePath, "utf8")
-				ignoreInstance.add(content)
-				ignoreInstance.add(".gitignore")
-			} catch (error) {
-				// Should never happen: reading file failed even though it exists
-				console.error("Unexpected error loading .gitignore:", error)
-			}
-
-			// (Re)Create shared service instances
-			const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
-				this.context,
-				this._cacheManager,
-				ignoreInstance,
-			)
-
-			// (Re)Initialize orchestrator
-			this._orchestrator = new CodeIndexOrchestrator(
-				this._configManager,
-				this._stateManager,
-				this.workspacePath,
-				this._cacheManager,
-				vectorStore,
-				scanner,
-				fileWatcher,
-			)
-
-			// (Re)Initialize search service
-			this._searchService = new CodeIndexSearchService(
-				this._configManager,
-				this._stateManager,
-				embedder,
-				vectorStore,
-			)
-		}
-
-		// 5. Handle Indexing Start/Restart
-		// The enhanced vectorStore.initialize() in startIndexing() now handles dimension changes automatically
-		// by detecting incompatible collections and recreating them, so we rely on that for dimension changes
-		const shouldStartOrRestartIndexing =
-			requiresRestart ||
-			(needsServiceRecreation && (!this._orchestrator || this._orchestrator.state !== "Indexing"))
-
-		if (shouldStartOrRestartIndexing) {
-			this._orchestrator?.startIndexing() // This method is async, but we don't await it here
-		}
+		this.startIndexing()
 
 		return { requiresRestart }
+	}
+
+	public async _startIndexing(): Promise<void> {
+		if (!this._configManager) {
+			this._stateManager.setSystemState("Error", "Config error.")
+			return
+		}
+
+		if (this._mcpClient !== undefined) {
+			this._stateManager.setSystemState("Indexed", `Codebase client initialized successfully. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
+			return
+		}
+
+		const config = this._configManager.getConfig()
+		const args = []
+		args.push("-m", "code_context_mcp")
+
+		if (!this._isEmbeddingEnabled) {
+			this._stateManager.setSystemState("Error", "Embedding service is not enabled.")
+		}
+		if (config.enhancementOptions && this._isEnhancementEnabled) {
+			args.push("--is-enhancement")
+			args.push("--enhancement-key", config.enhancementOptions.apiKey || "key")
+			args.push("--enhancement-model", config.enhancementOptions.modelID || "qwq-32b")
+			args.push("--enhancement-url", config.enhancementOptions.baseUrl || "http://10.12.154.110:7000/v1")
+		}
+		if (config.rerankOptions && this._isRerankEnabled) {
+			args.push("--rerank-key", config.rerankOptions.apiKey || "key")
+			args.push("--rerank-model", config.rerankOptions.modelID || "BAAI/bge-reranker-v2-m3")
+			args.push("--rerank-url", config.rerankOptions.baseUrl || "http://localhost:6123/rerank/v1")
+		}
+		if (config.embeddingOptions && this._isEmbeddingEnabled) {
+			args.push("--embedding-key", config.embeddingOptions.apiKey || "key")
+			args.push("--embedding-model", config.embeddingOptions.modelID || "BAAI/bge-m3")
+			args.push("--embedding-url", config.embeddingOptions.baseUrl || "http://localhost:6123/embedding/v1")
+		}
+		if (config.ragPath) {
+			args.push("--rag-path", config.ragPath)
+		}
+		if (config.codeBaseLogging) {
+			args.push("--log")
+		}
+
+		const mcpConfig = {
+			command: "python",
+			args
+		}
+		const transport = new StdioClientTransport({
+			command: mcpConfig.command,
+			args: mcpConfig.args,
+			// env: mcpConfig.env,
+			cwd: this.workspacePath,
+			stderr: "pipe",
+		})
+		try {
+			const client = new Client({ name: "CodeIndexManager", version: "0.1.0" }, { capabilities: {} })
+			// await transport.start()
+			await client.connect(transport)
+			// 你可以将 client 实例保存到 this._mcpClient 以便后续调用
+			this._mcpClient = client
+			this._stateManager.setSystemState("Indexed", `Codebase client initialized successfully. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
+		} catch (error) {
+			console.error("[CodeIndexManager] Failed to initialize MCP client:", error)
+			this._stateManager.setSystemState("Error", `Codebase client initialization failed. ${error}`)
+			// throw new Error("Failed to initialize MCP client")
+		}
 	}
 
 	/**
@@ -196,18 +238,28 @@ export class CodeIndexManager {
 			return
 		}
 		this.assertInitialized()
-		await this._orchestrator!.startIndexing()
+		if (!this.isFeatureConfigured) {
+			this._stateManager.setSystemState("Standby", "Missing configuration. Save your settings to start indexing.")
+			console.warn("[CodeIndexOrchestrator] Start rejected: Missing configuration.")
+			return
+		}
+		this._stateManager.setSystemState("Indexing", "Start Indexing...")
+		this._startIndexing()
+		// this._stateManager.setSystemState("Indexing", "Initializing services...")
+		// this._stateManager.setSystemState("Indexed", `File watcher started. ${this._isRerankEnabled? "\n  ✔ Rerank service enabled." : ""} ${this._isEnhancementEnabled? "\n  ✔ Enhancement service enabled." : ""}`)
 	}
 
 	/**
 	 * Stops the file watcher and potentially cleans up resources.
 	 */
 	public stopWatcher(): void {
-		if (!this.isFeatureEnabled) {
-			return
-		}
-		if (this._orchestrator) {
-			this._orchestrator.stopWatcher()
+		// if (!this.isFeatureEnabled) {
+		// 	return
+		// }
+		this._stateManager.setSystemState("Standby", "File watcher stopped.")
+		if (this._mcpClient) {
+			this._mcpClient.close() // Disconnect the MCP client
+			this._mcpClient = undefined // Clear the client reference
 		}
 	}
 
@@ -215,9 +267,7 @@ export class CodeIndexManager {
 	 * Cleans up the manager instance.
 	 */
 	public dispose(): void {
-		if (this._orchestrator) {
-			this.stopWatcher()
-		}
+		this.stopWatcher()
 		this._stateManager.dispose()
 	}
 
@@ -230,8 +280,41 @@ export class CodeIndexManager {
 			return
 		}
 		this.assertInitialized()
-		await this._orchestrator!.clearIndexData()
-		await this._cacheManager!.clearCacheFile()
+
+		if (!this._mcpClient) {
+			throw new Error("MCP client not initialized")
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "delete_index",
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
+				}
+			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP delete_index error:" + results.join(", "))
+				throw new Error("MCP delete_index returned an error:" + results.join(", "))
+			}
+		} catch (error) {
+			console.error("[CodeIndexManager] searchSummary exception:", error)
+			throw error
+		}
+
+		await this.stopWatcher()
 	}
 
 	// --- Private Helpers ---
@@ -240,12 +323,111 @@ export class CodeIndexManager {
 		return this._stateManager.getCurrentStatus()
 	}
 
-	public async searchIndex(query: string, directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
-		if (!this.isFeatureEnabled) {
-			return []
+	public async searchIndex(query: string, directoryPrefix?: string): Promise<string[]> {
+		if (!this._mcpClient) {
+			throw new Error("MCP client not initialized")
 		}
-		this.assertInitialized()
-		return this._searchService!.searchIndex(query, directoryPrefix)
+
+		
+		if (!this._configManager) {
+			this._stateManager.setSystemState("Error", "Config error.")
+			throw new Error("Config error.")
+		}
+
+		const config = this._configManager.getConfig()
+
+		
+
+		// const params: Record<string, any> = { queries: [query], json_format: true , rerank_enable: this._isRerankEnabled}
+		const params: Record<string, any> = { 
+			queries: query.split("|").map(q => q.trim()), 
+			json_format: true, 
+			rerank_enable: this._isRerankEnabled 
+		}
+
+		if (config.llmFilter) {
+			params.llm_filter = config.llmFilter
+		}
+
+		if (directoryPrefix) {
+			params.paths = [directoryPrefix]
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "search_code",
+						arguments: params
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
+				}
+			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP search_code error:" + results.join(", "))
+				throw new Error("MCP search_code returned an error:" + results.join(", "))
+			}
+
+			return results
+		} catch (error) {
+			console.error("[CodeIndexManager] searchIndex exception:", error)
+			throw error
+		}
+	}
+
+	public async searchSummary(directoryPrefix: string): Promise<string[]> {
+		if (!this._mcpClient) {
+			throw new Error("MCP client not initialized")
+		}
+
+		// const params: Record<string, any> = { queries: [query], json_format: true , rerank_enable: this._isRerankEnabled}
+		const params: Record<string, any> = { 
+			json_format: true, 
+			paths: [directoryPrefix],
+		}
+
+		try {
+			const response = await this._mcpClient.request(
+				{
+					method: "tools/call",
+					params: {
+						name: "get_summary",
+						arguments: params
+					}
+				},
+				CallToolResultSchema
+			)
+
+			const results: string[] = []
+			if (response && Array.isArray(response.content)) {
+				for (const item of response.content) {
+					if (item && typeof item.text === "string") {
+						results.push(item.text)
+					}
+				}
+			}
+
+			if (response.isError) {
+				console.error("[CodeIndexManager] MCP get_summary error:" + results.join(", "))
+				throw new Error("MCP get_summary returned an error:" + results.join(", "))
+			}
+
+			return results
+		} catch (error) {
+			console.error("[CodeIndexManager] searchSummary exception:", error)
+			throw error
+		}
 	}
 
 	/**
@@ -264,7 +446,12 @@ export class CodeIndexManager {
 			// If configuration changes require a restart and the manager is initialized, restart the service
 			if (requiresRestart && isFeatureEnabled && isFeatureConfigured && this.isInitialized) {
 				this.stopWatcher()
-				await this.startIndexing()
+				const contextProxy = await ContextProxy.getInstance(this.context)
+				await this.initialize(contextProxy)
+				// await this.startIndexing()
+			} else if (!isFeatureEnabled) {
+				this._stateManager.setSystemState("Standby", "File watcher stopped.")
+				this.stopWatcher()
 			}
 		}
 	}

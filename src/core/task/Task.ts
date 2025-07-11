@@ -1217,6 +1217,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			fileContextTracker: this.fileContextTracker,
 			rooIgnoreController: this.rooIgnoreController,
 			showRooIgnoredFiles,
+			globalStoragePath: this.globalStoragePath,
 		})
 
 		const environmentDetails = await getEnvironmentDetails(this, includeFileDetails)

@@ -97,15 +97,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)
-	const codeIndexManager = CodeIndexManager.getInstance(context)
+	const codeIndexManager = CodeIndexManager.getInstance(context);
 
-	try {
-		await codeIndexManager?.initialize(contextProxy)
-	} catch (error) {
-		outputChannel.appendLine(
-			`[CodeIndexManager] Error during background CodeIndexManager configuration/indexing: ${error.message || error}`,
-		)
-	}
+	(async () => {
+		try {
+			await codeIndexManager?.initialize(contextProxy)
+		} catch (error) {
+			outputChannel.appendLine(
+				`[CodeIndexManager] Error during background CodeIndexManager configuration/indexing: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	})()
 
 	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, codeIndexManager, mdmService)
 	TelemetryService.instance.setProvider(provider)

@@ -1190,7 +1190,7 @@ export class ClineProvider
 		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
 	}
 
-	// this function deletes a task from task hidtory, and deletes it's checkpoints and delete the task folder
+	// this function deletes a task from task history, and deletes it's checkpoints and delete the task folder
 	async deleteTaskWithId(id: string) {
 		try {
 			// get the task directory full path
@@ -1482,6 +1482,17 @@ export class ClineProvider
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
+
+				embeddingBaseUrl: "",
+				embeddingModelID: "",
+				enhancementBaseUrl: "",
+				enhancementModelID: "",
+				rerankBaseUrl: "",
+				rerankModelID: "",
+
+				ragPath: "",
+				llmFilter: false,
+				codeBaseLogging: false,
 			},
 			mdmCompliant: this.checkMdmCompliance(),
 			profileThresholds: profileThresholds ?? {},
@@ -1633,6 +1644,17 @@ export class ClineProvider
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
+				
+				embeddingBaseUrl: "",
+				embeddingModelID: "",
+				enhancementBaseUrl: "",
+				enhancementModelID: "",
+				rerankBaseUrl: "",
+				rerankModelID: "",
+				
+				ragPath: "",
+				llmFilter: false,
+				codeBaseLogging: false,
 			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 		}

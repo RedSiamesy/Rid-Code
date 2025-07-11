@@ -15,6 +15,14 @@ export interface CodeIndexConfig {
 	qdrantUrl?: string
 	qdrantApiKey?: string
 	searchMinScore?: number
+
+	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	rerankOptions?: { baseUrl: string; apiKey: string; modelID: string }
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }
 
 /**
@@ -32,4 +40,20 @@ export type PreviousConfigSnapshot = {
 	openAiCompatibleModelDimension?: number
 	qdrantUrl?: string
 	qdrantApiKey?: string
+
+	embeddingBaseUrl?: string
+	embeddingApiKey?: string
+	embeddingModelID?: string
+
+	enhancementBaseUrl?: string
+	enhancementApiKey?: string
+	enhancementModelID?: string
+	
+	rerankBaseUrl?: string
+	rerankApiKey?: string
+	rerankModelID?: string
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }
