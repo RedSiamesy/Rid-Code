@@ -1,5 +1,5 @@
-src\core\mentions\index.ts
-parseMentions函数对关键字的处理
+src\core\mentions\index-riddler.ts
+parseMentions函数对关键字的处理，这里是直接影响ai上下文的具体实现
 
 src\shared\context-mentions.ts
 正则对关键字的识别

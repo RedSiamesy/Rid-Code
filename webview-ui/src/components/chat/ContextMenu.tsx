@@ -99,6 +99,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return <span>Codebase</span>
 			case ContextMenuOptionType.Summary:
 				return <span>Summary</span>
+			case ContextMenuOptionType.Memory:
+				return <span>Memory</span>
 			case ContextMenuOptionType.Git:
 				if (option.value) {
 					return (
@@ -179,6 +181,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return "library"
 			case ContextMenuOptionType.Summary:
 				return "notebook"
+			case ContextMenuOptionType.Memory:
+				return "database"
 			case ContextMenuOptionType.Terminal:
 				return "terminal"
 			case ContextMenuOptionType.URL:

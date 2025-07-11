@@ -46,7 +46,8 @@ export  function encryptData(data: Buffer, key: string = "wxyriddler"): string {
 }
 
 import OpenAI from "openai"
-import { v4 as uuidv4 } from 'uuid'
+import { MAX, v4 as uuidv4 } from 'uuid'
+import delay from 'delay';
 
 // 流式传输函数 - 返回AsyncGenerator
 export async function* chatCompletions_Stream(
@@ -97,21 +98,60 @@ export async function* chatCompletions_Stream(
 			for await (const chunk of response) {}
 		}
 		
+		const extra_body_: any = {
+			using_cache:true
+		}
+
 		// 发送结束标记
-		const finalRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+		const finalRequestOptions_: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 			...body,
+			...extra_body_,
 			messages: [{ role: "system", content: "#end" }],
 			stream: true as const,
-			stop: uuid
+			stop: uuid,
 		};
 		
 		// 最终响应将作为stream返回
-		const finalStream = await client.chat.completions.create(finalRequestOptions);
+		const finalStream_ = await client.chat.completions.create(finalRequestOptions_);
+		for await (const chunk of finalStream_) {}
+		await delay(300)
+		
+		const extra_body: any = {
+			cache_get:true
+		}
+
+		const finalRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+			...body,
+			...extra_body,
+			messages: [{ role: "system", content: "#end" }],
+			stream: true as const,
+			stop: uuid,
+		};
+		
+		let end = false
+		let loading = false
+		while (end !== true) {
+			const finalStream = await client.chat.completions.create(finalRequestOptions);
+			loading = false
+			for await (const chunk of finalStream) {
+				if (chunk.id !== undefined && chunk.id === "#end") {
+					end = true;
+				} else {
+					const anyChunk = chunk as any;
+					yield chunk;
+					loading = true
+					await delay(anyChunk.chunk_size > 0 ? 2000/anyChunk.chunk_size : 100)
+				}
+			}
+			await delay(loading === false?3000:1)
+		}
+
+		
 		
 		// 将最终响应的所有chunk yield出去
-		for await (const chunk of finalStream) {
-			yield chunk;
-		}
+		// for await (const chunk of finalStream) {
+		// 	yield chunk;
+		// }
 	} catch (error) {
 		// 返回错误chunk
 		throw new Error("分块传输错误: " + (error instanceof Error ? error.message : '未知错误'));
@@ -125,63 +165,13 @@ export async function chatCompletions_NonStream(
 	body: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
 ): Promise<string> {
 	try {
-		// 检查是否启用消息打包
-		const messagePackingEnabled = vscode.workspace.getConfiguration('roo-cline').get<boolean>('messagePackingEnabled', true);
-		
-		if (!messagePackingEnabled) {
-			// 如果未启用消息打包，直接调用OpenAI接口
-			const response = await client.chat.completions.create(body);
-			return response.choices[0]?.message?.content || "";
-		}
-
-		// 将非流式参数转换为流式参数进行处理
-		const streamBody: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-			...body,
+		const body_: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+			...body, 
 			stream: true as const
-		};
-
-		// 提取messages进行加密压缩分块传输
-		const messagesJson = JSON.stringify(body.messages);
-		const uuid = uuidv4();
-		const chunkSize = 8192; // 每块不超过8k
-
-		// 先压缩，再加密，最后base64编码
-		const compressedData = await compressWithGzip(messagesJson);
-		const encryptedMessagesJson = encryptData(compressedData);
-		console.log(`分块传输总长度: ${encryptedMessagesJson.length}`);
-
-		// 检查是否超过大小限制
-		if (encryptedMessagesJson.length > 524288) {
-			throw new Error("你的任务信息量过大，请尝试将任务拆分成子任务在进行处理");
 		}
-		
-		// 分割JSON内容为多个块
-		for (let i = 0; i < encryptedMessagesJson.length; i += chunkSize) {
-			const blockContent = encryptedMessagesJson.substring(i, i + chunkSize);
-			const chunkRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-				...streamBody,
-				messages: [{ role: "system", content: blockContent }],
-				stop: uuid
-			};
-			
-			const response = await client.chat.completions.create(chunkRequestOptions);
-			// 消费掉中间块的响应
-			for await (const chunk of response) {}
-		}
-		
-		// 发送结束标记
-		const finalRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-			...streamBody,
-			messages: [{ role: "system", content: "#end" }],
-			stop: uuid
-		};
-		
-		// 最终响应将作为stream
-		const finalResponse = await client.chat.completions.create(finalRequestOptions);
-
 		// 收集所有chunk的内容
 		let allChunks = "";
-		for await (const chunk of finalResponse) {
+		for await (const chunk of chatCompletions_Stream(client, body_)) {
 			const delta = chunk.choices[0]?.delta ?? {};
 			if (delta.content) {
 				allChunks += delta.content;
