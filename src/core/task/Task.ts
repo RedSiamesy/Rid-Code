@@ -72,7 +72,7 @@ import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
 import { readApiMessages, saveApiMessages, readTaskMessages, saveTaskMessages, taskMetadata } from "../task-persistence"
-import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
+import { getEnvironmentDetails } from "../environment/getEnvironmentDetails-riddler"
 import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
@@ -1217,6 +1217,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			fileContextTracker: this.fileContextTracker,
 			rooIgnoreController: this.rooIgnoreController,
 			showRooIgnoredFiles,
+			globalStoragePath: this.globalStoragePath,
 		})
 
 		const environmentDetails = await getEnvironmentDetails(this, includeFileDetails)

@@ -33,7 +33,7 @@ interface MemoryData {
 /**
  * 获取记忆文件路径
  */
-async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
+export async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
 	const globalMemoryPath = path.join(globalStoragePath, "global-memory.md")
 
 	const workspacePath = getWorkspacePath()
@@ -53,7 +53,7 @@ async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFile
 /**
  * 读取记忆文件内容
  */
-async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
+export async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
 	const globalMemories: string[] = []
 	const projectMemories: string[] = []
 
@@ -88,7 +88,7 @@ async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
 /**
  * 格式化记忆内容为显示格式
  */
-function formatMemoryContent(memoryData: MemoryData): string {
+export function formatMemoryContent(memoryData: MemoryData): string {
 	if (memoryData.globalMemories.length === 0 && memoryData.projectMemories.length === 0) {
 		return "No memory data available"
 	}
@@ -98,7 +98,7 @@ function formatMemoryContent(memoryData: MemoryData): string {
 	if (memoryData.globalMemories.length > 0) {
 		formatted += "# Global Memory:\n"
 		memoryData.globalMemories.forEach((memory, index) => {
-			formatted += `${index + 1}. ${memory}\n`
+			formatted += `${memory}\n`
 		})
 		formatted += "\n"
 	}
@@ -106,7 +106,7 @@ function formatMemoryContent(memoryData: MemoryData): string {
 	if (memoryData.projectMemories.length > 0) {
 		formatted += "# Project Memory:\n"
 		memoryData.projectMemories.forEach((memory, index) => {
-			formatted += `${index + 1}. ${memory}\n`
+			formatted += `${memory}\n`
 		})
 	}
 
@@ -273,12 +273,12 @@ export async function parseMentions(
 					const memoryFiles = await getMemoryFilePaths(globalStoragePath)
 					const memoryData = await readMemoryFiles(memoryFiles)
 					const formattedMemory = formatMemoryContent(memoryData)
-					parsedText += `\n\n<agent_memory_content>\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)</agent_memory_content>`
+					parsedText += `\n\n<agent_memory_content>\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n</agent_memory_content>`
 				} catch (error) {
 					parsedText += `\n\n<agent_memory_content>\nError reading memory: ${error.message}\n</agent_memory_content>`
 				}
 			} else {
-				parsedText += `\n\n<agent_memory_content>\nError: Global storage path not available\n</agent_memory_content>`
+				parsedText += `\n\n<agent_memory_content>\nError: Memory path not available\n</agent_memory_content>`
 			}
 		}
 	}

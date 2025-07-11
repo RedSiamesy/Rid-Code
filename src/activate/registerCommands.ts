@@ -12,7 +12,7 @@ import { focusPanel } from "../utils/focusPanel"
 
 import { registerHumanRelayCallback, unregisterHumanRelayCallback, handleHumanRelayResponse } from "./humanRelay"
 import { handleNewTask } from "./handleTask"
-import { CodeIndexManager } from "../services/code-index/manager"
+import { CodeIndexManager } from "../services/code-index/manager-riddler"
 
 /**
  * Helper to get the visible ClineProvider instance or log if not found.

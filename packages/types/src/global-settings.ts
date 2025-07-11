@@ -8,7 +8,7 @@ import {
 	providerSettingsSchema,
 } from "./provider-settings.js"
 import { historyItemSchema } from "./history.js"
-import { codebaseIndexModelsSchema, codebaseIndexConfigSchema } from "./codebase-index.js"
+import { codebaseIndexModelsSchema, codebaseIndexConfigSchema } from "./codebase-index-riddler.js"
 import { experimentsSchema } from "./experiment.js"
 import { telemetrySettingsSchema } from "./telemetry.js"
 import { modeConfigSchema } from "./mode.js"
@@ -142,6 +142,10 @@ export const SECRET_STATE_KEYS = [
 	"codeIndexOpenAiKey",
 	"codeIndexQdrantApiKey",
 	"codebaseIndexOpenAiCompatibleApiKey",
+
+	"embeddingApiKey",
+	"enhancementApiKey",
+	"rerankApiKey",
 ] as const satisfies readonly (keyof ProviderSettings)[]
 export type SecretState = Pick<ProviderSettings, (typeof SECRET_STATE_KEYS)[number]>
 

@@ -17,7 +17,7 @@ Mention regex:
 		- **Slash (`/`)**: Indicates that the mention is a file or folder path starting with a '/'.
 	  - `|`: Logical OR.
 	  - `\w+:\/\/`:
-	    - **Protocol (`\w+://`)**: Matches URLs that start with a word character sequence followed by '://', such as 'http://', 'https://', 'ftp://', etc.
+		- **Protocol (`\w+://`)**: Matches URLs that start with a word character sequence followed by '://', such as 'http://', 'https://', 'ftp://', etc.
 	- `(?:[^\s\\]|\\ )+?`:
 	  - **Non-Capturing Group (`(?:...)`)**: Groups the alternatives without capturing them.
 	  - **Non-Whitespace and Non-Backslash (`[^\s\\]`)**: Matches any character that is not whitespace or a backslash.
@@ -54,7 +54,7 @@ Mention regex:
 
 */
 export const mentionRegex =
-	/(?<!\\)@((?:\/|\w+:\/\/)(?:[^\s\\]|\\ )+?|[a-f0-9]{7,40}\b|problems\b|git-changes\b|terminal\b)(?=[.,;:!?]?(?=[\s\r\n]|$))/
+	/(?<!\\)@((?:\/|\w+:\/\/)(?:[^\s\\]|\\ )+?|[a-f0-9]{7,40}\b|problems\b|codebase\b|summary\b|memory\b|summary:[^\s]+?|codebase:[^\s]+?|git-changes\b|terminal\b)(?=[.,;:!?]?(?=[\s\r\n]|$))/
 export const mentionRegexGlobal = new RegExp(mentionRegex.source, "g")
 
 export interface MentionSuggestion {

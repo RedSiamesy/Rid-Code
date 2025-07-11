@@ -26,6 +26,8 @@ import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler } from "../index"
 
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-riddler"
+
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
 	transforms?: string[]
@@ -48,12 +50,7 @@ interface CompletionUsage {
 	}
 	total_tokens?: number
 	cost?: number
-	is_byok?: boolean
 }
-
-// with bring your own key, OpenRouter charges 5% of what it normally would: https://openrouter.ai/docs/use-cases/byok
-// so we multiply the cost reported by OpenRouter to get an estimate of what the request actually cost
-const BYOK_COST_MULTIPLIER = 20
 
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
@@ -65,7 +62,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		super()
 		this.options = options
 
-		const baseURL = this.options.openRouterBaseUrl || "https://openrouter.ai/api/v1"
+		const baseURL = this.options.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
 		const apiKey = this.options.openRouterApiKey ?? "not-provided"
 
 		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS })
@@ -84,10 +81,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		// other providers (including Gemini), so we need to explicitly disable
 		// i We should generalize this using the logic in `getModelParams`, but
 		// this is easier for now.
-		if (
-			(modelId === "google/gemini-2.5-pro-preview" || modelId === "google/gemini-2.5-pro") &&
-			typeof reasoning === "undefined"
-		) {
+		if (modelId === "google/gemini-2.5-pro-preview" && typeof reasoning === "undefined") {
 			reasoning = { exclude: true }
 		}
 
@@ -136,7 +130,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		const stream = await this.client.chat.completions.create(completionParams)
+		const stream = await chatCompletions_Stream(this.client, completionParams)
 
 		let lastUsage: CompletionUsage | undefined = undefined
 
@@ -172,7 +166,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 				// and how to best support it.
 				// cacheReadTokens: lastUsage.prompt_tokens_details?.cached_tokens,
 				reasoningTokens: lastUsage.completion_tokens_details?.reasoning_tokens,
-				totalCost: (lastUsage.is_byok ? BYOK_COST_MULTIPLIER : 1) * (lastUsage.cost || 0),
+				totalCost: lastUsage.cost || 0,
 			}
 		}
 	}
@@ -236,14 +230,14 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		const response = await this.client.chat.completions.create(completionParams)
+		const content = await chatCompletions_NonStream(this.client, completionParams)
 
-		if ("error" in response) {
-			const error = response.error as { message?: string; code?: number }
-			throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
-		}
+		// if ("error" in response) {
+		// 	const error = response.error as { message?: string; code?: number }
+		// 	throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
+		// }
 
-		const completion = response as OpenAI.Chat.ChatCompletion
-		return completion.choices[0]?.message?.content || ""
+		// const completion = response as OpenAI.Chat.ChatCompletion
+		return content || ""
 	}
 }

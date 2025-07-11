@@ -1,7 +1,7 @@
 export * from "./providers/index.js"
 
 export * from "./api.js"
-export * from "./codebase-index.js"
+export * from "./codebase-index-riddler.js"
 export * from "./cloud.js"
 export * from "./experiment.js"
 export * from "./global-settings.js"

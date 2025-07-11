@@ -25,7 +25,7 @@ import { ClineProvider } from "./core/webview/ClineProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { McpServerManager } from "./services/mcp/McpServerManager"
-import { CodeIndexManager } from "./services/code-index/manager"
+import { CodeIndexManager } from "./services/code-index/manager-riddler"
 import { MdmService } from "./services/mdm/MdmService"
 import { migrateSettings } from "./utils/migrateSettings"
 import { API } from "./extension/api"
@@ -97,15 +97,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)
-	const codeIndexManager = CodeIndexManager.getInstance(context)
+	const codeIndexManager = CodeIndexManager.getInstance(context);
 
-	try {
-		await codeIndexManager?.initialize(contextProxy)
-	} catch (error) {
-		outputChannel.appendLine(
-			`[CodeIndexManager] Error during background CodeIndexManager configuration/indexing: ${error.message || error}`,
-		)
-	}
+	(async () => {
+		try {
+			await codeIndexManager?.initialize(contextProxy)
+		} catch (error) {
+			outputChannel.appendLine(
+				`[CodeIndexManager] Error during background CodeIndexManager configuration/indexing: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	})()
 
 	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, codeIndexManager, mdmService)
 	TelemetryService.instance.setProvider(provider)

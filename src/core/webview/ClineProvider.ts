@@ -50,7 +50,7 @@ import { McpHub } from "../../services/mcp/McpHub"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
-import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodeIndexManager } from "../../services/code-index/manager-riddler"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -1190,7 +1190,7 @@ export class ClineProvider
 		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
 	}
 
-	// this function deletes a task from task hidtory, and deletes it's checkpoints and delete the task folder
+	// this function deletes a task from task history, and deletes it's checkpoints and delete the task folder
 	async deleteTaskWithId(id: string) {
 		try {
 			// get the task directory full path
@@ -1482,6 +1482,17 @@ export class ClineProvider
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
+
+				embeddingBaseUrl: "",
+				embeddingModelID: "",
+				enhancementBaseUrl: "",
+				enhancementModelID: "",
+				rerankBaseUrl: "",
+				rerankModelID: "",
+
+				ragPath: "",
+				llmFilter: false,
+				codeBaseLogging: false,
 			},
 			mdmCompliant: this.checkMdmCompliance(),
 			profileThresholds: profileThresholds ?? {},
@@ -1633,6 +1644,17 @@ export class ClineProvider
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
+				
+				embeddingBaseUrl: "",
+				embeddingModelID: "",
+				enhancementBaseUrl: "",
+				enhancementModelID: "",
+				rerankBaseUrl: "",
+				rerankModelID: "",
+				
+				ragPath: "",
+				llmFilter: false,
+				codeBaseLogging: false,
 			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 		}

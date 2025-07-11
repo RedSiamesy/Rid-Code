@@ -22,6 +22,7 @@ import { readLines } from "../../integrations/misc/read-lines"
 import { addLineNumbers } from "../../integrations/misc/extract-text"
 
 import { Task } from "../task/Task"
+import { getMemoryFilePaths, readMemoryFiles, formatMemoryContent } from "../mentions/index-riddler"
 
 const generateDiagnosticText = (diagnostics?: any[]) => {
 	if (!diagnostics?.length) return ""
@@ -281,6 +282,18 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 			)
 
 			details += result
+		}
+
+		const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
+		if (globalStoragePath) {
+			try {
+				const memoryFiles = await getMemoryFilePaths(globalStoragePath)
+				const memoryData = await readMemoryFiles(memoryFiles)
+				const formattedMemory = formatMemoryContent(memoryData)
+				details += `\n\n# Agent Memory Content\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n`
+			} catch (error) {
+				details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
+			}
 		}
 	}
 

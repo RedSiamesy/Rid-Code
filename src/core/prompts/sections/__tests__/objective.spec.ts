@@ -1,5 +1,5 @@
 import { getObjectiveSection } from "../objective"
-import type { CodeIndexManager } from "../../../../services/code-index/manager"
+import type { CodeIndexManager } from "../../../../services/code-index/manager-riddler"
 
 describe("getObjectiveSection", () => {
 	// Mock CodeIndexManager with codebase search available
