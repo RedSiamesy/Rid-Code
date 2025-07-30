@@ -1,7 +1,6 @@
 import { z } from "zod"
 
 import { globalSettingsSchema } from "./global-settings.js"
-import { mcpMarketplaceItemSchema } from "./marketplace.js"
 
 /**
  * CloudUserInfo
@@ -97,7 +96,6 @@ export const organizationCloudSettingsSchema = z.object({
 	recordTaskMessages: z.boolean().optional(),
 	enableTaskSharing: z.boolean().optional(),
 	taskShareExpirationDays: z.number().int().positive().optional(),
-	allowMembersViewAllTasks: z.boolean().optional(),
 })
 
 export type OrganizationCloudSettings = z.infer<typeof organizationCloudSettingsSchema>
@@ -111,9 +109,6 @@ export const organizationSettingsSchema = z.object({
 	cloudSettings: organizationCloudSettingsSchema.optional(),
 	defaultSettings: organizationDefaultSettingsSchema,
 	allowList: organizationAllowListSchema,
-	hiddenMcps: z.array(z.string()).optional(),
-	hideMarketplaceMcps: z.boolean().optional(),
-	mcps: z.array(mcpMarketplaceItemSchema).optional(),
 })
 
 export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>
@@ -133,7 +128,6 @@ export const ORGANIZATION_DEFAULT: OrganizationSettings = {
 		recordTaskMessages: true,
 		enableTaskSharing: true,
 		taskShareExpirationDays: 30,
-		allowMembersViewAllTasks: true,
 	},
 	defaultSettings: {},
 	allowList: ORGANIZATION_ALLOW_ALL,

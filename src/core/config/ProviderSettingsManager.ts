@@ -5,7 +5,6 @@ import {
 	type ProviderSettingsEntry,
 	providerSettingsSchema,
 	providerSettingsSchemaDiscriminated,
-	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
@@ -27,8 +26,6 @@ export const providerProfilesSchema = z.object({
 			rateLimitSecondsMigrated: z.boolean().optional(),
 			diffSettingsMigrated: z.boolean().optional(),
 			openAiHeadersMigrated: z.boolean().optional(),
-			consecutiveMistakeLimitMigrated: z.boolean().optional(),
-			todoListEnabledMigrated: z.boolean().optional(),
 		})
 		.optional(),
 })
@@ -51,8 +48,6 @@ export class ProviderSettingsManager {
 			rateLimitSecondsMigrated: true, // Mark as migrated on fresh installs
 			diffSettingsMigrated: true, // Mark as migrated on fresh installs
 			openAiHeadersMigrated: true, // Mark as migrated on fresh installs
-			consecutiveMistakeLimitMigrated: true, // Mark as migrated on fresh installs
-			todoListEnabledMigrated: true, // Mark as migrated on fresh installs
 		},
 	}
 
@@ -118,8 +113,6 @@ export class ProviderSettingsManager {
 						rateLimitSecondsMigrated: false,
 						diffSettingsMigrated: false,
 						openAiHeadersMigrated: false,
-						consecutiveMistakeLimitMigrated: false,
-						todoListEnabledMigrated: false,
 					} // Initialize with default values
 					isDirty = true
 				}
@@ -139,18 +132,6 @@ export class ProviderSettingsManager {
 				if (!providerProfiles.migrations.openAiHeadersMigrated) {
 					await this.migrateOpenAiHeaders(providerProfiles)
 					providerProfiles.migrations.openAiHeadersMigrated = true
-					isDirty = true
-				}
-
-				if (!providerProfiles.migrations.consecutiveMistakeLimitMigrated) {
-					await this.migrateConsecutiveMistakeLimit(providerProfiles)
-					providerProfiles.migrations.consecutiveMistakeLimitMigrated = true
-					isDirty = true
-				}
-
-				if (!providerProfiles.migrations.todoListEnabledMigrated) {
-					await this.migrateTodoListEnabled(providerProfiles)
-					providerProfiles.migrations.todoListEnabledMigrated = true
 					isDirty = true
 				}
 
@@ -244,30 +225,6 @@ export class ProviderSettingsManager {
 			}
 		} catch (error) {
 			console.error(`[MigrateOpenAiHeaders] Failed to migrate OpenAI headers:`, error)
-		}
-	}
-
-	private async migrateConsecutiveMistakeLimit(providerProfiles: ProviderProfiles) {
-		try {
-			for (const [name, apiConfig] of Object.entries(providerProfiles.apiConfigs)) {
-				if (apiConfig.consecutiveMistakeLimit == null) {
-					apiConfig.consecutiveMistakeLimit = DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
-				}
-			}
-		} catch (error) {
-			console.error(`[MigrateConsecutiveMistakeLimit] Failed to migrate consecutive mistake limit:`, error)
-		}
-	}
-
-	private async migrateTodoListEnabled(providerProfiles: ProviderProfiles) {
-		try {
-			for (const [_name, apiConfig] of Object.entries(providerProfiles.apiConfigs)) {
-				if (apiConfig.todoListEnabled === undefined) {
-					apiConfig.todoListEnabled = true
-				}
-			}
-		} catch (error) {
-			console.error(`[MigrateTodoListEnabled] Failed to migrate todo list enabled setting:`, error)
 		}
 	}
 

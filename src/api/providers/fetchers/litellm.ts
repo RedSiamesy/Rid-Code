@@ -24,11 +24,7 @@ export async function getLiteLLMModels(apiKey: string, baseUrl: string): Promise
 			headers["Authorization"] = `Bearer ${apiKey}`
 		}
 		// Use URL constructor to properly join base URL and path
-		// This approach handles all edge cases including paths, query params, and fragments
-		const urlObj = new URL(baseUrl)
-		// Normalize the pathname by removing trailing slashes and multiple slashes
-		urlObj.pathname = urlObj.pathname.replace(/\/+$/, "").replace(/\/+/g, "/") + "/v1/model/info"
-		const url = urlObj.href
+		const url = new URL("/v1/model/info", baseUrl).href
 		// Added timeout to prevent indefinite hanging
 		const response = await axios.get(url, { headers, timeout: 5000 })
 		const models: ModelRecord = {}

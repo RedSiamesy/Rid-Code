@@ -22,10 +22,9 @@ import { CreateRun } from "@/lib/schemas"
 const EVALS_REPO_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../evals")
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function createRun({ suite, exercises = [], systemPrompt, timeout, ...values }: CreateRun) {
+export async function createRun({ suite, exercises = [], systemPrompt, ...values }: CreateRun) {
 	const run = await _createRun({
 		...values,
-		timeout,
 		socketPath: "", // TODO: Get rid of this.
 	})
 
@@ -56,7 +55,7 @@ export async function createRun({ suite, exercises = [], systemPrompt, timeout, 
 
 		const dockerArgs = [
 			`--name evals-controller-${run.id}`,
-			"--rm",
+			// "--rm",
 			"--network evals_default",
 			"-v /var/run/docker.sock:/var/run/docker.sock",
 			"-v /tmp/evals:/var/log/evals",

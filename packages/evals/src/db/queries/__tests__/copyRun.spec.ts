@@ -23,7 +23,6 @@ describe("copyRun", () => {
 			socketPath: "/tmp/roo.sock",
 			description: "Test run for copying",
 			concurrency: 4,
-			timeout: 5,
 		})
 
 		sourceRunId = run.id
@@ -272,7 +271,7 @@ describe("copyRun", () => {
 	})
 
 	it("should copy run without task metrics", async () => {
-		const minimalRun = await createRun({ model: "gpt-3.5-turbo", socketPath: "/tmp/minimal.sock", timeout: 5 })
+		const minimalRun = await createRun({ model: "gpt-3.5-turbo", socketPath: "/tmp/minimal.sock" })
 
 		const newRunId = await copyRun({ sourceDb: db, targetDb: db, runId: minimalRun.id })
 

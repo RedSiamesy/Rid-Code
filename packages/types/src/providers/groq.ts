@@ -10,14 +10,13 @@ export type GroqModelId =
 	| "qwen-qwq-32b"
 	| "qwen/qwen3-32b"
 	| "deepseek-r1-distill-llama-70b"
-	| "moonshotai/kimi-k2-instruct"
 
 export const groqDefaultModelId: GroqModelId = "llama-3.3-70b-versatile" // Defaulting to Llama3 70B Versatile
 
 export const groqModels = {
 	// Models based on API response: https://api.groq.com/openai/v1/models
 	"llama-3.1-8b-instant": {
-		maxTokens: 8192,
+		maxTokens: 131072,
 		contextWindow: 131072,
 		supportsImages: false,
 		supportsPromptCache: false,
@@ -26,7 +25,7 @@ export const groqModels = {
 		description: "Meta Llama 3.1 8B Instant model, 128K context.",
 	},
 	"llama-3.3-70b-versatile": {
-		maxTokens: 8192,
+		maxTokens: 32768,
 		contextWindow: 131072,
 		supportsImages: false,
 		supportsPromptCache: false,
@@ -53,7 +52,7 @@ export const groqModels = {
 		description: "Meta Llama 4 Maverick 17B Instruct model, 128K context.",
 	},
 	"mistral-saba-24b": {
-		maxTokens: 8192,
+		maxTokens: 32768,
 		contextWindow: 32768,
 		supportsImages: false,
 		supportsPromptCache: false,
@@ -62,7 +61,7 @@ export const groqModels = {
 		description: "Mistral Saba 24B model, 32K context.",
 	},
 	"qwen-qwq-32b": {
-		maxTokens: 8192,
+		maxTokens: 131072,
 		contextWindow: 131072,
 		supportsImages: false,
 		supportsPromptCache: false,
@@ -71,7 +70,7 @@ export const groqModels = {
 		description: "Alibaba Qwen QwQ 32B model, 128K context.",
 	},
 	"qwen/qwen3-32b": {
-		maxTokens: 8192,
+		maxTokens: 40960,
 		contextWindow: 131072,
 		supportsImages: false,
 		supportsPromptCache: false,
@@ -80,21 +79,12 @@ export const groqModels = {
 		description: "Alibaba Qwen 3 32B model, 128K context.",
 	},
 	"deepseek-r1-distill-llama-70b": {
-		maxTokens: 8192,
+		maxTokens: 131072,
 		contextWindow: 131072,
 		supportsImages: false,
 		supportsPromptCache: false,
 		inputPrice: 0.75,
 		outputPrice: 0.99,
 		description: "DeepSeek R1 Distill Llama 70B model, 128K context.",
-	},
-	"moonshotai/kimi-k2-instruct": {
-		maxTokens: 16384,
-		contextWindow: 131072,
-		supportsImages: false,
-		supportsPromptCache: false,
-		inputPrice: 1.0,
-		outputPrice: 3.0,
-		description: "Moonshot AI Kimi K2 Instruct 1T model, 128K context.",
 	},
 } as const satisfies Record<string, ModelInfo>

@@ -1,11 +1,5 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
-import {
-	claudeCodeDefaultModelId,
-	type ClaudeCodeModelId,
-	claudeCodeModels,
-	type ModelInfo,
-	getClaudeCodeModelId,
-} from "@roo-code/types"
+import { claudeCodeDefaultModelId, type ClaudeCodeModelId, claudeCodeModels } from "@roo-code/types"
 import { type ApiHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
 import { runClaudeCode } from "../../integrations/claude-code/run"
@@ -26,18 +20,11 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 		// Filter out image blocks since Claude Code doesn't support them
 		const filteredMessages = filterMessagesForClaudeCode(messages)
 
-		const useVertex = process.env.CLAUDE_CODE_USE_VERTEX === "1"
-		const model = this.getModel()
-
-		// Validate that the model ID is a valid ClaudeCodeModelId
-		const modelId = model.id in claudeCodeModels ? (model.id as ClaudeCodeModelId) : claudeCodeDefaultModelId
-
 		const claudeProcess = runClaudeCode({
 			systemPrompt,
 			messages: filteredMessages,
 			path: this.options.claudeCodePath,
-			modelId: getClaudeCodeModelId(modelId, useVertex),
-			maxOutputTokens: this.options.claudeCodeMaxOutputTokens,
+			modelId: this.getModel().id,
 		})
 
 		// Usage is included with assistant messages,
@@ -142,26 +129,12 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 		const modelId = this.options.apiModelId
 		if (modelId && modelId in claudeCodeModels) {
 			const id = modelId as ClaudeCodeModelId
-			const modelInfo: ModelInfo = { ...claudeCodeModels[id] }
-
-			// Override maxTokens with the configured value if provided
-			if (this.options.claudeCodeMaxOutputTokens !== undefined) {
-				modelInfo.maxTokens = this.options.claudeCodeMaxOutputTokens
-			}
-
-			return { id, info: modelInfo }
-		}
-
-		const defaultModelInfo: ModelInfo = { ...claudeCodeModels[claudeCodeDefaultModelId] }
-
-		// Override maxTokens with the configured value if provided
-		if (this.options.claudeCodeMaxOutputTokens !== undefined) {
-			defaultModelInfo.maxTokens = this.options.claudeCodeMaxOutputTokens
+			return { id, info: claudeCodeModels[id] }
 		}
 
 		return {
 			id: claudeCodeDefaultModelId,
-			info: defaultModelInfo,
+			info: claudeCodeModels[claudeCodeDefaultModelId],
 		}
 	}
 

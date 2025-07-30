@@ -3,8 +3,6 @@ import * as os from "os"
 
 import type { ModeConfig, PromptComponent, CustomModePrompts, TodoItem } from "@roo-code/types"
 
-import type { SystemPromptSettings } from "./types"
-
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
 import { formatLanguage } from "../../shared/language"
@@ -59,7 +57,7 @@ async function generatePrompt(
 	language?: string,
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
-	settings?: SystemPromptSettings,
+	settings?: Record<string, any>,
 	todoList?: TodoItem[],
 ): Promise<string> {
 	if (!context) {
@@ -73,14 +71,9 @@ async function generatePrompt(
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
-	// Check if MCP functionality should be included
-	const hasMcpGroup = modeConfig.groups.some((groupEntry) => getGroupName(groupEntry) === "mcp")
-	const hasMcpServers = mcpHub && mcpHub.getServers().length > 0
-	const shouldIncludeMcp = hasMcpGroup && hasMcpServers
-
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
-		shouldIncludeMcp
+		modeConfig.groups.some((groupEntry) => getGroupName(groupEntry) === "mcp")
 			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
 			: Promise.resolve(""),
 	])
@@ -100,7 +93,7 @@ ${getToolDescriptionsForMode(
 	codeIndexManager,
 	effectiveDiffStrategy,
 	browserViewportSize,
-	shouldIncludeMcp ? mcpHub : undefined,
+	mcpHub,
 	customModeConfigs,
 	experiments,
 	partialReadsEnabled,
@@ -111,7 +104,7 @@ ${getToolUseGuidelinesSection(codeIndexManager)}
 
 ${mcpServersSection}
 
-${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+${getCapabilitiesSection(cwd, supportsComputerUse, mcpHub, effectiveDiffStrategy, codeIndexManager)}
 
 ${modesSection}
 
@@ -121,11 +114,7 @@ ${getSystemInfoSection(cwd)}
 
 ${getObjectiveSection(codeIndexManager, experiments)}
 
-${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-	language: language ?? formatLanguage(vscode.env.language),
-	rooIgnoreInstructions,
-	settings,
-})}`
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, { language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions })}`
 
 	return basePrompt
 }
@@ -147,7 +136,7 @@ export const SYSTEM_PROMPT = async (
 	language?: string,
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
-	settings?: SystemPromptSettings,
+	settings?: Record<string, any>,
 	todoList?: TodoItem[],
 ): Promise<string> => {
 	if (!context) {
@@ -183,11 +172,7 @@ export const SYSTEM_PROMPT = async (
 			globalCustomInstructions || "",
 			cwd,
 			mode,
-			{
-				language: language ?? formatLanguage(vscode.env.language),
-				rooIgnoreInstructions,
-				settings,
-			},
+			{ language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions },
 		)
 
 		// For file-based prompts, don't include the tool sections

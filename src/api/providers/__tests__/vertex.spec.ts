@@ -7,7 +7,6 @@ import { Anthropic } from "@anthropic-ai/sdk"
 
 import { ApiStreamChunk } from "../../transform/stream"
 
-import { t } from "i18next"
 import { VertexHandler } from "../vertex"
 
 describe("VertexHandler", () => {
@@ -106,7 +105,7 @@ describe("VertexHandler", () => {
 			;(handler["client"].models.generateContent as any).mockRejectedValue(mockError)
 
 			await expect(handler.completePrompt("Test prompt")).rejects.toThrow(
-				t("common:errors.gemini.generate_complete_prompt", { error: "Vertex API error" }),
+				"Gemini completion error: Vertex API error",
 			)
 		})
 
