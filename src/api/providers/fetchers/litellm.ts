@@ -4,6 +4,7 @@ import { LITELLM_COMPUTER_USE_MODELS } from "@roo-code/types"
 
 import type { ModelRecord } from "../../../shared/api"
 
+import { DEFAULT_HEADERS } from "../constants"
 /**
  * Fetches available models from a LiteLLM server
  *
@@ -16,13 +17,18 @@ export async function getLiteLLMModels(apiKey: string, baseUrl: string): Promise
 	try {
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
+			...DEFAULT_HEADERS,
 		}
 
 		if (apiKey) {
 			headers["Authorization"] = `Bearer ${apiKey}`
 		}
 		// Use URL constructor to properly join base URL and path
-		const url = new URL("/v1/model/info", baseUrl).href
+		// This approach handles all edge cases including paths, query params, and fragments
+		const urlObj = new URL(baseUrl)
+		// Normalize the pathname by removing trailing slashes and multiple slashes
+		urlObj.pathname = urlObj.pathname.replace(/\/+$/, "").replace(/\/+/g, "/") + "/v1/model/info"
+		const url = urlObj.href
 		// Added timeout to prevent indefinite hanging
 		const response = await axios.get(url, { headers, timeout: 5000 })
 		const models: ModelRecord = {}

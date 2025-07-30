@@ -6,6 +6,7 @@ import pWaitFor from "p-wait-for"
 import delay from "delay"
 
 import type { ExperimentId } from "@roo-code/types"
+import { DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT } from "@roo-code/types"
 
 import { EXPERIMENT_IDS, experiments as Experiments } from "../../shared/experiments"
 import { formatLanguage } from "../../shared/language"
@@ -17,27 +18,19 @@ import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 
-import { EditorUtils } from "../../integrations/editor/EditorUtils"
-import { readLines } from "../../integrations/misc/read-lines"
-import { addLineNumbers } from "../../integrations/misc/extract-text"
-
 import { Task } from "../task/Task"
-import { getMemoryFilePaths, readMemoryFiles, formatMemoryContent } from "../mentions/index"
-
-const generateDiagnosticText = (diagnostics?: any[]) => {
-	if (!diagnostics?.length) return ""
-	return `\nCurrent problems detected:\n${diagnostics
-		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
-		.join("\n")}`
-}
-
+import { formatReminderSection } from "./reminder"
 
 export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
 	let details = ""
 
 	const clineProvider = cline.providerRef.deref()
 	const state = await clineProvider?.getState()
-	const { terminalOutputLineLimit = 500, maxWorkspaceFiles = 200 } = state ?? {}
+	const {
+		terminalOutputLineLimit = 500,
+		terminalOutputCharacterLimit = DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT,
+		maxWorkspaceFiles = 200,
+	} = state ?? {}
 
 	// It could be useful for cline to know if the user went from one or no
 	// file to another between messages, so we always include this context.
@@ -65,7 +58,8 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 	const maxTabs = maxOpenTabsContext ?? 20
 	const openTabPaths = vscode.window.tabGroups.all
 		.flatMap((group) => group.tabs)
-		.map((tab) => (tab.input as vscode.TabInputText)?.uri?.fsPath)
+		.filter((tab) => tab.input instanceof vscode.TabInputText)
+		.map((tab) => (tab.input as vscode.TabInputText).uri.fsPath)
 		.filter(Boolean)
 		.map((absolutePath) => path.relative(cline.cwd, absolutePath).toPosix())
 		.slice(0, maxTabs)
@@ -123,7 +117,11 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 			let newOutput = TerminalRegistry.getUnretrievedOutput(busyTerminal.id)
 
 			if (newOutput) {
-				newOutput = Terminal.compressTerminalOutput(newOutput, terminalOutputLineLimit)
+				newOutput = Terminal.compressTerminalOutput(
+					newOutput,
+					terminalOutputLineLimit,
+					terminalOutputCharacterLimit,
+				)
 				terminalDetails += `\n### New Output\n${newOutput}`
 			}
 		}
@@ -151,7 +149,11 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 				let output = process.getUnretrievedOutput()
 
 				if (output) {
-					output = Terminal.compressTerminalOutput(output, terminalOutputLineLimit)
+					output = Terminal.compressTerminalOutput(
+						output,
+						terminalOutputLineLimit,
+						terminalOutputCharacterLimit,
+					)
 					terminalOutputs.push(`Command: \`${process.command}\`\n${output}`)
 				}
 			}
@@ -191,32 +193,17 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 	// Add current time information with timezone.
 	const now = new Date()
 
-	const formatter = new Intl.DateTimeFormat(undefined, {
-		year: "numeric",
-		month: "numeric",
-		day: "numeric",
-		hour: "numeric",
-		minute: "numeric",
-		second: "numeric",
-		hour12: true,
-	})
-
-	const timeZone = formatter.resolvedOptions().timeZone
+	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 	const timeZoneOffset = -now.getTimezoneOffset() / 60 // Convert to hours and invert sign to match conventional notation
 	const timeZoneOffsetHours = Math.floor(Math.abs(timeZoneOffset))
 	const timeZoneOffsetMinutes = Math.abs(Math.round((Math.abs(timeZoneOffset) - timeZoneOffsetHours) * 60))
 	const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : "-"}${timeZoneOffsetHours}:${timeZoneOffsetMinutes.toString().padStart(2, "0")}`
-	details += `\n\n# Current Time\n${formatter.format(now)} (${timeZone}, UTC${timeZoneOffsetStr})`
+	details += `\n\n# Current Time\nCurrent time in ISO 8601 UTC format: ${now.toISOString()}\nUser time zone: ${timeZone}, UTC${timeZoneOffsetStr}`
 
 	// Add context tokens information.
 	const { contextTokens, totalCost } = getApiMetrics(cline.clineMessages)
-	const { id: modelId, info: modelInfo } = cline.api.getModel()
-	const contextWindow = modelInfo.contextWindow
+	const { id: modelId } = cline.api.getModel()
 
-	const contextPercentage =
-		contextTokens && contextWindow ? Math.round((contextTokens / contextWindow) * 100) : undefined
-
-	details += `\n\n# Current Context Size (Tokens)\n${contextTokens ? `${contextTokens.toLocaleString()} (${contextPercentage}%)` : "(Not available)"}`
 	details += `\n\n# Current Cost\n${totalCost !== null ? `$${totalCost.toFixed(2)}` : "(Not available)"}`
 
 	// Add current mode and any mode-specific warnings.
@@ -250,16 +237,6 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 		}
 	}
 
-	// Add warning if not in code mode.
-	if (
-		!isToolAllowedForMode("write_to_file", currentMode, customModes ?? [], { apply_diff: cline.diffEnabled }) &&
-		!isToolAllowedForMode("apply_diff", currentMode, customModes ?? [], { apply_diff: cline.diffEnabled })
-	) {
-		const currentModeName = getModeBySlug(currentMode, customModes)?.name ?? currentMode
-		const defaultModeName = getModeBySlug(defaultModeSlug, customModes)?.name ?? defaultModeSlug
-		details += `\n\nNOTE: You are currently in '${currentModeName}' mode, which does not allow write operations. To write files, the user will need to switch to a mode that supports file writing, such as '${defaultModeName}' mode.`
-	}
-
 	if (includeFileDetails) {
 		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
 		const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
@@ -270,59 +247,27 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 			details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
 		} else {
 			const maxFiles = maxWorkspaceFiles ?? 200
-			const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
-			const { showRooIgnoredFiles = true } = state ?? {}
 
-			const result = formatResponse.formatFilesList(
-				cline.cwd,
-				files,
-				didHitLimit,
-				cline.rooIgnoreController,
-				showRooIgnoredFiles,
-			)
+			// Early return for limit of 0
+			if (maxFiles === 0) {
+				details += "(Workspace files context disabled. Use list_files to explore if needed.)"
+			} else {
+				const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
+				const { showRooIgnoredFiles = true } = state ?? {}
 
-			details += result
-		}
+				const result = formatResponse.formatFilesList(
+					cline.cwd,
+					files,
+					didHitLimit,
+					cline.rooIgnoreController,
+					showRooIgnoredFiles,
+				)
 
-		const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
-		if (globalStoragePath) {
-			try {
-				const memoryFiles = await getMemoryFilePaths(globalStoragePath)
-				const memoryData = await readMemoryFiles(memoryFiles)
-				const formattedMemory = formatMemoryContent(memoryData)
-				details += `\n\n# Agent Memory Content\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n`
-			} catch (error) {
-				details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
+				details += result
 			}
 		}
 	}
 
-	let filePath: string
-	let selectedText: string
-	let startLine: number | undefined
-	let endLine: number | undefined
-	let diagnostics: any[] | undefined
-	const context = EditorUtils.getEditorContext()
-	if (context) {
-		;({ filePath, selectedText, startLine, endLine, diagnostics } = context)
-		const fullPath = path.resolve(cline.cwd, filePath)
-		if (endLine !== undefined && startLine != undefined) {
-			try {
-				// Check if file is readable
-				await vscode.workspace.fs.stat(vscode.Uri.file(fullPath))
-				details += `\n\n# The File Where The Cursor In\n${fullPath}\n`
-				const content = addLineNumbers(
-					await readLines(fullPath, endLine + 5, startLine - 5),
-					startLine - 4 > 1 ? startLine - 4: 1,
-				)
-				details += `\n# Line near the Cursor\n${content}\n`
-				if (diagnostics) {
-					const diagno = generateDiagnosticText(diagnostics)
-					details += `\n# Issues near the Cursor\n${diagno}\n`
-				}
-			} catch (error) {}
-		}
-	}
-
-	return `<environment_details>\n${details.trim()}\n</environment_details>`
+	const reminderSection = formatReminderSection(cline.todoList)
+	return `<environment_details>\n${details.trim()}\n${reminderSection}\n</environment_details>`
 }

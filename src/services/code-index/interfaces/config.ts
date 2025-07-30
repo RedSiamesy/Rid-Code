@@ -5,24 +5,19 @@ import { EmbedderProvider } from "./manager"
  * Configuration state for the code indexing feature
  */
 export interface CodeIndexConfig {
-	isEnabled: boolean
 	isConfigured: boolean
 	embedderProvider: EmbedderProvider
 	modelId?: string
+	modelDimension?: number // Generic dimension property for all providers
 	openAiOptions?: ApiHandlerOptions
 	ollamaOptions?: ApiHandlerOptions
-	openAiCompatibleOptions?: { baseUrl: string; apiKey: string; modelDimension?: number }
+	openAiCompatibleOptions?: { baseUrl: string; apiKey: string }
+	geminiOptions?: { apiKey: string }
+	mistralOptions?: { apiKey: string }
 	qdrantUrl?: string
 	qdrantApiKey?: string
 	searchMinScore?: number
-
-	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
-	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
-	rerankOptions?: { baseUrl: string; apiKey: string; modelID: string }
-
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
+	searchMaxResults?: number
 }
 
 /**
@@ -33,27 +28,13 @@ export type PreviousConfigSnapshot = {
 	configured: boolean
 	embedderProvider: EmbedderProvider
 	modelId?: string
+	modelDimension?: number // Generic dimension property
 	openAiKey?: string
 	ollamaBaseUrl?: string
 	openAiCompatibleBaseUrl?: string
 	openAiCompatibleApiKey?: string
-	openAiCompatibleModelDimension?: number
+	geminiApiKey?: string
+	mistralApiKey?: string
 	qdrantUrl?: string
 	qdrantApiKey?: string
-
-	embeddingBaseUrl?: string
-	embeddingApiKey?: string
-	embeddingModelID?: string
-
-	enhancementBaseUrl?: string
-	enhancementApiKey?: string
-	enhancementModelID?: string
-	
-	rerankBaseUrl?: string
-	rerankApiKey?: string
-	rerankModelID?: string
-
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
 }

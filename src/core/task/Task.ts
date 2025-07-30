@@ -1,4 +1,5 @@
 import * as path from "path"
+import * as vscode from "vscode"
 import os from "os"
 import crypto from "crypto"
 import EventEmitter from "events"
@@ -18,8 +19,12 @@ import {
 	type ClineMessage,
 	type ClineSay,
 	type ToolProgressStatus,
+	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 	type HistoryItem,
 	TelemetryEventName,
+	TodoItem,
+	getApiProtocol,
+	getModelId,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService } from "@roo-code/cloud"
@@ -39,6 +44,7 @@ import { ClineAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { getModelMaxOutputTokens } from "../../shared/api"
 
 // services
 import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
@@ -85,6 +91,10 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
+import { restoreTodoListForTask } from "../tools/updateTodoListTool"
+
+// Constants
+const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 
 export type ClineEvents = {
 	message: [{ action: "created" | "updated"; message: ClineMessage }]
@@ -119,6 +129,7 @@ export type TaskOptions = {
 }
 
 export class Task extends EventEmitter<ClineEvents> {
+	todoList?: TodoItem[]
 	readonly taskId: string
 	readonly instanceId: string
 
@@ -126,6 +137,49 @@ export class Task extends EventEmitter<ClineEvents> {
 	readonly parentTask: Task | undefined = undefined
 	readonly taskNumber: number
 	readonly workspacePath: string
+	/**
+	 * The mode associated with this task. Persisted across sessions
+	 * to maintain user context when reopening tasks from history.
+	 *
+	 * ## Lifecycle
+	 *
+	 * ### For new tasks:
+	 * 1. Initially `undefined` during construction
+	 * 2. Asynchronously initialized from provider state via `initializeTaskMode()`
+	 * 3. Falls back to `defaultModeSlug` if provider state is unavailable
+	 *
+	 * ### For history items:
+	 * 1. Immediately set from `historyItem.mode` during construction
+	 * 2. Falls back to `defaultModeSlug` if mode is not stored in history
+	 *
+	 * ## Important
+	 * This property should NOT be accessed directly until `taskModeReady` promise resolves.
+	 * Use `getTaskMode()` for async access or `taskMode` getter for sync access after initialization.
+	 *
+	 * @private
+	 * @see {@link getTaskMode} - For safe async access
+	 * @see {@link taskMode} - For sync access after initialization
+	 * @see {@link waitForModeInitialization} - To ensure initialization is complete
+	 */
+	private _taskMode: string | undefined
+
+	/**
+	 * Promise that resolves when the task mode has been initialized.
+	 * This ensures async mode initialization completes before the task is used.
+	 *
+	 * ## Purpose
+	 * - Prevents race conditions when accessing task mode
+	 * - Ensures provider state is properly loaded before mode-dependent operations
+	 * - Provides a synchronization point for async initialization
+	 *
+	 * ## Resolution timing
+	 * - For history items: Resolves immediately (sync initialization)
+	 * - For new tasks: Resolves after provider state is fetched (async initialization)
+	 *
+	 * @private
+	 * @see {@link waitForModeInitialization} - Public method to await this promise
+	 */
+	private taskModeReady: Promise<void>
 
 	providerRef: WeakRef<ClineProvider>
 	private readonly globalStoragePath: string
@@ -208,7 +262,7 @@ export class Task extends EventEmitter<ClineEvents> {
 		enableDiff = false,
 		enableCheckpoints = true,
 		fuzzyMatchThreshold = 1.0,
-		consecutiveMistakeLimit = 3,
+		consecutiveMistakeLimit = DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 		task,
 		images,
 		historyItem,
@@ -247,19 +301,26 @@ export class Task extends EventEmitter<ClineEvents> {
 		this.browserSession = new BrowserSession(provider.context)
 		this.diffEnabled = enableDiff
 		this.fuzzyMatchThreshold = fuzzyMatchThreshold
-		this.consecutiveMistakeLimit = consecutiveMistakeLimit
+		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
 		this.providerRef = new WeakRef(provider)
 		this.globalStoragePath = provider.context.globalStorageUri.fsPath
-		this.diffViewProvider = new DiffViewProvider(this.cwd)
+		this.diffViewProvider = new DiffViewProvider(this.cwd, this)
 		this.enableCheckpoints = enableCheckpoints
 
 		this.rootTask = rootTask
 		this.parentTask = parentTask
 		this.taskNumber = taskNumber
 
+		// Store the task's mode when it's created
+		// For history items, use the stored mode; for new tasks, we'll set it after getting state
 		if (historyItem) {
+			this._taskMode = historyItem.mode || defaultModeSlug
+			this.taskModeReady = Promise.resolve()
 			TelemetryService.instance.captureTaskRestarted(this.taskId)
 		} else {
+			// For new tasks, don't set the mode yet - wait for async initialization
+			this._taskMode = undefined
+			this.taskModeReady = this.initializeTaskMode(provider)
 			TelemetryService.instance.captureTaskCreated(this.taskId)
 		}
 
@@ -294,6 +355,129 @@ export class Task extends EventEmitter<ClineEvents> {
 				throw new Error("Either historyItem or task/images must be provided")
 			}
 		}
+	}
+
+	/**
+	 * Initialize the task mode from the provider state.
+	 * This method handles async initialization with proper error handling.
+	 *
+	 * ## Flow
+	 * 1. Attempts to fetch the current mode from provider state
+	 * 2. Sets `_taskMode` to the fetched mode or `defaultModeSlug` if unavailable
+	 * 3. Handles errors gracefully by falling back to default mode
+	 * 4. Logs any initialization errors for debugging
+	 *
+	 * ## Error handling
+	 * - Network failures when fetching provider state
+	 * - Provider not yet initialized
+	 * - Invalid state structure
+	 *
+	 * All errors result in fallback to `defaultModeSlug` to ensure task can proceed.
+	 *
+	 * @private
+	 * @param provider - The ClineProvider instance to fetch state from
+	 * @returns Promise that resolves when initialization is complete
+	 */
+	private async initializeTaskMode(provider: ClineProvider): Promise<void> {
+		try {
+			const state = await provider.getState()
+			this._taskMode = state?.mode || defaultModeSlug
+		} catch (error) {
+			// If there's an error getting state, use the default mode
+			this._taskMode = defaultModeSlug
+			// Use the provider's log method for better error visibility
+			const errorMessage = `Failed to initialize task mode: ${error instanceof Error ? error.message : String(error)}`
+			provider.log(errorMessage)
+		}
+	}
+
+	/**
+	 * Wait for the task mode to be initialized before proceeding.
+	 * This method ensures that any operations depending on the task mode
+	 * will have access to the correct mode value.
+	 *
+	 * ## When to use
+	 * - Before accessing mode-specific configurations
+	 * - When switching between tasks with different modes
+	 * - Before operations that depend on mode-based permissions
+	 *
+	 * ## Example usage
+	 * ```typescript
+	 * // Wait for mode initialization before mode-dependent operations
+	 * await task.waitForModeInitialization();
+	 * const mode = task.taskMode; // Now safe to access synchronously
+	 *
+	 * // Or use with getTaskMode() for a one-liner
+	 * const mode = await task.getTaskMode(); // Internally waits for initialization
+	 * ```
+	 *
+	 * @returns Promise that resolves when the task mode is initialized
+	 * @public
+	 */
+	public async waitForModeInitialization(): Promise<void> {
+		return this.taskModeReady
+	}
+
+	/**
+	 * Get the task mode asynchronously, ensuring it's properly initialized.
+	 * This is the recommended way to access the task mode as it guarantees
+	 * the mode is available before returning.
+	 *
+	 * ## Async behavior
+	 * - Internally waits for `taskModeReady` promise to resolve
+	 * - Returns the initialized mode or `defaultModeSlug` as fallback
+	 * - Safe to call multiple times - subsequent calls return immediately if already initialized
+	 *
+	 * ## Example usage
+	 * ```typescript
+	 * // Safe async access
+	 * const mode = await task.getTaskMode();
+	 * console.log(`Task is running in ${mode} mode`);
+	 *
+	 * // Use in conditional logic
+	 * if (await task.getTaskMode() === 'architect') {
+	 *   // Perform architect-specific operations
+	 * }
+	 * ```
+	 *
+	 * @returns Promise resolving to the task mode string
+	 * @public
+	 */
+	public async getTaskMode(): Promise<string> {
+		await this.taskModeReady
+		return this._taskMode || defaultModeSlug
+	}
+
+	/**
+	 * Get the task mode synchronously. This should only be used when you're certain
+	 * that the mode has already been initialized (e.g., after waitForModeInitialization).
+	 *
+	 * ## When to use
+	 * - In synchronous contexts where async/await is not available
+	 * - After explicitly waiting for initialization via `waitForModeInitialization()`
+	 * - In event handlers or callbacks where mode is guaranteed to be initialized
+	 *
+	 * ## Example usage
+	 * ```typescript
+	 * // After ensuring initialization
+	 * await task.waitForModeInitialization();
+	 * const mode = task.taskMode; // Safe synchronous access
+	 *
+	 * // In an event handler after task is started
+	 * task.on('taskStarted', () => {
+	 *   console.log(`Task started in ${task.taskMode} mode`); // Safe here
+	 * });
+	 * ```
+	 *
+	 * @throws {Error} If the mode hasn't been initialized yet
+	 * @returns The task mode string
+	 * @public
+	 */
+	public get taskMode(): string {
+		if (this._taskMode === undefined) {
+			throw new Error("Task mode accessed before initialization. Use getTaskMode() or wait for taskModeReady.")
+		}
+		return this._taskMode
 	}
 
 	static create(options: TaskOptions): [Task, Promise<void>] {
@@ -367,6 +551,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 	public async overwriteClineMessages(newMessages: ClineMessage[]) {
 		this.clineMessages = newMessages
+		restoreTodoListForTask(this)
 		await this.saveClineMessages()
 	}
 
@@ -399,6 +584,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				taskNumber: this.taskNumber,
 				globalStoragePath: this.globalStoragePath,
 				workspace: this.cwd,
+				mode: this._taskMode || defaultModeSlug, // Use the task's own mode, not the current provider mode
 			})
 
 			this.emit("taskTokenUsageUpdated", this.taskId, tokenUsage)
@@ -1150,7 +1336,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			throw new Error(`[RooCode#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
-		if (this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
+		if (this.consecutiveMistakeLimit > 0 && this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
 			const { response, text, images } = await this.ask(
 				"mistake_limit_reached",
 				t("common:errors.mistake_limit_guidance"),
@@ -1200,15 +1386,26 @@ export class Task extends EventEmitter<ClineEvents> {
 		// top-down build file structure of project which for large projects can
 		// take a few seconds. For the best UX we show a placeholder api_req_started
 		// message with a loading spinner as this happens.
+
+		// Determine API protocol based on provider and model
+		const modelId = getModelId(this.apiConfiguration)
+		const apiProtocol = getApiProtocol(this.apiConfiguration.apiProvider, modelId)
+
 		await this.say(
 			"api_req_started",
 			JSON.stringify({
 				request:
 					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") + "\n\nLoading...",
+				apiProtocol,
 			}),
 		)
 
-		const { showRooIgnoredFiles = true } = (await this.providerRef.deref()?.getState()) ?? {}
+		const {
+			showRooIgnoredFiles = true,
+			includeDiagnosticMessages = true,
+			maxDiagnosticMessages = 50,
+			maxReadFileLine = -1,
+		} = (await this.providerRef.deref()?.getState()) ?? {}
 
 		const parsedUserContent = await processUserContentMentions({
 			userContent,
@@ -1217,7 +1414,9 @@ export class Task extends EventEmitter<ClineEvents> {
 			fileContextTracker: this.fileContextTracker,
 			rooIgnoreController: this.rooIgnoreController,
 			showRooIgnoredFiles,
-			globalStoragePath: this.globalStoragePath,
+			includeDiagnosticMessages,
+			maxDiagnosticMessages,
+			maxReadFileLine,
 		})
 
 		const environmentDetails = await getEnvironmentDetails(this, includeFileDetails)
@@ -1237,6 +1436,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 		this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 			request: finalUserContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
+			apiProtocol,
 		} satisfies ClineApiReqInfo)
 
 		await this.saveClineMessages()
@@ -1257,8 +1457,9 @@ export class Task extends EventEmitter<ClineEvents> {
 			// of prices in tasks from history (it's worth removing a few months
 			// from now).
 			const updateApiReqMsg = (cancelReason?: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
+				const existingData = JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}")
 				this.clineMessages[lastApiReqIndex].text = JSON.stringify({
-					...JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}"),
+					...existingData,
 					tokensIn: inputTokens,
 					tokensOut: outputTokens,
 					cacheWrites: cacheWriteTokens,
@@ -1424,12 +1625,19 @@ export class Task extends EventEmitter<ClineEvents> {
 					// could be in (i.e. could have streamed some tools the user
 					// may have executed), so we just resort to replicating a
 					// cancel task.
-					this.abortTask()
 
-					await abortStream(
-						"streaming_failed",
-						error.message ?? JSON.stringify(serializeError(error), null, 2),
-					)
+					// Check if this was a user-initiated cancellation BEFORE calling abortTask
+					// If this.abort is already true, it means the user clicked cancel, so we should
+					// treat this as "user_cancelled" rather than "streaming_failed"
+					const cancelReason = this.abort ? "user_cancelled" : "streaming_failed"
+					const streamingFailedMessage = this.abort
+						? undefined
+						: (error.message ?? JSON.stringify(serializeError(error), null, 2))
+
+					// Now call abortTask after determining the cancel reason
+					await this.abortTask()
+
+					await abortStream(cancelReason, streamingFailedMessage)
 
 					const history = await provider?.getTaskWithId(this.taskId)
 
@@ -1601,6 +1809,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			language,
 			maxConcurrentFileReads,
 			maxReadFileLine,
+			apiConfiguration,
 		} = state ?? {}
 
 		return await (async () => {
@@ -1628,7 +1837,9 @@ export class Task extends EventEmitter<ClineEvents> {
 				rooIgnoreInstructions,
 				maxReadFileLine !== -1,
 				{
-					maxConcurrentFileReads,
+					maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
+					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
+					useAgentRules: vscode.workspace.getConfiguration("roo-cline").get<boolean>("useAgentRules") ?? true,
 				},
 			)
 		})()
@@ -1697,17 +1908,19 @@ export class Task extends EventEmitter<ClineEvents> {
 		const { contextTokens } = this.getTokenUsage()
 
 		if (contextTokens) {
-			// Default max tokens value for thinking models when no specific
-			// value is set.
-			const DEFAULT_THINKING_MODEL_MAX_TOKENS = 16_384
-
 			const modelInfo = this.api.getModel().info
 
-			const maxTokens = modelInfo.supportsReasoningBudget
-				? this.apiConfiguration.modelMaxTokens || DEFAULT_THINKING_MODEL_MAX_TOKENS
-				: modelInfo.maxTokens
+			const maxTokens = getModelMaxOutputTokens({
+				modelId: this.api.getModel().id,
+				model: modelInfo,
+				settings: this.apiConfiguration,
+			})
 
 			const contextWindow = modelInfo.contextWindow
+
+			const currentProfileId =
+				state?.listApiConfigMeta.find((profile) => profile.name === state?.currentApiConfigName)?.id ??
+				"default"
 
 			const truncateResult = await truncateConversationIfNeeded({
 				messages: this.apiConversationHistory,
@@ -1722,7 +1935,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				customCondensingPrompt,
 				condensingApiHandler,
 				profileThresholds,
-				currentProfileId: state?.currentApiConfigName || "default",
+				currentProfileId,
 			})
 			if (truncateResult.messages !== this.apiConversationHistory) {
 				await this.overwriteApiConversationHistory(truncateResult.messages)
@@ -1793,7 +2006,10 @@ export class Task extends EventEmitter<ClineEvents> {
 				}
 
 				const baseDelay = requestDelaySeconds || 5
-				let exponentialDelay = Math.ceil(baseDelay * Math.pow(2, retryAttempt))
+				let exponentialDelay = Math.min(
+					Math.ceil(baseDelay * Math.pow(2, retryAttempt)),
+					MAX_EXPONENTIAL_BACKOFF_SECONDS,
+				)
 
 				// If the error is a 429, and the error details contain a retry delay, use that delay instead of exponential backoff
 				if (error.status === 429) {

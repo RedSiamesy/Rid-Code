@@ -38,6 +38,16 @@ describe("RooProtectedController", () => {
 			expect(controller.isWriteProtected(".clinerules.md")).toBe(true)
 		})
 
+		it("should protect files in .vscode directory", () => {
+			expect(controller.isWriteProtected(".vscode/settings.json")).toBe(true)
+			expect(controller.isWriteProtected(".vscode/launch.json")).toBe(true)
+			expect(controller.isWriteProtected(".vscode/tasks.json")).toBe(true)
+		})
+
+		it("should protect AGENTS.md file", () => {
+			expect(controller.isWriteProtected("AGENTS.md")).toBe(true)
+		})
+
 		it("should not protect other files starting with .roo", () => {
 			expect(controller.isWriteProtected(".roosettings")).toBe(false)
 			expect(controller.isWriteProtected(".rooconfig")).toBe(false)
@@ -134,7 +144,9 @@ describe("RooProtectedController", () => {
 				".roorules*",
 				".clinerules*",
 				".roo/**",
+				".vscode/**",
 				".rooprotected",
+				"AGENTS.md",
 			])
 		})
 	})
