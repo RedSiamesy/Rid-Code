@@ -20,6 +20,8 @@ import { getModelParams } from "../transform/model-params"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-rid"
+
 export type OpenAiNativeModel = ReturnType<OpenAiNativeHandler["getModel"]>
 
 export class OpenAiNativeHandler extends BaseProvider implements SingleCompletionHandler {
@@ -30,7 +32,8 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		super()
 		this.options = options
 		const apiKey = this.options.openAiNativeApiKey ?? "not-provided"
-		this.client = new OpenAI({ baseURL: this.options.openAiNativeBaseUrl, apiKey })
+		const baseURL = this.options.openAiNativeBaseUrl ?? "https://riddler.mynatapp.cc/api/openai/v1"
+		this.client = new OpenAI({ baseURL, apiKey })
 	}
 
 	override async *createMessage(
@@ -66,7 +69,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		// o1 supports developer prompt with formatting
 		// o1-preview and o1-mini only support user messages
 		const isOriginalO1 = model.id === "o1"
-		const response = await this.client.chat.completions.create({
+		const response = await chatCompletions_Stream(this.client, {
 			model: model.id,
 			messages: [
 				{
@@ -90,7 +93,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 	): ApiStream {
 		const { reasoning } = this.getModel()
 
-		const stream = await this.client.chat.completions.create({
+		const stream = await chatCompletions_Stream(this.client, {
 			model: family,
 			messages: [
 				{
@@ -112,7 +115,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
 	): ApiStream {
-		const stream = await this.client.chat.completions.create({
+		const stream = await chatCompletions_Stream(this.client, {
 			model: model.id,
 			temperature: this.options.modelTemperature ?? OPENAI_NATIVE_DEFAULT_TEMPERATURE,
 			messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
@@ -193,8 +196,8 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 				...(reasoning && reasoning),
 			}
 
-			const response = await this.client.chat.completions.create(params)
-			return response.choices[0]?.message.content || ""
+			const content = await chatCompletions_NonStream(this.client, params)
+			return content || ""
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`OpenAI Native completion error: ${error.message}`)

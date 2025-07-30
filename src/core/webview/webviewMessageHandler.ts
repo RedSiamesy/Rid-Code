@@ -50,6 +50,8 @@ import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { getCommand } from "../../utils/commands"
 
+import { saveMemory } from "./Memory-rid"
+
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
@@ -1284,6 +1286,10 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
+		case "saveMemory":
+			// 调用保存记忆函数，函数内部会发送相应的消息
+			await saveMemory(provider, message.text??"")
+			break
 		case "enhancePrompt":
 			if (message.text) {
 				try {
@@ -1947,6 +1953,17 @@ export const webviewMessageHandler = async (
 					codebaseIndexOpenAiCompatibleBaseUrl: settings.codebaseIndexOpenAiCompatibleBaseUrl,
 					codebaseIndexSearchMaxResults: settings.codebaseIndexSearchMaxResults,
 					codebaseIndexSearchMinScore: settings.codebaseIndexSearchMinScore,
+
+					embeddingBaseUrl: settings.embeddingBaseUrl,
+					embeddingModelID: settings.embeddingModelID,
+					enhancementBaseUrl: settings.enhancementBaseUrl,
+					enhancementModelID: settings.enhancementModelID,
+					// embeddingApiKey: settings.embeddingApiKey,
+					// enhancementApiKey: settings.enhancementApiKey,
+
+					ragPath: settings.ragPath,
+					llmFilter: settings.llmFilter,
+					codeBaseLogging: settings.codeBaseLogging,
 				}
 
 				// Save global state first
@@ -1971,6 +1988,19 @@ export const webviewMessageHandler = async (
 						settings.codebaseIndexGeminiApiKey,
 					)
 				}
+
+				if (settings.codeIndexOpenAiKey !== undefined) {
+					await provider.contextProxy.storeSecret("codeIndexOpenAiKey", settings.codeIndexOpenAiKey)
+				}
+
+				
+				if (settings.embeddingApiKey !== undefined) {
+					await provider.contextProxy.storeSecret("embeddingApiKey", settings.embeddingApiKey)
+				}
+				if (settings.enhancementApiKey !== undefined) {
+					await provider.contextProxy.storeSecret("enhancementApiKey", settings.enhancementApiKey)
+				}
+				
 
 				// Send success response first - settings are saved regardless of validation
 				await provider.postMessageToWebview({
@@ -2063,6 +2093,8 @@ export const webviewMessageHandler = async (
 				"codebaseIndexOpenAiCompatibleApiKey",
 			))
 			const hasGeminiApiKey = !!(await provider.context.secrets.get("codebaseIndexGeminiApiKey"))
+			const hasEmbeddingApiKey = !!(await provider.context.secrets.get("embeddingApiKey"))
+			const hasEnhancementApiKey = !!(await provider.context.secrets.get("enhancementApiKey"))
 
 			provider.postMessageToWebview({
 				type: "codeIndexSecretStatus",
@@ -2071,6 +2103,8 @@ export const webviewMessageHandler = async (
 					hasQdrantApiKey,
 					hasOpenAiCompatibleApiKey,
 					hasGeminiApiKey,
+					hasEmbeddingApiKey,
+					hasEnhancementApiKey
 				},
 			})
 			break

@@ -106,6 +106,8 @@ export interface WebviewMessage {
 		| "updateMcpTimeout"
 		| "fuzzyMatchThreshold"
 		| "writeDelayMs"
+		| "saveMemory"
+		| "savedMemory"
 		| "enhancePrompt"
 		| "enhancedPrompt"
 		| "draggedImages"
@@ -251,6 +253,18 @@ export interface WebviewMessage {
 		codeIndexQdrantApiKey?: string
 		codebaseIndexOpenAiCompatibleApiKey?: string
 		codebaseIndexGeminiApiKey?: string
+
+		// RAG settings
+		embeddingBaseUrl?: string
+		embeddingModelID?: string
+		enhancementBaseUrl?: string
+		enhancementModelID?: string
+		embeddingApiKey?: string
+		enhancementApiKey?: string
+
+		ragPath?: string
+		llmFilter?: boolean
+		codeBaseLogging?: boolean
 	}
 }
 

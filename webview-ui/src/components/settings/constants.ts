@@ -12,6 +12,7 @@ import {
 	xaiModels,
 	groqModels,
 	chutesModels,
+	modelScopeModels
 } from "@roo-code/types"
 
 export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, ModelInfo>>> = {
@@ -26,28 +27,29 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 	xai: xaiModels,
 	groq: groqModels,
 	chutes: chutesModels,
+	modelscope: modelScopeModels,
 }
 
 export const PROVIDERS = [
 	{ value: "openrouter", label: "OpenRouter" },
-	{ value: "anthropic", label: "Anthropic" },
-	{ value: "claude-code", label: "Claude Code" },
+	// { value: "anthropic", label: "Anthropic" },
 	{ value: "gemini", label: "Google Gemini" },
 	{ value: "deepseek", label: "DeepSeek" },
 	{ value: "openai-native", label: "OpenAI" },
 	{ value: "openai", label: "OpenAI Compatible" },
-	{ value: "vertex", label: "GCP Vertex AI" },
-	{ value: "bedrock", label: "Amazon Bedrock" },
-	{ value: "glama", label: "Glama" },
-	{ value: "vscode-lm", label: "VS Code LM API" },
-	{ value: "mistral", label: "Mistral" },
-	{ value: "lmstudio", label: "LM Studio" },
-	{ value: "ollama", label: "Ollama" },
-	{ value: "unbound", label: "Unbound" },
-	{ value: "requesty", label: "Requesty" },
-	{ value: "human-relay", label: "Human Relay" },
-	{ value: "xai", label: "xAI (Grok)" },
-	{ value: "groq", label: "Groq" },
-	{ value: "chutes", label: "Chutes AI" },
-	{ value: "litellm", label: "LiteLLM" },
+	{ value: "modelscope", label: "ModelScope" },
+	// { value: "vertex", label: "GCP Vertex AI" },
+	// { value: "bedrock", label: "Amazon Bedrock" },
+	// { value: "glama", label: "Glama" },
+	// { value: "vscode-lm", label: "VS Code LM API" },
+	// { value: "mistral", label: "Mistral" },
+	// { value: "lmstudio", label: "LM Studio" },
+	// { value: "ollama", label: "Ollama" },
+	// { value: "unbound", label: "Unbound" },
+	// { value: "requesty", label: "Requesty" },
+	// { value: "human-relay", label: "Human Relay" },
+	// { value: "xai", label: "xAI (Grok)" },
+	// { value: "groq", label: "Groq" },
+	// { value: "chutes", label: "Chutes AI" },
+	// { value: "litellm", label: "LiteLLM" },
 ].sort((a, b) => a.label.localeCompare(b.label))

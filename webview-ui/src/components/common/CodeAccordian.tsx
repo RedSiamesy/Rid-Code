@@ -33,6 +33,7 @@ const CodeAccordian = ({
 	const inferredLanguage = useMemo(() => language ?? (path ? getLanguageFromPath(path) : "txt"), [path, language])
 	const source = useMemo(() => code.trim(), [code])
 	const hasHeader = Boolean(path || isFeedback || header)
+	const isAgentEdits = Boolean(source.startsWith('# agentEdits'))
 
 	return (
 		<ToolUseBlock>
@@ -46,9 +47,9 @@ const CodeAccordian = ({
 						</div>
 					) : isFeedback ? (
 						<div className="flex items-center">
-							<span className={`codicon codicon-${isFeedback ? "feedback" : "codicon-output"} mr-1.5`} />
+							<span className={`codicon codicon-${isAgentEdits ? "hubot" : isFeedback ? "feedback" : "output"} mr-1.5`} />
 							<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2 rtl">
-								{isFeedback ? "User Edits" : "Console Logs"}
+								{isAgentEdits ? "Roo Edits" : isFeedback ? "User Edits" : "Console Logs"}
 							</span>
 						</div>
 					) : (

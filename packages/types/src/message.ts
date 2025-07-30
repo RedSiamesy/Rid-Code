@@ -106,6 +106,9 @@ export const clineSays = [
 	"condense_context",
 	"condense_context_error",
 	"codebase_search_result",
+	"save_memory",
+	"save_memory_error",
+	"save_memory_tag",
 	"user_edit_todos",
 ] as const
 

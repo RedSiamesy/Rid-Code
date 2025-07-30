@@ -17,6 +17,13 @@ export interface CodeIndexConfig {
 	qdrantApiKey?: string
 	searchMinScore?: number
 	searchMaxResults?: number
+
+	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }
 
 /**
@@ -35,4 +42,16 @@ export type PreviousConfigSnapshot = {
 	geminiApiKey?: string
 	qdrantUrl?: string
 	qdrantApiKey?: string
+
+	embeddingBaseUrl?: string
+	embeddingApiKey?: string
+	embeddingModelID?: string
+
+	enhancementBaseUrl?: string
+	enhancementApiKey?: string
+	enhancementModelID?: string
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }

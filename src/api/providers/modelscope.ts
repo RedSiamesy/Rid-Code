@@ -1,4 +1,4 @@
-import { deepSeekModels, deepSeekDefaultModelId } from "@roo-code/types"
+import { modelScopeModels, modelScopeDefaultModelId } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
@@ -7,26 +7,26 @@ import { getModelParams } from "../transform/model-params"
 
 import { RiddlerHandler } from "./providers-rid"
 
-export class DeepSeekHandler extends RiddlerHandler {
+export class ModelScopeHandler extends RiddlerHandler {
 	constructor(options: ApiHandlerOptions) {
 		super({
 			...options,
-			openAiApiKey: options.deepSeekApiKey ?? "not-provided",
-			openAiModelId: options.apiModelId ?? deepSeekDefaultModelId,
-			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/api/deepseek/v1",
+			openAiApiKey: options.modelscopeApiKey ?? "not-provided",
+			openAiModelId: options.apiModelId ?? modelScopeDefaultModelId,
+			openAiBaseUrl: options.modelscopeBaseUrl ?? "https://riddler.mynatapp.cc/api/modelscope/v1",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})
 	}
 
 	override getModel() {
-		const id = this.options.apiModelId ?? deepSeekDefaultModelId
-		const info = deepSeekModels[id as keyof typeof deepSeekModels] || deepSeekModels[deepSeekDefaultModelId]
+		const id = this.options.apiModelId ?? modelScopeDefaultModelId
+		const info = modelScopeModels[id as keyof typeof modelScopeModels] || modelScopeModels[modelScopeDefaultModelId]
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
 		return { id, info, ...params }
 	}
 
-	// Override to handle DeepSeek's usage metrics, including caching.
+	// Override to handle ModelScope's usage metrics, including caching.
 	protected override processUsageMetrics(usage: any): ApiStreamUsageChunk {
 		return {
 			type: "usage",

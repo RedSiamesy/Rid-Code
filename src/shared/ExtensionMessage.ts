@@ -60,6 +60,7 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "mcpServers"
 		| "enhancedPrompt"
+		| "savedMemory"
 		| "commitSearchResults"
 		| "listApiConfig"
 		| "routerModels"

@@ -22,6 +22,12 @@ export class CodeIndexConfigManager {
 	private searchMinScore?: number
 	private searchMaxResults?: number
 
+	private embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	private enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	private ragPath?: string
+	private llmFilter?: boolean
+	private codeBaseLogging?: boolean
+
 	constructor(private readonly contextProxy: ContextProxy) {
 		// Initialize with current configuration to avoid false restart triggers
 		this._loadAndSetConfiguration()
@@ -48,6 +54,14 @@ export class CodeIndexConfigManager {
 			codebaseIndexEmbedderModelId: "",
 			codebaseIndexSearchMinScore: undefined,
 			codebaseIndexSearchMaxResults: undefined,
+
+			embeddingBaseUrl: "",
+			embeddingModelID: "",
+			enhancementBaseUrl: "",
+			enhancementModelID: "",
+			ragPath: "",
+			llmFilter: false,
+			codeBaseLogging: false,
 		}
 
 		const {
@@ -58,6 +72,14 @@ export class CodeIndexConfigManager {
 			codebaseIndexEmbedderModelId,
 			codebaseIndexSearchMinScore,
 			codebaseIndexSearchMaxResults,
+
+			embeddingBaseUrl,
+			embeddingModelID,
+			enhancementBaseUrl,
+			enhancementModelID,
+			ragPath,
+			llmFilter,
+			codeBaseLogging,
 		} = codebaseIndexConfig
 
 		const openAiKey = this.contextProxy?.getSecret("codeIndexOpenAiKey") ?? ""
@@ -66,6 +88,10 @@ export class CodeIndexConfigManager {
 		const openAiCompatibleBaseUrl = codebaseIndexConfig.codebaseIndexOpenAiCompatibleBaseUrl ?? ""
 		const openAiCompatibleApiKey = this.contextProxy?.getSecret("codebaseIndexOpenAiCompatibleApiKey") ?? ""
 		const geminiApiKey = this.contextProxy?.getSecret("codebaseIndexGeminiApiKey") ?? ""
+
+		const embeddingApiKey = this.contextProxy?.getSecret("embeddingApiKey") ?? ""
+		const enhancementApiKey = this.contextProxy?.getSecret("enhancementApiKey") ?? ""
+
 
 		// Update instance variables with configuration
 		// Note: codebaseIndexEnabled is no longer used as the feature is always enabled
@@ -118,6 +144,30 @@ export class CodeIndexConfigManager {
 				: undefined
 
 		this.geminiOptions = geminiApiKey ? { apiKey: geminiApiKey } : undefined
+
+		this.embeddingOptions =
+			embeddingBaseUrl && embeddingApiKey && embeddingModelID
+				? {
+						baseUrl: embeddingBaseUrl,
+						apiKey: embeddingApiKey,
+						modelID: embeddingModelID,
+					}
+				: undefined
+
+		this.enhancementOptions =
+			enhancementBaseUrl && enhancementApiKey && enhancementModelID
+				? {
+						baseUrl: enhancementBaseUrl,
+						apiKey: enhancementApiKey,
+						modelID: enhancementModelID,
+					}
+				: undefined
+
+
+		this.ragPath = ragPath ? ragPath : undefined
+		this.llmFilter = llmFilter ? llmFilter : false
+		this.codeBaseLogging = codeBaseLogging ? codeBaseLogging : false
+ 	
 	}
 
 	/**
@@ -154,6 +204,18 @@ export class CodeIndexConfigManager {
 			geminiApiKey: this.geminiOptions?.apiKey ?? "",
 			qdrantUrl: this.qdrantUrl ?? "",
 			qdrantApiKey: this.qdrantApiKey ?? "",
+
+			embeddingApiKey: this.embeddingOptions?.apiKey ?? "",
+			embeddingBaseUrl: this.embeddingOptions?.baseUrl ?? "",
+			embeddingModelID: this.embeddingOptions?.modelID ?? "",
+
+			enhancementApiKey: this.enhancementOptions?.apiKey ?? "",
+			enhancementBaseUrl: this.enhancementOptions?.baseUrl ?? "",
+			enhancementModelID: this.enhancementOptions?.modelID ?? "",
+
+			ragPath: this.ragPath ?? "",
+			llmFilter: this.llmFilter ?? false,
+			codeBaseLogging: this.codeBaseLogging ?? false
 		}
 
 		// Refresh secrets from VSCode storage to ensure we have the latest values
@@ -197,10 +259,10 @@ export class CodeIndexConfigManager {
 			const qdrantUrl = this.qdrantUrl
 			return !!(ollamaBaseUrl && qdrantUrl)
 		} else if (this.embedderProvider === "openai-compatible") {
-			const baseUrl = this.openAiCompatibleOptions?.baseUrl
-			const apiKey = this.openAiCompatibleOptions?.apiKey
-			const qdrantUrl = this.qdrantUrl
-			const isConfigured = !!(baseUrl && apiKey && qdrantUrl)
+			const baseUrl = this.embeddingOptions?.baseUrl
+			const apiKey = this.embeddingOptions?.apiKey
+			const modelID = this.embeddingOptions?.modelID
+			const isConfigured = !!(baseUrl && apiKey && modelID)
 			return isConfigured
 		} else if (this.embedderProvider === "gemini") {
 			const apiKey = this.geminiOptions?.apiKey
@@ -242,6 +304,18 @@ export class CodeIndexConfigManager {
 		const prevGeminiApiKey = prev?.geminiApiKey ?? ""
 		const prevQdrantUrl = prev?.qdrantUrl ?? ""
 		const prevQdrantApiKey = prev?.qdrantApiKey ?? ""
+
+		const prevembeddingApiKey = prev?.embeddingApiKey ?? ""
+		const prevembeddingBaseUrl = prev?.embeddingBaseUrl ?? ""
+		const prevembeddingModelID = prev?.embeddingModelID ?? ""
+
+		const prevenhancementApiKey = prev?.enhancementApiKey ?? ""
+		const prevenhancementBaseUrl = prev?.enhancementBaseUrl ?? ""
+		const prevenhancementModelID = prev?.enhancementModelID ?? ""
+
+		const prevragPath = prev?.ragPath ?? ""
+		const prevcodeBaseLogging = prev?.codeBaseLogging ?? false
+
 
 		// 1. Transition from unconfigured to configured
 		// Since the feature is always enabled, we only check configuration status
@@ -301,6 +375,48 @@ export class CodeIndexConfigManager {
 			return true
 		}
 
+		// Enhancement configuration changes
+		const currentEmbeddingApiKey = this.embeddingOptions?.apiKey ?? ""
+		const currentEmbeddingBaseUrl = this.embeddingOptions?.baseUrl ?? ""
+		const currentEmbeddingModelID = this.embeddingOptions?.modelID ?? ""
+
+		if (
+			prevembeddingApiKey !== currentEmbeddingApiKey ||
+			prevembeddingBaseUrl !== currentEmbeddingBaseUrl ||
+			prevembeddingModelID !== currentEmbeddingModelID
+		) {
+			return true
+		}
+
+		// Enhancement configuration changes
+		const currentEnhancementApiKey = this.enhancementOptions?.apiKey ?? ""
+		const currentEnhancementBaseUrl = this.enhancementOptions?.baseUrl ?? ""
+		const currentEnhancementModelID = this.enhancementOptions?.modelID ?? ""
+		
+
+		if (
+			prevenhancementApiKey !== currentEnhancementApiKey ||
+			prevenhancementBaseUrl !== currentEnhancementBaseUrl ||
+			prevenhancementModelID !== currentEnhancementModelID
+		) {
+			return true
+		}
+
+
+		const currentRagPath = this.ragPath ?? ""
+		if (
+			prevragPath !== currentRagPath
+		) {
+			return true
+		}
+
+		const currentCodeBaseLogging = this.codeBaseLogging ?? false
+		if (
+			prevcodeBaseLogging !== currentCodeBaseLogging
+		) {
+			return true
+		}
+
 		return false
 	}
 
@@ -347,6 +463,13 @@ export class CodeIndexConfigManager {
 			qdrantApiKey: this.qdrantApiKey,
 			searchMinScore: this.currentSearchMinScore,
 			searchMaxResults: this.currentSearchMaxResults,
+
+			embeddingOptions: this.embeddingOptions,
+			enhancementOptions: this.enhancementOptions,
+
+			ragPath: this.ragPath,
+			llmFilter: this.llmFilter,
+			codeBaseLogging: this.codeBaseLogging,
 		}
 	}
 

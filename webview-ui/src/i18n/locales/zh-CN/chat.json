@@ -107,7 +107,7 @@
 	"sendMessage": "发送消息",
 	"stopTts": "停止文本转语音",
 	"typeMessage": "输入消息...",
-	"typeTask": "在此处输入您的任务...",
+	"typeTask": "在此处输入您的任务... (按 Enter 键发送，Ctrl+Enter 或 Shift+Enter 换行)",
 	"addContext": "@添加上下文，/切换模式",
 	"dragFiles": "Shift+拖拽文件",
 	"dragFilesImages": "Shift+拖拽文件/图片",
