@@ -155,64 +155,7 @@ export async function searchWorkspaceFiles(
 			}),
 		)
 
-		// return verifiedResults
-		let inc: typeof allItems = []
-		const _query = query.replace(/\\/g, '/')
-		if (_query.includes("/")) {
-			inc = allItems
-				.filter((item) => {
-					const itemAbsolutePath = path.resolve(workspacePath, item.path).replace(/\\/g, '/')
-					if (!itemAbsolutePath.includes(_query)) {
-						return false
-					}
-					// const afterQuery = itemAbsolutePath.split(abs_queryPath).pop() || ""
-					// const slashCount = (afterQuery.match(/\//g) || []).length
-					// if (slashCount > 1 && !afterQuery.endsWith('/')) {
-					// 	return false
-					// }
-					return true
-				})
-				.map((item) => {
-					const fullPath = path.join(workspacePath, item.path)
-					const isDirectory = fs.lstatSync(fullPath).isDirectory()
-					return {
-						...item,
-						path: item.path.toPosix(),
-						type: isDirectory ? ("folder" as const) : ("file" as const),
-					}
-				})
-		}
-		
-		// const abs_queryPath = path.resolve(workspacePath, query).replace(/\\/g, '/')
-		// let inc: typeof allItems = []
-		// if (fs.existsSync(abs_queryPath)) {
-		// 	inc = allItems
-		// 		.filter((item) => {
-		// 			const itemAbsolutePath = path.resolve(workspacePath, item.path).replace(/\\/g, '/')
-		// 			if (!itemAbsolutePath.includes(abs_queryPath)) {
-		// 				return false
-		// 			}
-		// 			const afterQuery = itemAbsolutePath.split(abs_queryPath).pop() || ""
-		// 			const slashCount = (afterQuery.match(/\//g) || []).length
-		// 			if (slashCount > 1 && !afterQuery.endsWith('/')) {
-		// 				return false
-		// 			}
-		// 			return true
-		// 		})
-		// 		.map((item) => {
-		// 			const fullPath = path.join(workspacePath, item.path)
-		// 			const isDirectory = fs.lstatSync(fullPath).isDirectory()
-		// 			return {
-		// 				...item,
-		// 				path: item.path.toPosix(),
-		// 				type: isDirectory ? ("folder" as const) : ("file" as const),
-		// 			}
-		// 		})
-		// }
-
-		return [...inc,...verifiedResults,].filter((item) => {
-			return item.type !== "folder"
-		})
+		return verifiedResults
 	} catch (error) {
 		console.error("Error in searchWorkspaceFiles:", error)
 		return []

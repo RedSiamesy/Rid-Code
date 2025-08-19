@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
+import * as vscode from "vscode"
 
 import { TelemetryService } from "@roo-code/telemetry"
 
@@ -14,6 +15,7 @@ import {
 	AskFinishSubTaskApproval,
 } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
+import { Package } from "../../shared/package"
 
 export async function attemptCompletionTool(
 	cline: Task,
@@ -27,6 +29,25 @@ export async function attemptCompletionTool(
 ) {
 	const result: string | undefined = block.params.result
 	const command: string | undefined = block.params.command
+
+	// Get the setting for preventing completion with open todos from VSCode configuration
+	const preventCompletionWithOpenTodos = vscode.workspace
+		.getConfiguration(Package.name)
+		.get<boolean>("preventCompletionWithOpenTodos", false)
+
+	// Check if there are incomplete todos (only if the setting is enabled)
+	const hasIncompleteTodos = cline.todoList && cline.todoList.some((todo) => todo.status !== "completed")
+
+	if (preventCompletionWithOpenTodos && hasIncompleteTodos) {
+		cline.consecutiveMistakeCount++
+		cline.recordToolError("attempt_completion")
+		pushToolResult(
+			formatResponse.toolError(
+				"Cannot complete task while there are incomplete todos. Please finish all todos before attempting completion.",
+			),
+		)
+		return
+	}
 
 	try {
 		const lastMessage = cline.clineMessages.at(-1)
@@ -77,8 +98,6 @@ export async function attemptCompletionTool(
 				if (!didApprove) {
 					return
 				}
-				
-				// const summary = await getFinishSubTaskSummary(cline, result)
 
 				// tell the provider to remove the current subtask and resume the previous task in the stack
 				await cline.providerRef.deref()?.finishSubTask(result)
@@ -117,133 +136,3 @@ export async function attemptCompletionTool(
 		return
 	}
 }
-
-
-
-// import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
-// import { truncateConversationIfNeeded } from "../sliding-window"
-// import { ApiMessage } from "../task-persistence/apiMessages"
-// import {
-// 	type ContextCondense,
-// } from "@roo-code/types"
-
-
-// async function getFinishSubTaskSummary(cline: Task, result:string) 
-// : Promise<string>
-// {
-// 	const state = await cline.providerRef.deref()?.getState()
-
-// 	const {
-// 		autoCondenseContext = true,
-// 		autoCondenseContextPercent = 100,
-// 		profileThresholds = {},
-// 	} = state ?? {}
-
-// 	const systemPrompt = `You are "CodeCrafter," an expert AI Programming Assistant and a master of code, logic, and software architecture. Your primary directive is to be an exceptionally helpful and proactive partner to users, assisting them in all aspects of the software development lifecycle. Your ultimate goal is to empower users to write better code, solve problems faster, and learn new technologies effectively.
-
-// **Core Responsibilities:**
-
-// *   **Code Generation & Completion:** Write clean, efficient, and well-documented code in any requested programming language.
-// *   **Explanation & Learning:** Explain complex code, algorithms, or programming concepts in a clear and easy-to-understand manner.
-// *   **Debugging & Troubleshooting:** Analyze code snippets or error messages to identify the root cause of bugs and propose effective solutions.
-// *   **Refactoring & Optimization:** Review existing code and suggest improvements for readability, performance, security, and maintainability.
-// *   **Architectural Design:** Provide high-level architectural suggestions, design patterns, and best practices for building robust and scalable applications.
-// *   **Testing:** Generate unit tests, suggest testing strategies, and help create a comprehensive test plan.
-
-// **Key Capability: Tool Utilization**
-
-// Beyond your extensive knowledge, you are equipped with a set of practical tools to interact with the user's development environment. You MUST use these tools when a task requires accessing or modifying local information.
-
-// **Available Tools:**
-// *   'file_reader': To read the content of one or more files.
-// *   'file_writer': To write new content to a file or create a new file.
-// *   'code_executor': To execute a piece of code and get its output, which is essential for verification and debugging.
-// *   'web_search': To find the most up-to-date information, library documentation, or solutions to novel errors.
-// ...
-
-// **Rules for Tool Use:**
-// 1.  **Analyze the Request:** First, determine if the user's request can be fulfilled with your internal knowledge or if it requires interacting with their files or system.
-// 2.  **Select the Right Tool:** If external interaction is needed, choose the appropriate tool.
-// *   *Example:* If a user says, "Fix the bug in my 'utils.py' file," your first step should be to use 'file_reader' to read 'utils.py'.
-// 3.  **Think Step-by-Step:** Formulate a plan. For a debugging task, this might be: read the file, identify the potential error, suggest a fix, and offer to write the corrected code back using 'file_writer'.
-// 4.  **Communicate Clearly:** Always inform the user which tool you are about to use and why. For example: "Okay, I will now use the 'file_reader' to examine the contents of 'utils.py' to understand the context of the bug."
-
-// **Guiding Principles:**
-// *   **Clarity First:** Prioritize clear, simple, and direct communication. Avoid jargon where possible.
-// *   **Best Practices:** Always adhere to industry best practices regarding coding standards, security, and project structure.
-// *   **Proactivity:** Don't just answer the question. If you see a potential improvement, a security vulnerability, or a better way to do something, proactively suggest it.
-// *   **Context-Awareness:** Maintain the context of the conversation to provide relevant and coherent support over multiple interactions.`
-// 	const customCondensingPrompt = state?.customCondensingPrompt
-// 	const condensingApiConfigId = state?.condensingApiConfigId
-// 	const listApiConfigMeta = state?.listApiConfigMeta
-
-// 	let condensingApiHandler: ApiHandler | undefined
-// 			if (condensingApiConfigId && listApiConfigMeta && Array.isArray(listApiConfigMeta)) {
-// 				// Using type assertion for the id property to avoid implicit any
-// 				const matchingConfig = listApiConfigMeta.find((config: any) => config.id === condensingApiConfigId)
-// 				if (matchingConfig) {
-// 					const profile = await cline.providerRef.deref()?.providerSettingsManager.getProfile({
-// 						id: condensingApiConfigId,
-// 					})
-// 					// Ensure profile and apiProvider exist before trying to build handler
-// 					if (profile && profile.apiProvider) {
-// 						condensingApiHandler = buildApiHandler(profile)
-// 					}
-// 				}
-// 			}
-	
-
-// 	const DEFAULT_THINKING_MODEL_MAX_TOKENS = 16_384
-// 	const modelInfo = cline.api.getModel().info
-// 	const { contextTokens } = cline.getTokenUsage()
-// 	const maxTokens = modelInfo.supportsReasoningBudget
-// 		? cline.apiConfiguration.modelMaxTokens || DEFAULT_THINKING_MODEL_MAX_TOKENS
-// 		: modelInfo.maxTokens || DEFAULT_THINKING_MODEL_MAX_TOKENS
-
-// 	const contextWindow = modelInfo.contextWindow
-
-// 	const currentProfileId =
-// 		state?.listApiConfigMeta.find((profile) => profile.name === state?.currentApiConfigName)?.id ??
-// 		"default"
-
-// 	if (contextTokens > 0.2 * maxTokens) {
-// 		const truncateResult = await truncateConversationIfNeeded({
-// 			messages: cline.apiConversationHistory,
-// 			totalTokens: contextTokens,
-// 			maxTokens,
-// 			contextWindow,
-// 			apiHandler: cline.api,
-// 			autoCondenseContext,
-// 			autoCondenseContextPercent,
-// 			systemPrompt,
-// 			taskId: cline.taskId,
-// 			customCondensingPrompt,
-// 			condensingApiHandler,
-// 			profileThresholds,
-// 			currentProfileId,
-// 		})
-
-// 		// ApiMessage[]
-// 		// const { summary, cost, prevContextTokens, newContextTokens = 0 } = truncateResult
-// 		// const contextCondense: ContextCondense = { summary, cost, newContextTokens, prevContextTokens }
-// 		// await cline.say(
-// 		// 	"condense_context",
-// 		// 	undefined /* text */,
-// 		// 	undefined /* images */,
-// 		// 	false /* partial */,
-// 		// 	undefined /* checkpoint */,
-// 		// 	undefined /* progressStatus */,
-// 		// 	{ isNonInteractive: true } /* options */,
-// 		// 	contextCondense,
-// 		// )
-
-// 		if (truncateResult.error) {
-// 			return truncateResult.summary
-// 		} 
-// 		return JSON.stringify(cline.apiConversationHistory)
-		
-// 	} else {
-// 		// 直接返回所有对话序列化组成的字符串
-// 		return JSON.stringify(cline.apiConversationHistory)
-// 	}
-// }

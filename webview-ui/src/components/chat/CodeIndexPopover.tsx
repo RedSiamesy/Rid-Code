@@ -4,10 +4,10 @@ import { z } from "zod"
 import {
 	VSCodeButton,
 	VSCodeTextField,
-	VSCodeCheckbox,
 	VSCodeDropdown,
 	VSCodeOption,
 	VSCodeLink,
+	VSCodeCheckbox,
 } from "@vscode/webview-ui-toolkit/react"
 import * as ProgressPrimitive from "@radix-ui/react-progress"
 import { vscode } from "@src/utils/vscode"
@@ -38,6 +38,7 @@ import {
 } from "@src/components/ui"
 import { AlertTriangle } from "lucide-react"
 import { useRooPortal } from "@src/components/ui/hooks/useRooPortal"
+import { useEscapeKey } from "@src/hooks/useEscapeKey"
 import type { EmbedderProvider } from "@roo/embeddingModels"
 import type { IndexingStatus } from "@roo/ExtensionMessage"
 import { CODEBASE_INDEX_DEFAULTS } from "@roo-code/types"
@@ -68,21 +69,13 @@ interface LocalCodeIndexSettings {
 	codebaseIndexOpenAiCompatibleBaseUrl?: string
 	codebaseIndexOpenAiCompatibleApiKey?: string
 	codebaseIndexGeminiApiKey?: string
-
-	embeddingBaseUrl?: string
-	embeddingModelID?: string
-	embeddingApiKey?: string
-	enhancementBaseUrl?: string
-	enhancementModelID?: string
-	enhancementApiKey?: string
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
+	codebaseIndexMistralApiKey?: string
 }
 
 // Validation schema for codebase index settings
 const createValidationSchema = (provider: EmbedderProvider, t: any) => {
 	const baseSchema = z.object({
+		codebaseIndexEnabled: z.boolean(),
 		codebaseIndexQdrantUrl: z
 			.string()
 			.min(1, t("settings:codeIndex.validation.qdrantUrlRequired"))
@@ -106,26 +99,38 @@ const createValidationSchema = (provider: EmbedderProvider, t: any) => {
 					.min(1, t("settings:codeIndex.validation.ollamaBaseUrlRequired"))
 					.url(t("settings:codeIndex.validation.invalidOllamaUrl")),
 				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+				codebaseIndexEmbedderModelDimension: z
+					.number()
+					.min(1, t("settings:codeIndex.validation.modelDimensionRequired"))
+					.optional(),
 			})
 
 		case "openai-compatible":
 			return baseSchema.extend({
-				embeddingBaseUrl: z
+				codebaseIndexOpenAiCompatibleBaseUrl: z
 					.string()
 					.min(1, t("settings:codeIndex.validation.baseUrlRequired"))
 					.url(t("settings:codeIndex.validation.invalidBaseUrl")),
-				embeddingApiKey: z
+				codebaseIndexOpenAiCompatibleApiKey: z
 					.string()
 					.min(1, t("settings:codeIndex.validation.apiKeyRequired")),
-				embeddingModelID: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
-				// codebaseIndexEmbedderModelDimension: z
-				// 	.number()
-				// 	.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
+				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+				codebaseIndexEmbedderModelDimension: z
+					.number()
+					.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
 			})
 
 		case "gemini":
 			return baseSchema.extend({
 				codebaseIndexGeminiApiKey: z.string().min(1, t("settings:codeIndex.validation.geminiApiKeyRequired")),
+				codebaseIndexEmbedderModelId: z
+					.string()
+					.min(1, t("settings:codeIndex.validation.modelSelectionRequired")),
+			})
+
+		case "mistral":
+			return baseSchema.extend({
+				codebaseIndexMistralApiKey: z.string().min(1, t("settings:codeIndex.validation.mistralApiKeyRequired")),
 				codebaseIndexEmbedderModelId: z
 					.string()
 					.min(1, t("settings:codeIndex.validation.modelSelectionRequired")),
@@ -140,7 +145,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	children,
 	indexingStatus: externalIndexingStatus,
 }) => {
-	const SECRET_PLACEHOLDER = "••••••••••••••••••••••••••••••••••••••••••••••••"
+	const SECRET_PLACEHOLDER = "••••••••••••••••"
 	const { t } = useAppTranslation()
 	const { codebaseIndexConfig, codebaseIndexModels } = useExtensionState()
 	const [open, setOpen] = useState(false)
@@ -163,7 +168,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	const getDefaultSettings = (): LocalCodeIndexSettings => ({
 		codebaseIndexEnabled: true,
 		codebaseIndexQdrantUrl: "",
-		codebaseIndexEmbedderProvider: "openai-compatible",
+		codebaseIndexEmbedderProvider: "openai",
 		codebaseIndexEmbedderBaseUrl: "",
 		codebaseIndexEmbedderModelId: "",
 		codebaseIndexEmbedderModelDimension: undefined,
@@ -174,16 +179,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 		codebaseIndexOpenAiCompatibleBaseUrl: "",
 		codebaseIndexOpenAiCompatibleApiKey: "",
 		codebaseIndexGeminiApiKey: "",
-
-		embeddingBaseUrl: "",
-		embeddingModelID: "",
-		embeddingApiKey: "",
-		enhancementBaseUrl: "",
-		enhancementModelID: "",
-		enhancementApiKey: "",
-		ragPath: "",
-		llmFilter: false,
-		codeBaseLogging: false,
+		codebaseIndexMistralApiKey: "",
 	})
 
 	// Initial settings state - stores the settings when popover opens
@@ -217,18 +213,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 				codebaseIndexOpenAiCompatibleBaseUrl: codebaseIndexConfig.codebaseIndexOpenAiCompatibleBaseUrl || "",
 				codebaseIndexOpenAiCompatibleApiKey: "",
 				codebaseIndexGeminiApiKey: "",
-
-				embeddingBaseUrl: codebaseIndexConfig.embeddingBaseUrl || "",
-				embeddingModelID: codebaseIndexConfig.embeddingModelID || "",
-				enhancementBaseUrl: codebaseIndexConfig.enhancementBaseUrl || "",
-				enhancementModelID: codebaseIndexConfig.enhancementModelID || "",
-
-				embeddingApiKey: "",
-				enhancementApiKey: "",
-				
-				ragPath: codebaseIndexConfig.ragPath || "",
-				llmFilter: codebaseIndexConfig.llmFilter || false,
-				codeBaseLogging: codebaseIndexConfig.codeBaseLogging || false,
+				codebaseIndexMistralApiKey: "",
 			}
 			setInitialSettings(settings)
 			setCurrentSettings(settings)
@@ -246,6 +231,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 		}
 	}, [open])
 
+	// Use a ref to capture current settings for the save handler
+	const currentSettingsRef = useRef(currentSettings)
+	currentSettingsRef.current = currentSettings
+
 	// Listen for indexing status updates and save responses
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent<any>) => {
@@ -260,21 +249,24 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 			} else if (event.data.type === "codeIndexSettingsSaved") {
 				if (event.data.success) {
 					setSaveStatus("saved")
-					// Don't update initial settings here - wait for the secret status response
-					// Request updated secret status after save
+					// Update initial settings to match current settings after successful save
+					// This ensures hasUnsavedChanges becomes false
+					const savedSettings = { ...currentSettingsRef.current }
+					setInitialSettings(savedSettings)
+					// Also update current settings to maintain consistency
+					setCurrentSettings(savedSettings)
+					// Request secret status to ensure we have the latest state
+					// This is important to maintain placeholder display after save
+
 					vscode.postMessage({ type: "requestCodeIndexSecretStatus" })
-					// Reset status after 3 seconds
-					setTimeout(() => {
-						setSaveStatus("idle")
-					}, 3000)
+
+					setSaveStatus("idle")
 				} else {
 					setSaveStatus("error")
 					setSaveError(event.data.error || t("settings:codeIndex.saveError"))
 					// Clear error message after 5 seconds
-					setTimeout(() => {
-						setSaveStatus("idle")
-						setSaveError(null)
-					}, 5000)
+					setSaveStatus("idle")
+					setSaveError(null)
 				}
 			}
 		}
@@ -310,37 +302,28 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 							? SECRET_PLACEHOLDER
 							: ""
 					}
-					if (
-						!prev.embeddingApiKey ||
-						prev.embeddingApiKey === SECRET_PLACEHOLDER
-					) {
-						updated.embeddingApiKey = secretStatus.hasEmbeddingApiKey
-							? SECRET_PLACEHOLDER
-							: ""
-					}
-					if (
-						!prev.enhancementApiKey ||
-						prev.enhancementApiKey === SECRET_PLACEHOLDER
-					) {
-						updated.enhancementApiKey = secretStatus.hasEnhancementApiKey
-							? SECRET_PLACEHOLDER
-							: ""
-					}
 					if (!prev.codebaseIndexGeminiApiKey || prev.codebaseIndexGeminiApiKey === SECRET_PLACEHOLDER) {
 						updated.codebaseIndexGeminiApiKey = secretStatus.hasGeminiApiKey ? SECRET_PLACEHOLDER : ""
+					}
+					if (!prev.codebaseIndexMistralApiKey || prev.codebaseIndexMistralApiKey === SECRET_PLACEHOLDER) {
+						updated.codebaseIndexMistralApiKey = secretStatus.hasMistralApiKey ? SECRET_PLACEHOLDER : ""
 					}
 
 					return updated
 				}
 
-				setCurrentSettings(updateWithSecrets)
-				setInitialSettings(updateWithSecrets)
+				// Only update settings if we're not in the middle of saving
+				// After save is complete (saved status), we still want to update to maintain consistency
+				if (saveStatus === "idle" || saveStatus === "saved") {
+					setCurrentSettings(updateWithSecrets)
+					setInitialSettings(updateWithSecrets)
+				}
 			}
 		}
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [])
+	}, [saveStatus])
 
 	// Generic comparison function that detects changes between initial and current settings
 	const hasUnsavedChanges = useMemo(() => {
@@ -397,8 +380,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 					key === "codeIndexOpenAiKey" ||
 					key === "codebaseIndexOpenAiCompatibleApiKey" ||
 					key === "codebaseIndexGeminiApiKey" ||
-					key === "embeddingApiKey" ||
-					key === "enhancementApiKey"
+					key === "codebaseIndexMistralApiKey"
 				) {
 					dataToValidate[key] = "placeholder-valid"
 				}
@@ -459,6 +441,9 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 		})
 	}, [checkUnsavedChanges])
 
+	// Use the shared ESC key handler hook - respects unsaved changes logic
+	useEscapeKey(open, handlePopoverClose)
+
 	const handleSaveSettings = () => {
 		// Validate settings before saving
 		if (!validateSettings()) {
@@ -468,19 +453,25 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 		setSaveStatus("saving")
 		setSaveError(null)
 
-		// Prepare settings to save - include all fields except secrets with placeholder values
+		// Prepare settings to save
 		const settingsToSave: any = {}
 
 		// Iterate through all current settings
 		for (const [key, value] of Object.entries(currentSettings)) {
-			// Skip secret fields that still have placeholder value
+			// For secret fields with placeholder, don't send the placeholder
+			// but also don't send an empty string - just skip the field
+			// This tells the backend to keep the existing secret
 			if (value === SECRET_PLACEHOLDER) {
+				// Skip sending placeholder values - backend will preserve existing secrets
 				continue
 			}
 
-			// Include all other fields
+			// Include all other fields, including empty strings (which clear secrets)
 			settingsToSave[key] = value
 		}
+
+		// Always include codebaseIndexEnabled to ensure it's persisted
+		settingsToSave.codebaseIndexEnabled = currentSettings.codebaseIndexEnabled
 
 		// Save settings to backend
 		vscode.postMessage({
@@ -545,6 +536,20 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 					</div>
 
 					<div className="p-4">
+						{/* Enable/Disable Toggle */}
+						<div className="mb-4">
+							<div className="flex items-center gap-2">
+								<VSCodeCheckbox
+									checked={currentSettings.codebaseIndexEnabled}
+									onChange={(e: any) => updateSetting("codebaseIndexEnabled", e.target.checked)}>
+									<span className="font-medium">{t("settings:codeIndex.enableLabel")}</span>
+								</VSCodeCheckbox>
+								<StandardTooltip content={t("settings:codeIndex.enableDescription")}>
+									<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
+								</StandardTooltip>
+							</div>
+						</div>
+
 						{/* Status Section */}
 						<div className="space-y-2">
 							<h4 className="text-sm font-medium">{t("settings:codeIndex.statusTitle")}</h4>
@@ -593,10 +598,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 							{isSetupSettingsOpen && (
 								<div className="mt-4 space-y-4">
 									{/* Embedder Provider Section */}
-									<div className="flex flex-col gap-3">
-										<div className="flex items-center gap-4 font-bold">
-											<div>{t("settings:codeIndex.embedderProviderLabel")}</div>
-										</div>
+									<div className="space-y-2">
+										<label className="text-sm font-medium">
+											{t("settings:codeIndex.embedderProviderLabel")}
+										</label>
 										<Select
 											value={currentSettings.codebaseIndexEmbedderProvider}
 											onValueChange={(value: EmbedderProvider) => {
@@ -608,18 +613,21 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
-												{/* <SelectItem value="openai">
+												<SelectItem value="openai">
 													{t("settings:codeIndex.openaiProvider")}
 												</SelectItem>
 												<SelectItem value="ollama">
 													{t("settings:codeIndex.ollamaProvider")}
-												</SelectItem> */}
+												</SelectItem>
 												<SelectItem value="openai-compatible">
 													{t("settings:codeIndex.openaiCompatibleProvider")}
 												</SelectItem>
-												{/* <SelectItem value="gemini">
+												<SelectItem value="gemini">
 													{t("settings:codeIndex.geminiProvider")}
-												</SelectItem> */}
+												</SelectItem>
+												<SelectItem value="mistral">
+													{t("settings:codeIndex.mistralProvider")}
+												</SelectItem>
 											</SelectContent>
 										</Select>
 									</div>
@@ -661,7 +669,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 													className={cn("w-full", {
 														"border-red-500": formErrors.codebaseIndexEmbedderModelId,
 													})}>
-													<VSCodeOption value="">
+													<VSCodeOption value="" className="p-2">
 														{t("settings:codeIndex.selectModel")}
 													</VSCodeOption>
 													{getAvailableModels().map((modelId) => {
@@ -670,7 +678,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 																currentSettings.codebaseIndexEmbedderProvider
 															]?.[modelId]
 														return (
-															<VSCodeOption key={modelId} value={modelId}>
+															<VSCodeOption key={modelId} value={modelId} className="p-2">
 																{modelId}{" "}
 																{model
 																	? t("settings:codeIndex.modelDimensions", {
@@ -724,40 +732,50 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 											</div>
 
 											<div className="space-y-2">
-												<label className="font-medium">
+												<label className="text-sm font-medium">
 													{t("settings:codeIndex.modelLabel")}
 												</label>
-												<VSCodeDropdown
-													value={currentSettings.codebaseIndexEmbedderModelId}
-													onChange={(e: any) =>
+												<VSCodeTextField
+													value={currentSettings.codebaseIndexEmbedderModelId || ""}
+													onInput={(e: any) =>
 														updateSetting("codebaseIndexEmbedderModelId", e.target.value)
 													}
+													placeholder={t("settings:codeIndex.modelPlaceholder")}
 													className={cn("w-full", {
 														"border-red-500": formErrors.codebaseIndexEmbedderModelId,
-													})}>
-													<VSCodeOption value="">
-														{t("settings:codeIndex.selectModel")}
-													</VSCodeOption>
-													{getAvailableModels().map((modelId) => {
-														const model =
-															codebaseIndexModels?.[
-																currentSettings.codebaseIndexEmbedderProvider
-															]?.[modelId]
-														return (
-															<VSCodeOption key={modelId} value={modelId}>
-																{modelId}{" "}
-																{model
-																	? t("settings:codeIndex.modelDimensions", {
-																			dimension: model.dimension,
-																		})
-																	: ""}
-															</VSCodeOption>
-														)
 													})}
-												</VSCodeDropdown>
+												/>
 												{formErrors.codebaseIndexEmbedderModelId && (
 													<p className="text-xs text-vscode-errorForeground mt-1 mb-0">
 														{formErrors.codebaseIndexEmbedderModelId}
+													</p>
+												)}
+											</div>
+
+											<div className="space-y-2">
+												<label className="text-sm font-medium">
+													{t("settings:codeIndex.modelDimensionLabel")}
+												</label>
+												<VSCodeTextField
+													value={
+														currentSettings.codebaseIndexEmbedderModelDimension?.toString() ||
+														""
+													}
+													onInput={(e: any) => {
+														const value = e.target.value
+															? parseInt(e.target.value, 10) || undefined
+															: undefined
+														updateSetting("codebaseIndexEmbedderModelDimension", value)
+													}}
+													placeholder={t("settings:codeIndex.modelDimensionPlaceholder")}
+													className={cn("w-full", {
+														"border-red-500":
+															formErrors.codebaseIndexEmbedderModelDimension,
+													})}
+												/>
+												{formErrors.codebaseIndexEmbedderModelDimension && (
+													<p className="text-xs text-vscode-errorForeground mt-1 mb-0">
+														{formErrors.codebaseIndexEmbedderModelDimension}
 													</p>
 												)}
 											</div>
@@ -766,7 +784,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 
 									{currentSettings.codebaseIndexEmbedderProvider === "openai-compatible" && (
 										<>
-											{/* <div className="space-y-2">
+											<div className="space-y-2">
 												<label className="text-sm font-medium">
 													{t("settings:codeIndex.openAiCompatibleBaseUrlLabel")}
 												</label>
@@ -853,7 +871,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 													}
 													onInput={(e: any) => {
 														const value = e.target.value
-															? parseInt(e.target.value)
+															? parseInt(e.target.value, 10) || undefined
 															: undefined
 														updateSetting("codebaseIndexEmbedderModelDimension", value)
 													}}
@@ -868,95 +886,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 														{formErrors.codebaseIndexEmbedderModelDimension}
 													</p>
 												)}
-											</div> */}
-
-											<div className="flex flex-col gap-3">
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"基础 URL"}</div>
-													<StandardTooltip
-														content={"使用嵌入模型对源文件片段进行向量化"}>
-														<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-													</StandardTooltip>
-												</div>
-												<div>
-													<VSCodeTextField
-														value={currentSettings.embeddingBaseUrl || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingBaseUrl", e.target.value)
-														}
-														style={{ width: "100%" }}>
-													</VSCodeTextField>
-												</div>
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"API 密钥"}</div>
-												</div>
-												<div>
-													<VSCodeTextField
-														type="password"
-														value={currentSettings.embeddingApiKey || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingApiKey", e.target.value)
-														}
-														style={{ width: "100%" }}></VSCodeTextField>
-												</div>
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"模型 ID"}</div>
-												</div>
-												<div>
-													<VSCodeTextField
-														value={currentSettings.embeddingModelID || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingModelID", e.target.value)
-														}
-														style={{ width: "100%" }}></VSCodeTextField>
-												</div>
-											</div>
-
-											<div className="mt-8">
-												<div className="flex flex-col gap-3">
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解基础 URL"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-														<StandardTooltip
-															content={"使用对话模型对源文件片段进行注解，帮助 Codebase Search 搜索代码上下文，也使用于 LLM 重排序"}>
-															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-														</StandardTooltip>
-													</div>
-													<div>
-														<VSCodeTextField
-															value={currentSettings.enhancementBaseUrl || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementBaseUrl", e.target.value)
-															}
-															style={{ width: "100%" }}>
-														</VSCodeTextField>
-													</div>
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解 API 密钥"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-													</div>
-													<div>
-														<VSCodeTextField
-															type="password"
-															value={currentSettings.enhancementApiKey || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementApiKey", e.target.value)
-															}
-															style={{ width: "100%" }}></VSCodeTextField>
-													</div>
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解模型 ID"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-													</div>
-													<div>
-														<VSCodeTextField
-															value={currentSettings.enhancementModelID || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementModelID", e.target.value)
-															}
-															style={{ width: "100%" }}></VSCodeTextField>
-													</div>
-												</div>
 											</div>
 										</>
 									)}
@@ -997,7 +926,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 													className={cn("w-full", {
 														"border-red-500": formErrors.codebaseIndexEmbedderModelId,
 													})}>
-													<VSCodeOption value="">
+													<VSCodeOption value="" className="p-2">
 														{t("settings:codeIndex.selectModel")}
 													</VSCodeOption>
 													{getAvailableModels().map((modelId) => {
@@ -1006,7 +935,72 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 																currentSettings.codebaseIndexEmbedderProvider
 															]?.[modelId]
 														return (
-															<VSCodeOption key={modelId} value={modelId}>
+															<VSCodeOption key={modelId} value={modelId} className="p-2">
+																{modelId}{" "}
+																{model
+																	? t("settings:codeIndex.modelDimensions", {
+																			dimension: model.dimension,
+																		})
+																	: ""}
+															</VSCodeOption>
+														)
+													})}
+												</VSCodeDropdown>
+												{formErrors.codebaseIndexEmbedderModelId && (
+													<p className="text-xs text-vscode-errorForeground mt-1 mb-0">
+														{formErrors.codebaseIndexEmbedderModelId}
+													</p>
+												)}
+											</div>
+										</>
+									)}
+
+									{currentSettings.codebaseIndexEmbedderProvider === "mistral" && (
+										<>
+											<div className="space-y-2">
+												<label className="text-sm font-medium">
+													{t("settings:codeIndex.mistralApiKeyLabel")}
+												</label>
+												<VSCodeTextField
+													type="password"
+													value={currentSettings.codebaseIndexMistralApiKey || ""}
+													onInput={(e: any) =>
+														updateSetting("codebaseIndexMistralApiKey", e.target.value)
+													}
+													placeholder={t("settings:codeIndex.mistralApiKeyPlaceholder")}
+													className={cn("w-full", {
+														"border-red-500": formErrors.codebaseIndexMistralApiKey,
+													})}
+												/>
+												{formErrors.codebaseIndexMistralApiKey && (
+													<p className="text-xs text-vscode-errorForeground mt-1 mb-0">
+														{formErrors.codebaseIndexMistralApiKey}
+													</p>
+												)}
+											</div>
+
+											<div className="space-y-2">
+												<label className="text-sm font-medium">
+													{t("settings:codeIndex.modelLabel")}
+												</label>
+												<VSCodeDropdown
+													value={currentSettings.codebaseIndexEmbedderModelId}
+													onChange={(e: any) =>
+														updateSetting("codebaseIndexEmbedderModelId", e.target.value)
+													}
+													className={cn("w-full", {
+														"border-red-500": formErrors.codebaseIndexEmbedderModelId,
+													})}>
+													<VSCodeOption value="" className="p-2">
+														{t("settings:codeIndex.selectModel")}
+													</VSCodeOption>
+													{getAvailableModels().map((modelId) => {
+														const model =
+															codebaseIndexModels?.[
+																currentSettings.codebaseIndexEmbedderProvider
+															]?.[modelId]
+														return (
+															<VSCodeOption key={modelId} value={modelId} className="p-2">
 																{modelId}{" "}
 																{model
 																	? t("settings:codeIndex.modelDimensions", {
@@ -1027,7 +1021,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									)}
 
 									{/* Qdrant Settings */}
-									{/*<div className="space-y-2">
+									<div className="space-y-2">
 										<label className="text-sm font-medium">
 											{t("settings:codeIndex.qdrantUrlLabel")}
 										</label>
@@ -1073,7 +1067,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												{formErrors.codeIndexQdrantApiKey}
 											</p>
 										)}
-									</div>*/}
+									</div>
 								</div>
 							)}
 						</div>
@@ -1096,7 +1090,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									{/* Search Score Threshold Slider */}
 									<div className="space-y-2">
 										<div className="flex items-center gap-2">
-											<label className="font-medium">
+											<label className="text-sm font-medium">
 												{t("settings:codeIndex.searchMinScoreLabel")}
 											</label>
 											<StandardTooltip
@@ -1142,7 +1136,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									{/* Maximum Search Results Slider */}
 									<div className="space-y-2">
 										<div className="flex items-center gap-2">
-											<label className="font-medium">
+											<label className="text-sm font-medium">
 												{t("settings:codeIndex.searchMaxResultsLabel")}
 											</label>
 											<StandardTooltip
@@ -1181,54 +1175,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												<span className="codicon codicon-discard" />
 											</VSCodeButton>
 										</div>
-									
-										<div className="flex flex-col gap-2 mt-6">
-											<div className="flex items-center gap-0 font-bold">
-												<div>{"存放位置"}</div>
-												<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-												<StandardTooltip
-													content={"向量数据库仅支持存放在本地硬盘，不支持存放在网络硬盘"}>
-													<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-												</StandardTooltip>
-											</div>
-											<div>
-												<VSCodeTextField
-													value={currentSettings.ragPath || ""}
-													onInput={(e: any) =>
-														updateSetting("ragPath", e.target.value)
-													}
-													style={{ width: "100%" }}>
-												</VSCodeTextField>
-											</div>
-										</div>
-										<div className="flex flex-col gap-2">
-											<div className="flex items-center gap-2">
-												<VSCodeCheckbox
-													checked={currentSettings.llmFilter || false}
-													onChange={(e: any) =>
-														updateSetting("llmFilter", e.target.checked)
-													}>
-													<span style={{ display: 'flex', alignItems: 'center' }}>
-														<span className="font-medium">{"启用 LLM 重排序"}</span>
-														<StandardTooltip
-															content={"使用对话模型对搜索结果进行筛选，提高检索准确性"}>
-															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" style={{ display: 'inline-flex', alignItems: 'center', height: '1em', marginLeft: '8px' }} />
-														</StandardTooltip>
-													</span>
-												</VSCodeCheckbox>
-											</div>
-										</div>
-										<div className="flex flex-col gap-2">
-											<div className="flex items-center gap-2">
-												<VSCodeCheckbox
-													checked={currentSettings.codeBaseLogging || false}
-													onChange={(e: any) =>
-														updateSetting("codeBaseLogging", e.target.checked)
-													}>
-													<span className="font-medium">{"启用代码库日志记录"}</span>
-												</VSCodeCheckbox>
-											</div>
-										</div>
 									</div>
 								</div>
 							)}
@@ -1237,44 +1183,46 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 						{/* Action Buttons */}
 						<div className="flex items-center justify-between gap-2 pt-6">
 							<div className="flex gap-2">
-								{(indexingStatus.systemStatus === "Error" ||
-									indexingStatus.systemStatus === "Standby") && (
-									<VSCodeButton
-										onClick={() => vscode.postMessage({ type: "startIndexing" })}
-										disabled={saveStatus === "saving" || hasUnsavedChanges}>
-										{t("settings:codeIndex.startIndexingButton")}
-									</VSCodeButton>
-								)}
+								{currentSettings.codebaseIndexEnabled &&
+									(indexingStatus.systemStatus === "Error" ||
+										indexingStatus.systemStatus === "Standby") && (
+										<VSCodeButton
+											onClick={() => vscode.postMessage({ type: "startIndexing" })}
+											disabled={saveStatus === "saving" || hasUnsavedChanges}>
+											{t("settings:codeIndex.startIndexingButton")}
+										</VSCodeButton>
+									)}
 
-								{(indexingStatus.systemStatus === "Indexed" ||
-									indexingStatus.systemStatus === "Error") && (
-									<AlertDialog>
-										<AlertDialogTrigger asChild>
-											<VSCodeButton appearance="secondary">
-												{t("settings:codeIndex.clearIndexDataButton")}
-											</VSCodeButton>
-										</AlertDialogTrigger>
-										<AlertDialogContent>
-											<AlertDialogHeader>
-												<AlertDialogTitle>
-													{t("settings:codeIndex.clearDataDialog.title")}
-												</AlertDialogTitle>
-												<AlertDialogDescription>
-													{t("settings:codeIndex.clearDataDialog.description")}
-												</AlertDialogDescription>
-											</AlertDialogHeader>
-											<AlertDialogFooter>
-												<AlertDialogCancel>
-													{t("settings:codeIndex.clearDataDialog.cancelButton")}
-												</AlertDialogCancel>
-												<AlertDialogAction
-													onClick={() => vscode.postMessage({ type: "clearIndexData" })}>
-													{t("settings:codeIndex.clearDataDialog.confirmButton")}
-												</AlertDialogAction>
-											</AlertDialogFooter>
-										</AlertDialogContent>
-									</AlertDialog>
-								)}
+								{currentSettings.codebaseIndexEnabled &&
+									(indexingStatus.systemStatus === "Indexed" ||
+										indexingStatus.systemStatus === "Error") && (
+										<AlertDialog>
+											<AlertDialogTrigger asChild>
+												<VSCodeButton appearance="secondary">
+													{t("settings:codeIndex.clearIndexDataButton")}
+												</VSCodeButton>
+											</AlertDialogTrigger>
+											<AlertDialogContent>
+												<AlertDialogHeader>
+													<AlertDialogTitle>
+														{t("settings:codeIndex.clearDataDialog.title")}
+													</AlertDialogTitle>
+													<AlertDialogDescription>
+														{t("settings:codeIndex.clearDataDialog.description")}
+													</AlertDialogDescription>
+												</AlertDialogHeader>
+												<AlertDialogFooter>
+													<AlertDialogCancel>
+														{t("settings:codeIndex.clearDataDialog.cancelButton")}
+													</AlertDialogCancel>
+													<AlertDialogAction
+														onClick={() => vscode.postMessage({ type: "clearIndexData" })}>
+														{t("settings:codeIndex.clearDataDialog.confirmButton")}
+													</AlertDialogAction>
+												</AlertDialogFooter>
+											</AlertDialogContent>
+										</AlertDialog>
+									)}
 							</div>
 
 							<VSCodeButton

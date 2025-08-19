@@ -95,7 +95,7 @@ type OpenRouterModelEndpointsResponse = z.infer<typeof openRouterModelEndpointsR
 
 export async function getOpenRouterModels(options?: ApiHandlerOptions): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelsResponse>(`${baseURL}/models`)
@@ -135,7 +135,7 @@ export async function getOpenRouterModelEndpoints(
 	options?: ApiHandlerOptions,
 ): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelEndpointsResponse>(`${baseURL}/models/${modelId}/endpoints`)
@@ -230,6 +230,11 @@ export const parseOpenRouterModel = ({
 
 	if (id === "anthropic/claude-3.7-sonnet:thinking") {
 		modelInfo.maxTokens = anthropicModels["claude-3-7-sonnet-20250219:thinking"].maxTokens
+	}
+
+	// Set horizon-alpha model to 32k max tokens
+	if (id === "openrouter/horizon-alpha") {
+		modelInfo.maxTokens = 32768
 	}
 
 	return modelInfo

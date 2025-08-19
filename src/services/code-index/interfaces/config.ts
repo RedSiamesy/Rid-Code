@@ -13,17 +13,11 @@ export interface CodeIndexConfig {
 	ollamaOptions?: ApiHandlerOptions
 	openAiCompatibleOptions?: { baseUrl: string; apiKey: string }
 	geminiOptions?: { apiKey: string }
+	mistralOptions?: { apiKey: string }
 	qdrantUrl?: string
 	qdrantApiKey?: string
 	searchMinScore?: number
 	searchMaxResults?: number
-
-	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
-	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
-
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
 }
 
 /**
@@ -40,18 +34,7 @@ export type PreviousConfigSnapshot = {
 	openAiCompatibleBaseUrl?: string
 	openAiCompatibleApiKey?: string
 	geminiApiKey?: string
+	mistralApiKey?: string
 	qdrantUrl?: string
 	qdrantApiKey?: string
-
-	embeddingBaseUrl?: string
-	embeddingApiKey?: string
-	embeddingModelID?: string
-
-	enhancementBaseUrl?: string
-	enhancementApiKey?: string
-	enhancementModelID?: string
-
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
 }

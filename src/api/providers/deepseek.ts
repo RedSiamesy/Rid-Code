@@ -5,15 +5,15 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import type { ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
-import { RiddlerHandler } from "./providers-rid"
+import { OpenAiHandler } from "./openai"
 
-export class DeepSeekHandler extends RiddlerHandler {
+export class DeepSeekHandler extends OpenAiHandler {
 	constructor(options: ApiHandlerOptions) {
 		super({
 			...options,
 			openAiApiKey: options.deepSeekApiKey ?? "not-provided",
 			openAiModelId: options.apiModelId ?? deepSeekDefaultModelId,
-			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/api/deepseek/v1",
+			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://api.deepseek.com",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})
