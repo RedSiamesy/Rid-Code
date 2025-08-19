@@ -1,10 +1,12 @@
 import { DiffStrategy } from "../../../shared/tools"
 import { McpHub } from "../../../services/mcp/McpHub"
+import { config } from "@dotenvx/dotenvx"
 
 export async function getMcpServersSection(
 	mcpHub?: McpHub,
 	diffStrategy?: DiffStrategy,
 	enableMcpServerCreation?: boolean,
+	mode?: string
 ): Promise<string> {
 	if (!mcpHub) {
 		return ""
@@ -15,6 +17,17 @@ export async function getMcpServersSection(
 			? `${mcpHub
 					.getServers()
 					.filter((server) => server.status === "connected")
+					.filter((server) => {
+						if (!mode) return true
+						const cfg = server.config ? JSON.parse(server.config) : {}
+						const enabledModes = cfg.enabledModes || []
+						const disabledModes = cfg.disabledModes || []
+						
+						if (enabledModes.length > 0) {
+							return enabledModes.includes(mode) && !disabledModes.includes(mode)
+						}
+						return !disabledModes.includes(mode)
+					})
 					.map((server) => {
 						const tools = server.tools
 							?.filter((tool) => tool.enabledForPrompt !== false)

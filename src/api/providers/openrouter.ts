@@ -26,6 +26,8 @@ import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler } from "../index"
 
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-rid"
+
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
 	transforms?: string[]
@@ -48,9 +50,6 @@ interface CompletionUsage {
 	}
 	total_tokens?: number
 	cost?: number
-	cost_details?: {
-		upstream_inference_cost?: number
-	}
 }
 
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {
@@ -63,7 +62,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		super()
 		this.options = options
 
-		const baseURL = this.options.openRouterBaseUrl || "https://openrouter.ai/api/v1"
+		const baseURL = this.options.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
 		const apiKey = this.options.openRouterApiKey ?? "not-provided"
 
 		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS })
@@ -82,10 +81,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		// other providers (including Gemini), so we need to explicitly disable
 		// i We should generalize this using the logic in `getModelParams`, but
 		// this is easier for now.
-		if (
-			(modelId === "google/gemini-2.5-pro-preview" || modelId === "google/gemini-2.5-pro") &&
-			typeof reasoning === "undefined"
-		) {
+		if (modelId === "google/gemini-2.5-pro-preview" && typeof reasoning === "undefined") {
 			reasoning = { exclude: true }
 		}
 
@@ -134,9 +130,12 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		const stream = await this.client.chat.completions.create(completionParams)
-
 		let lastUsage: CompletionUsage | undefined = undefined
+		let startTime = Date.now()
+		let firstTokenTime: number | null = null
+		let hasFirstToken = false
+
+		const stream = await chatCompletions_Stream(this.client, completionParams)
 
 		for await (const chunk of stream) {
 			// OpenRouter returns an error object instead of the OpenAI SDK throwing an error.
@@ -149,10 +148,20 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			const delta = chunk.choices[0]?.delta
 
 			if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
+				// Record first token time for reasoning content
+				if (!hasFirstToken && delta.reasoning.trim()) {
+					firstTokenTime = Date.now()
+					hasFirstToken = true
+				}
 				yield { type: "reasoning", text: delta.reasoning }
 			}
 
 			if (delta?.content) {
+				// Record first token time
+				if (!hasFirstToken && delta.content.trim()) {
+					firstTokenTime = Date.now()
+					hasFirstToken = true
+				}
 				yield { type: "text", text: delta.content }
 			}
 
@@ -162,14 +171,52 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		}
 
 		if (lastUsage) {
-			yield {
-				type: "usage",
-				inputTokens: lastUsage.prompt_tokens || 0,
-				outputTokens: lastUsage.completion_tokens || 0,
-				cacheReadTokens: lastUsage.prompt_tokens_details?.cached_tokens,
-				reasoningTokens: lastUsage.completion_tokens_details?.reasoning_tokens,
-				totalCost: (lastUsage.cost_details?.upstream_inference_cost || 0) + (lastUsage.cost || 0),
+			const endTime = Date.now()
+			const totalLatency = endTime - startTime
+			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
+			
+			// Add timing information to usage
+			const enhancedUsage = {
+				...lastUsage,
+				startTime,
+				firstTokenTime,
+				endTime,
+				totalLatency,
+				firstTokenLatency
 			}
+
+			yield this.processUsageMetrics(enhancedUsage)
+		}
+	}
+
+	protected processUsageMetrics(usage: any): ApiStreamChunk {
+		const outputTokens = usage?.completion_tokens || 0
+		const totalLatency = usage?.totalLatency || 10
+		const firstTokenLatency = usage?.firstTokenLatency || 10
+		
+		// Calculate TPS excluding first token latency
+		// TPS = (total_tokens - 1) / (total_time - first_token_time) * 1000
+		let tps = 0 // default fallback
+		if (outputTokens > 1 && totalLatency > firstTokenLatency) {
+			const tokensAfterFirst = outputTokens - 1
+			const timeAfterFirstToken = totalLatency - firstTokenLatency
+			tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
+		} else if (outputTokens > 0 && totalLatency > 0) {
+			// Fallback: calculate TPS for all tokens including first
+			tps = (outputTokens * 1000) / totalLatency
+		}
+
+		return {
+			type: "usage",
+			inputTokens: usage?.prompt_tokens || 0,
+			outputTokens: outputTokens,
+			// Waiting on OpenRouter to figure out what this represents in the Gemini case
+			// and how to best support it.
+			// cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens,
+			reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
+			totalCost: usage?.cost || 0,
+			tps: tps, // Round to 2 decimal places
+			latency: firstTokenLatency, // Use first token latency as the latency metric
 		}
 	}
 
@@ -232,14 +279,14 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		const response = await this.client.chat.completions.create(completionParams)
+		const content = await chatCompletions_NonStream(this.client, completionParams)
 
-		if ("error" in response) {
-			const error = response.error as { message?: string; code?: number }
-			throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
-		}
+		// if ("error" in response) {
+		// 	const error = response.error as { message?: string; code?: number }
+		// 	throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
+		// }
 
-		const completion = response as OpenAI.Chat.ChatCompletion
-		return completion.choices[0]?.message?.content || ""
+		// const completion = response as OpenAI.Chat.ChatCompletion
+		return content || ""
 	}
 }

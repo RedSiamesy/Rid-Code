@@ -161,6 +161,10 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
+			let startTime = Date.now()
+			let firstTokenTime: number | null = null
+			let hasFirstToken = false
+
 			const stream = await this.client.chat.completions.create(
 				requestOptions,
 				isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
@@ -181,12 +185,24 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				const delta = chunk.choices[0]?.delta ?? {}
 
 				if (delta.content) {
+					// Record first token time
+					if (!hasFirstToken && delta.content.trim()) {
+						firstTokenTime = Date.now()
+						hasFirstToken = true
+					}
+
 					for (const chunk of matcher.update(delta.content)) {
 						yield chunk
 					}
 				}
 
 				if ("reasoning_content" in delta && delta.reasoning_content) {
+					// Record first token time for reasoning content too
+					if (!hasFirstToken && (delta.reasoning_content as string)?.trim()) {
+						firstTokenTime = Date.now()
+						hasFirstToken = true
+					}
+
 					yield {
 						type: "reasoning",
 						text: (delta.reasoning_content as string | undefined) || "",
@@ -202,7 +218,21 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			}
 
 			if (lastUsage) {
-				yield this.processUsageMetrics(lastUsage, modelInfo)
+				const endTime = Date.now()
+				const totalLatency = endTime - startTime
+				const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
+				
+				// Add timing information to usage
+				const enhancedUsage = {
+					...lastUsage,
+					startTime,
+					firstTokenTime,
+					endTime,
+					totalLatency,
+					firstTokenLatency
+				}
+				
+				yield this.processUsageMetrics(enhancedUsage, modelInfo)
 			}
 		} else {
 			// o1 for instance doesnt support streaming, non-1 temp, or system prompt
@@ -238,12 +268,30 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	}
 
 	protected processUsageMetrics(usage: any, _modelInfo?: ModelInfo): ApiStreamUsageChunk {
+		const outputTokens = usage?.completion_tokens || 0
+		const totalLatency = usage?.totalLatency || 10
+		const firstTokenLatency = usage?.firstTokenLatency || 10
+		
+		// Calculate TPS excluding first token latency
+		// TPS = (total_tokens - 1) / (total_time - first_token_time) * 1000
+		let tps = 0 // default fallback
+		if (outputTokens > 1 && totalLatency > firstTokenLatency) {
+			const tokensAfterFirst = outputTokens - 1
+			const timeAfterFirstToken = totalLatency - firstTokenLatency
+			tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
+		} else if (outputTokens > 0 && totalLatency > 0) {
+			// Fallback: calculate TPS for all tokens including first
+			tps = (outputTokens * 1000) / totalLatency
+		}
+
 		return {
 			type: "usage",
 			inputTokens: usage?.prompt_tokens || 0,
-			outputTokens: usage?.completion_tokens || 0,
+			outputTokens: outputTokens,
 			cacheWriteTokens: usage?.cache_creation_input_tokens || undefined,
 			cacheReadTokens: usage?.cache_read_input_tokens || undefined,
+			tps: tps, // Round to 2 decimal places
+			latency: firstTokenLatency, // Use first token latency as the latency metric
 		}
 	}
 
@@ -353,9 +401,20 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	}
 
 	private async *handleStreamResponse(stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>): ApiStream {
+		let startTime = Date.now()
+		let firstTokenTime: number | null = null
+		let hasFirstToken = false
+		let lastUsage
+
 		for await (const chunk of stream) {
 			const delta = chunk.choices[0]?.delta
 			if (delta?.content) {
+				// Record first token time
+				if (!hasFirstToken && delta.content.trim()) {
+					firstTokenTime = Date.now()
+					hasFirstToken = true
+				}
+
 				yield {
 					type: "text",
 					text: delta.content,
@@ -363,12 +422,26 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			}
 
 			if (chunk.usage) {
-				yield {
-					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
-				}
+				lastUsage = chunk.usage
 			}
+		}
+
+		if (lastUsage) {
+			const endTime = Date.now()
+			const totalLatency = endTime - startTime
+			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
+			
+			// Add timing information to usage
+			const enhancedUsage = {
+				...lastUsage,
+				startTime,
+				firstTokenTime,
+				endTime,
+				totalLatency,
+				firstTokenLatency
+			}
+
+			yield this.processUsageMetrics(enhancedUsage)
 		}
 	}
 

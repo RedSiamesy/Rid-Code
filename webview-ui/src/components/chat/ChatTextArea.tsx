@@ -51,6 +51,8 @@ interface ChatTextAreaProps {
 	// Edit mode props
 	isEditMode?: boolean
 	onCancel?: () => void
+	isSavingMemory: boolean
+	setIsSavingMemory: (value: boolean) => void
 }
 
 const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -72,6 +74,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			modeShortcutText,
 			isEditMode = false,
 			onCancel,
+			isSavingMemory,
+			setIsSavingMemory,
 		},
 		ref,
 	) => {
@@ -234,7 +238,28 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 		}, [selectedType, searchQuery])
 
+		const handleSavingMemory = useCallback(() => {
+			if (sendingDisabled) {
+				return
+			}
+
+			const trimmedInput = inputValue.trim()
+
+			if (trimmedInput) {
+				setIsSavingMemory(true)
+				vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
+			} else {
+				setIsSavingMemory(true)
+				vscode.postMessage({ type: "saveMemory" as const, text: "" })
+			}
+			setInputValue("")
+		}, [inputValue, sendingDisabled, setInputValue, setIsSavingMemory])
+
 		const handleEnhancePrompt = useCallback(() => {
+			if (sendingDisabled) {
+				return
+			}
+
 			const trimmedInput = inputValue.trim()
 
 			if (trimmedInput) {
@@ -243,7 +268,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			} else {
 				setInputValue(t("chat:enhancePromptDescription"))
 			}
-		}, [inputValue, setInputValue, t])
+		}, [inputValue, setInputValue, t, setIsEnhancingPrompt])
 
 		const allModes = useMemo(() => getAllModes(customModes), [customModes])
 
@@ -251,6 +276,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			return [
 				{ type: ContextMenuOptionType.Problems, value: "problems" },
 				{ type: ContextMenuOptionType.Terminal, value: "terminal" },
+				{ type: ContextMenuOptionType.Codebase, value: "codebase" },
+				{ type: ContextMenuOptionType.Summary, value: "summary" },
+				{ type: ContextMenuOptionType.Memory, value: "memory" },
 				...gitCommits,
 				...openedTabs
 					.filter((tab) => tab.path)
@@ -352,6 +380,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						insertValue = "terminal"
 					} else if (type === ContextMenuOptionType.Git) {
 						insertValue = value || ""
+					} else if (type === ContextMenuOptionType.Codebase) {
+						insertValue = "codebase"
+					} else if (type === ContextMenuOptionType.Summary) {
+						insertValue = "summary"
+					} else if (type === ContextMenuOptionType.Memory) {
+						insertValue = "memory"
 					} else if (type === ContextMenuOptionType.Command) {
 						insertValue = value ? `/${value}` : ""
 					}
@@ -959,6 +993,36 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}
 					<SlashCommandsPopover />
 					<IndexingStatusBadge />
+						<StandardTooltip content={t("保留永久记忆")}>
+							<button
+								aria-label={t("保留永久记忆")}
+								disabled={sendingDisabled}
+								onClick={handleSavingMemory}
+								className={cn(
+									"relative inline-flex items-center justify-center",
+									"bg-transparent border-none p-1.5",
+									"rounded-md min-w-[28px] min-h-[28px]",
+									"text-vscode-foreground opacity-85",
+									"transition-all duration-150",
+									"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
+									"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
+									"active:bg-[rgba(255,255,255,0.1)]",
+									!sendingDisabled && "cursor-pointer",
+									sendingDisabled &&
+										"opacity-40 cursor-not-allowed grayscale-[30%] hover:bg-transparent hover:border-[rgba(255,255,255,0.08)] active:bg-transparent",
+									"ml-1",
+								)}>
+								{isSavingMemory ? (
+									<div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+								) : (
+									<div className="w-4 h-4 flex items-center justify-center">
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7M4 7c0-2.21 1.79-4 4-4h8c2.21 0 4 1.79 4 4M4 7h16m-4 4h.01M7 11h.01" />
+										</svg>
+									</div>
+								)}
+							</button>
+						</StandardTooltip>
 					<StandardTooltip content={t("chat:addImages")}>
 						<button
 							aria-label={t("chat:addImages")}

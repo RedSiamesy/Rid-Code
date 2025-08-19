@@ -19,6 +19,7 @@ import {
 	claudeCodeDefaultModelId,
 	geminiDefaultModelId,
 	deepSeekDefaultModelId,
+	modelScopeDefaultModelId,
 	moonshotDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
@@ -58,6 +59,7 @@ import {
 	Chutes,
 	ClaudeCode,
 	DeepSeek,
+	ModelScope,
 	Doubao,
 	Gemini,
 	Glama,
@@ -294,6 +296,7 @@ const ApiOptions = ({
 				"openai-native": { field: "apiModelId", default: openAiNativeDefaultModelId },
 				gemini: { field: "apiModelId", default: geminiDefaultModelId },
 				deepseek: { field: "apiModelId", default: deepSeekDefaultModelId },
+				modelscope: { field: "apiModelId", default: modelScopeDefaultModelId },
 				doubao: { field: "apiModelId", default: doubaoDefaultModelId },
 				moonshot: { field: "apiModelId", default: moonshotDefaultModelId },
 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
@@ -472,6 +475,10 @@ const ApiOptions = ({
 
 			{selectedProvider === "lmstudio" && (
 				<LMStudio apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
+			{selectedProvider === "modelscope" && (
+				<ModelScope apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "deepseek" && (

@@ -4,14 +4,14 @@ import { z } from "zod"
  * Codebase Index Constants
  */
 export const CODEBASE_INDEX_DEFAULTS = {
-	MIN_SEARCH_RESULTS: 10,
-	MAX_SEARCH_RESULTS: 200,
-	DEFAULT_SEARCH_RESULTS: 50,
-	SEARCH_RESULTS_STEP: 10,
+	MIN_SEARCH_RESULTS: 1,
+	MAX_SEARCH_RESULTS: 64,
+	DEFAULT_SEARCH_RESULTS: 16,
+	SEARCH_RESULTS_STEP: 1,
 	MIN_SEARCH_SCORE: 0,
-	MAX_SEARCH_SCORE: 1,
-	DEFAULT_SEARCH_MIN_SCORE: 0.4,
-	SEARCH_SCORE_STEP: 0.05,
+	MAX_SEARCH_SCORE: 2,
+	DEFAULT_SEARCH_MIN_SCORE: 1.3,
+	SEARCH_SCORE_STEP: 0.01,
 } as const
 
 /**
@@ -26,6 +26,7 @@ export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexEmbedderModelId: z.string().optional(),
 	codebaseIndexEmbedderModelDimension: z.number().optional(),
 	codebaseIndexSearchMinScore: z.number().min(0).max(1).optional(),
+	
 	codebaseIndexSearchMaxResults: z
 		.number()
 		.min(CODEBASE_INDEX_DEFAULTS.MIN_SEARCH_RESULTS)
@@ -34,6 +35,15 @@ export const codebaseIndexConfigSchema = z.object({
 	// OpenAI Compatible specific fields
 	codebaseIndexOpenAiCompatibleBaseUrl: z.string().optional(),
 	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
+
+	embeddingBaseUrl: z.string().optional(),
+	embeddingModelID: z.string().optional(),
+	enhancementBaseUrl: z.string().optional(),
+	enhancementModelID: z.string().optional(),
+
+	ragPath: z.string().optional(),
+	llmFilter: z.boolean().optional(),
+	codeBaseLogging: z.boolean().optional(),
 })
 
 export type CodebaseIndexConfig = z.infer<typeof codebaseIndexConfigSchema>
@@ -64,6 +74,8 @@ export const codebaseIndexProviderSchema = z.object({
 	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
 	codebaseIndexGeminiApiKey: z.string().optional(),
 	codebaseIndexMistralApiKey: z.string().optional(),
+	embeddingApiKey: z.string().optional(),
+	enhancementApiKey: z.string().optional(),
 })
 
 export type CodebaseIndexProvider = z.infer<typeof codebaseIndexProviderSchema>

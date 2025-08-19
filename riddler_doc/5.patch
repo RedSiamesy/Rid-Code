@@ -1,0 +1,785 @@
+diff --git a/webview-ui/src/components/chat/ChatView.tsx b/webview-ui/src/components/chat/ChatView.tsx
+index 38b8997f..1f045bcd 100644
+--- a/webview-ui/src/components/chat/ChatView.tsx
++++ b/webview-ui/src/components/chat/ChatView.tsx
+@@ -161,6 +161,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
+ 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
+ 	const [showCheckpointWarning, setShowCheckpointWarning] = useState<boolean>(false)
+ 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
++	const [isSavingMemory, setIsSavingMemory] = useState<boolean>(false)
+ 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
+ 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
+ 		new LRUCache({
+@@ -746,6 +747,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
+ 						setIsCondensing(false)
+ 					}
+ 					break
++				case "savedMemory":
++					if (message.success !== undefined) {
++						setIsSavingMemory(false)
++						if (sendingDisabled) {
++							setSendingDisabled(false)
++						}
++					}
++					break
+ 			}
+ 			// textAreaRef.current is not explicitly required here since React
+ 			// guarantees that ref will be stable across re-renders, and we're
+@@ -1137,8 +1146,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
+ 			})
+ 		}
+ 
++		if (isSavingMemory) {
++			// Show indicator after clicking save memory button
++			result.push({
++				type: "say",
++				say: "save_memory",
++				ts: Date.now(),
++				partial: true,
++			})
++		}
++
++
+ 		return result
+-	}, [isCondensing, visibleMessages])
++	}, [isCondensing, isSavingMemory, visibleMessages])
+ 
+ 	// scrolling
+ 
+@@ -1760,6 +1780,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
+ 				mode={mode}
+ 				setMode={setMode}
+ 				modeShortcutText={modeShortcutText}
++				isSavingMemory={isSavingMemory}
++				setIsSavingMemory={setIsSavingMemory}
+ 			/>
+ 
+ 			{isProfileDisabled && (
+diff --git a/webview-ui/src/components/chat/CodeIndexPopover.tsx b/webview-ui/src/components/chat/CodeIndexPopover.tsx
+index 1243b7ef..758bc4c5 100644
+--- a/webview-ui/src/components/chat/CodeIndexPopover.tsx
++++ b/webview-ui/src/components/chat/CodeIndexPopover.tsx
+@@ -4,6 +4,7 @@ import { z } from "zod"
+ import {
+ 	VSCodeButton,
+ 	VSCodeTextField,
++	VSCodeCheckbox,
+ 	VSCodeDropdown,
+ 	VSCodeOption,
+ 	VSCodeLink,
+@@ -67,6 +68,16 @@ interface LocalCodeIndexSettings {
+ 	codebaseIndexOpenAiCompatibleBaseUrl?: string
+ 	codebaseIndexOpenAiCompatibleApiKey?: string
+ 	codebaseIndexGeminiApiKey?: string
++
++	embeddingBaseUrl?: string
++	embeddingModelID?: string
++	embeddingApiKey?: string
++	enhancementBaseUrl?: string
++	enhancementModelID?: string
++	enhancementApiKey?: string
++	ragPath?: string
++	llmFilter?: boolean
++	codeBaseLogging?: boolean
+ }
+ 
+ // Validation schema for codebase index settings
+@@ -99,17 +110,17 @@ const createValidationSchema = (provider: EmbedderProvider, t: any) => {
+ 
+ 		case "openai-compatible":
+ 			return baseSchema.extend({
+-				codebaseIndexOpenAiCompatibleBaseUrl: z
++				embeddingBaseUrl: z
+ 					.string()
+ 					.min(1, t("settings:codeIndex.validation.baseUrlRequired"))
+ 					.url(t("settings:codeIndex.validation.invalidBaseUrl")),
+-				codebaseIndexOpenAiCompatibleApiKey: z
++				embeddingApiKey: z
+ 					.string()
+ 					.min(1, t("settings:codeIndex.validation.apiKeyRequired")),
+-				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+-				codebaseIndexEmbedderModelDimension: z
+-					.number()
+-					.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
++				embeddingModelID: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
++				// codebaseIndexEmbedderModelDimension: z
++				// 	.number()
++				// 	.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
+ 			})
+ 
+ 		case "gemini":
+@@ -129,7 +140,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 	children,
+ 	indexingStatus: externalIndexingStatus,
+ }) => {
+-	const SECRET_PLACEHOLDER = "••••••••••••••••"
++	const SECRET_PLACEHOLDER = "••••••••••••••••••••••••••••••••••••••••••••••••"
+ 	const { t } = useAppTranslation()
+ 	const { codebaseIndexConfig, codebaseIndexModels } = useExtensionState()
+ 	const [open, setOpen] = useState(false)
+@@ -152,7 +163,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 	const getDefaultSettings = (): LocalCodeIndexSettings => ({
+ 		codebaseIndexEnabled: true,
+ 		codebaseIndexQdrantUrl: "",
+-		codebaseIndexEmbedderProvider: "openai",
++		codebaseIndexEmbedderProvider: "openai-compatible",
+ 		codebaseIndexEmbedderBaseUrl: "",
+ 		codebaseIndexEmbedderModelId: "",
+ 		codebaseIndexEmbedderModelDimension: undefined,
+@@ -163,6 +174,16 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 		codebaseIndexOpenAiCompatibleBaseUrl: "",
+ 		codebaseIndexOpenAiCompatibleApiKey: "",
+ 		codebaseIndexGeminiApiKey: "",
++
++		embeddingBaseUrl: "",
++		embeddingModelID: "",
++		embeddingApiKey: "",
++		enhancementBaseUrl: "",
++		enhancementModelID: "",
++		enhancementApiKey: "",
++		ragPath: "",
++		llmFilter: false,
++		codeBaseLogging: false,
+ 	})
+ 
+ 	// Initial settings state - stores the settings when popover opens
+@@ -196,6 +217,18 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 				codebaseIndexOpenAiCompatibleBaseUrl: codebaseIndexConfig.codebaseIndexOpenAiCompatibleBaseUrl || "",
+ 				codebaseIndexOpenAiCompatibleApiKey: "",
+ 				codebaseIndexGeminiApiKey: "",
++
++				embeddingBaseUrl: codebaseIndexConfig.embeddingBaseUrl || "",
++				embeddingModelID: codebaseIndexConfig.embeddingModelID || "",
++				enhancementBaseUrl: codebaseIndexConfig.enhancementBaseUrl || "",
++				enhancementModelID: codebaseIndexConfig.enhancementModelID || "",
++
++				embeddingApiKey: "",
++				enhancementApiKey: "",
++				
++				ragPath: codebaseIndexConfig.ragPath || "",
++				llmFilter: codebaseIndexConfig.llmFilter || false,
++				codeBaseLogging: codebaseIndexConfig.codeBaseLogging || false,
+ 			}
+ 			setInitialSettings(settings)
+ 			setCurrentSettings(settings)
+@@ -277,6 +310,22 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 							? SECRET_PLACEHOLDER
+ 							: ""
+ 					}
++					if (
++						!prev.embeddingApiKey ||
++						prev.embeddingApiKey === SECRET_PLACEHOLDER
++					) {
++						updated.embeddingApiKey = secretStatus.hasEmbeddingApiKey
++							? SECRET_PLACEHOLDER
++							: ""
++					}
++					if (
++						!prev.enhancementApiKey ||
++						prev.enhancementApiKey === SECRET_PLACEHOLDER
++					) {
++						updated.enhancementApiKey = secretStatus.hasEnhancementApiKey
++							? SECRET_PLACEHOLDER
++							: ""
++					}
+ 					if (!prev.codebaseIndexGeminiApiKey || prev.codebaseIndexGeminiApiKey === SECRET_PLACEHOLDER) {
+ 						updated.codebaseIndexGeminiApiKey = secretStatus.hasGeminiApiKey ? SECRET_PLACEHOLDER : ""
+ 					}
+@@ -347,7 +396,9 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 				if (
+ 					key === "codeIndexOpenAiKey" ||
+ 					key === "codebaseIndexOpenAiCompatibleApiKey" ||
+-					key === "codebaseIndexGeminiApiKey"
++					key === "codebaseIndexGeminiApiKey" ||
++					key === "embeddingApiKey" ||
++					key === "enhancementApiKey"
+ 				) {
+ 					dataToValidate[key] = "placeholder-valid"
+ 				}
+@@ -542,10 +593,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 							{isSetupSettingsOpen && (
+ 								<div className="mt-4 space-y-4">
+ 									{/* Embedder Provider Section */}
+-									<div className="space-y-2">
+-										<label className="text-sm font-medium">
+-											{t("settings:codeIndex.embedderProviderLabel")}
+-										</label>
++									<div className="flex flex-col gap-3">
++										<div className="flex items-center gap-4 font-bold">
++											<div>{t("settings:codeIndex.embedderProviderLabel")}</div>
++										</div>
+ 										<Select
+ 											value={currentSettings.codebaseIndexEmbedderProvider}
+ 											onValueChange={(value: EmbedderProvider) => {
+@@ -557,18 +608,18 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 												<SelectValue />
+ 											</SelectTrigger>
+ 											<SelectContent>
+-												<SelectItem value="openai">
++												{/* <SelectItem value="openai">
+ 													{t("settings:codeIndex.openaiProvider")}
+ 												</SelectItem>
+ 												<SelectItem value="ollama">
+ 													{t("settings:codeIndex.ollamaProvider")}
+-												</SelectItem>
++												</SelectItem> */}
+ 												<SelectItem value="openai-compatible">
+ 													{t("settings:codeIndex.openaiCompatibleProvider")}
+ 												</SelectItem>
+-												<SelectItem value="gemini">
++												{/* <SelectItem value="gemini">
+ 													{t("settings:codeIndex.geminiProvider")}
+-												</SelectItem>
++												</SelectItem> */}
+ 											</SelectContent>
+ 										</Select>
+ 									</div>
+@@ -673,7 +724,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 											</div>
+ 
+ 											<div className="space-y-2">
+-												<label className="text-sm font-medium">
++												<label className="font-medium">
+ 													{t("settings:codeIndex.modelLabel")}
+ 												</label>
+ 												<VSCodeDropdown
+@@ -715,7 +766,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 
+ 									{currentSettings.codebaseIndexEmbedderProvider === "openai-compatible" && (
+ 										<>
+-											<div className="space-y-2">
++											{/* <div className="space-y-2">
+ 												<label className="text-sm font-medium">
+ 													{t("settings:codeIndex.openAiCompatibleBaseUrlLabel")}
+ 												</label>
+@@ -817,6 +868,95 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 														{formErrors.codebaseIndexEmbedderModelDimension}
+ 													</p>
+ 												)}
++											</div> */}
++
++											<div className="flex flex-col gap-3">
++												<div className="flex items-center gap-2 font-bold">
++													<div>{"基础 URL"}</div>
++													<StandardTooltip
++														content={"使用嵌入模型对源文件片段进行向量化"}>
++														<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
++													</StandardTooltip>
++												</div>
++												<div>
++													<VSCodeTextField
++														value={currentSettings.embeddingBaseUrl || ""}
++														onInput={(e: any) =>
++															updateSetting("embeddingBaseUrl", e.target.value)
++														}
++														style={{ width: "100%" }}>
++													</VSCodeTextField>
++												</div>
++												<div className="flex items-center gap-2 font-bold">
++													<div>{"API 密钥"}</div>
++												</div>
++												<div>
++													<VSCodeTextField
++														type="password"
++														value={currentSettings.embeddingApiKey || ""}
++														onInput={(e: any) =>
++															updateSetting("embeddingApiKey", e.target.value)
++														}
++														style={{ width: "100%" }}></VSCodeTextField>
++												</div>
++												<div className="flex items-center gap-2 font-bold">
++													<div>{"模型 ID"}</div>
++												</div>
++												<div>
++													<VSCodeTextField
++														value={currentSettings.embeddingModelID || ""}
++														onInput={(e: any) =>
++															updateSetting("embeddingModelID", e.target.value)
++														}
++														style={{ width: "100%" }}></VSCodeTextField>
++												</div>
++											</div>
++
++											<div className="mt-8">
++												<div className="flex flex-col gap-3">
++													<div className="flex items-center gap-0 font-bold">
++														<div>{"注解基础 URL"}</div>
++														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
++														<StandardTooltip
++															content={"使用对话模型对源文件片段进行注解，帮助 Codebase Search 搜索代码上下文，也使用于 LLM 重排序"}>
++															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
++														</StandardTooltip>
++													</div>
++													<div>
++														<VSCodeTextField
++															value={currentSettings.enhancementBaseUrl || ""}
++															onInput={(e: any) =>
++																updateSetting("enhancementBaseUrl", e.target.value)
++															}
++															style={{ width: "100%" }}>
++														</VSCodeTextField>
++													</div>
++													<div className="flex items-center gap-0 font-bold">
++														<div>{"注解 API 密钥"}</div>
++														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
++													</div>
++													<div>
++														<VSCodeTextField
++															type="password"
++															value={currentSettings.enhancementApiKey || ""}
++															onInput={(e: any) =>
++																updateSetting("enhancementApiKey", e.target.value)
++															}
++															style={{ width: "100%" }}></VSCodeTextField>
++													</div>
++													<div className="flex items-center gap-0 font-bold">
++														<div>{"注解模型 ID"}</div>
++														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
++													</div>
++													<div>
++														<VSCodeTextField
++															value={currentSettings.enhancementModelID || ""}
++															onInput={(e: any) =>
++																updateSetting("enhancementModelID", e.target.value)
++															}
++															style={{ width: "100%" }}></VSCodeTextField>
++													</div>
++												</div>
+ 											</div>
+ 										</>
+ 									)}
+@@ -887,7 +1027,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 									)}
+ 
+ 									{/* Qdrant Settings */}
+-									<div className="space-y-2">
++									{/*<div className="space-y-2">
+ 										<label className="text-sm font-medium">
+ 											{t("settings:codeIndex.qdrantUrlLabel")}
+ 										</label>
+@@ -933,7 +1073,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 												{formErrors.codeIndexQdrantApiKey}
+ 											</p>
+ 										)}
+-									</div>
++									</div>*/}
+ 								</div>
+ 							)}
+ 						</div>
+@@ -956,7 +1096,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 									{/* Search Score Threshold Slider */}
+ 									<div className="space-y-2">
+ 										<div className="flex items-center gap-2">
+-											<label className="text-sm font-medium">
++											<label className="font-medium">
+ 												{t("settings:codeIndex.searchMinScoreLabel")}
+ 											</label>
+ 											<StandardTooltip
+@@ -1002,7 +1142,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 									{/* Maximum Search Results Slider */}
+ 									<div className="space-y-2">
+ 										<div className="flex items-center gap-2">
+-											<label className="text-sm font-medium">
++											<label className="font-medium">
+ 												{t("settings:codeIndex.searchMaxResultsLabel")}
+ 											</label>
+ 											<StandardTooltip
+@@ -1041,6 +1181,54 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
+ 												<span className="codicon codicon-discard" />
+ 											</VSCodeButton>
+ 										</div>
++									
++										<div className="flex flex-col gap-2 mt-6">
++											<div className="flex items-center gap-0 font-bold">
++												<div>{"存放位置"}</div>
++												<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
++												<StandardTooltip
++													content={"向量数据库仅支持存放在本地硬盘，不支持存放在网络硬盘"}>
++													<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
++												</StandardTooltip>
++											</div>
++											<div>
++												<VSCodeTextField
++													value={currentSettings.ragPath || ""}
++													onInput={(e: any) =>
++														updateSetting("ragPath", e.target.value)
++													}
++													style={{ width: "100%" }}>
++												</VSCodeTextField>
++											</div>
++										</div>
++										<div className="flex flex-col gap-2">
++											<div className="flex items-center gap-2">
++												<VSCodeCheckbox
++													checked={currentSettings.llmFilter || false}
++													onChange={(e: any) =>
++														updateSetting("llmFilter", e.target.checked)
++													}>
++													<span style={{ display: 'flex', alignItems: 'center' }}>
++														<span className="font-medium">{"启用 LLM 重排序"}</span>
++														<StandardTooltip
++															content={"使用对话模型对搜索结果进行筛选，提高检索准确性"}>
++															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" style={{ display: 'inline-flex', alignItems: 'center', height: '1em', marginLeft: '8px' }} />
++														</StandardTooltip>
++													</span>
++												</VSCodeCheckbox>
++											</div>
++										</div>
++										<div className="flex flex-col gap-2">
++											<div className="flex items-center gap-2">
++												<VSCodeCheckbox
++													checked={currentSettings.codeBaseLogging || false}
++													onChange={(e: any) =>
++														updateSetting("codeBaseLogging", e.target.checked)
++													}>
++													<span className="font-medium">{"启用代码库日志记录"}</span>
++												</VSCodeCheckbox>
++											</div>
++										</div>
+ 									</div>
+ 								</div>
+ 							)}
+diff --git a/webview-ui/src/components/chat/ContextMenu.tsx b/webview-ui/src/components/chat/ContextMenu.tsx
+index 1672c35e..bf90d7ee 100644
+--- a/webview-ui/src/components/chat/ContextMenu.tsx
++++ b/webview-ui/src/components/chat/ContextMenu.tsx
+@@ -95,6 +95,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
+ 				return <span>Paste URL to fetch contents</span>
+ 			case ContextMenuOptionType.NoResults:
+ 				return <span>No results found</span>
++			case ContextMenuOptionType.Codebase:
++				return <span>Codebase</span>
++			case ContextMenuOptionType.Summary:
++				return <span>Summary</span>
++			case ContextMenuOptionType.Memory:
++				return <span>Memory</span>
+ 			case ContextMenuOptionType.Git:
+ 				if (option.value) {
+ 					return (
+@@ -171,6 +177,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
+ 				return "folder"
+ 			case ContextMenuOptionType.Problems:
+ 				return "warning"
++			case ContextMenuOptionType.Codebase:
++				return "library"
++			case ContextMenuOptionType.Summary:
++				return "notebook"
++			case ContextMenuOptionType.Memory:
++				return "database"
+ 			case ContextMenuOptionType.Terminal:
+ 				return "terminal"
+ 			case ContextMenuOptionType.URL:
+@@ -217,7 +229,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
+ 					zIndex: 1000,
+ 					display: "flex",
+ 					flexDirection: "column",
+-					maxHeight: "200px",
++					maxHeight: "405px", // 增加可以显示更多选项
+ 					overflowY: "auto",
+ 				}}>
+ 				{filteredOptions && filteredOptions.length > 0 ? (
+diff --git a/webview-ui/src/components/common/CodeAccordian.tsx b/webview-ui/src/components/common/CodeAccordian.tsx
+index b07461c7..ef896d42 100644
+--- a/webview-ui/src/components/common/CodeAccordian.tsx
++++ b/webview-ui/src/components/common/CodeAccordian.tsx
+@@ -33,6 +33,7 @@ const CodeAccordian = ({
+ 	const inferredLanguage = useMemo(() => language ?? (path ? getLanguageFromPath(path) : "txt"), [path, language])
+ 	const source = useMemo(() => code.trim(), [code])
+ 	const hasHeader = Boolean(path || isFeedback || header)
++	const isAgentEdits = Boolean(source.startsWith('# agentEdits'))
+ 
+ 	return (
+ 		<ToolUseBlock>
+@@ -46,9 +47,9 @@ const CodeAccordian = ({
+ 						</div>
+ 					) : isFeedback ? (
+ 						<div className="flex items-center">
+-							<span className={`codicon codicon-${isFeedback ? "feedback" : "codicon-output"} mr-1.5`} />
++							<span className={`codicon codicon-${isAgentEdits ? "hubot" : isFeedback ? "feedback" : "output"} mr-1.5`} />
+ 							<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2 rtl">
+-								{isFeedback ? "User Edits" : "Console Logs"}
++								{isAgentEdits ? "Roo Edits" : isFeedback ? "User Edits" : "Console Logs"}
+ 							</span>
+ 						</div>
+ 					) : (
+diff --git a/webview-ui/src/components/common/CodeBlock.tsx b/webview-ui/src/components/common/CodeBlock.tsx
+index 28492acd..458fa3c2 100644
+--- a/webview-ui/src/components/common/CodeBlock.tsx
++++ b/webview-ui/src/components/common/CodeBlock.tsx
+@@ -145,7 +145,16 @@ export const StyledPre = styled.div<{
+ 		word-break: ${({ wordwrap }) => (wordwrap === "false" ? "normal" : "normal")};
+ 		overflow-wrap: ${({ wordwrap }) => (wordwrap === "false" ? "normal" : "break-word")};
+ 		font-size: var(--vscode-editor-font-size, var(--vscode-font-size, 12px));
+-		font-family: var(--vscode-editor-font-family);
++		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
++    
++		@font-face {
++			font-family: 'code-chinese';
++			src: local('Microsoft YaHei'), local('PingFang SC'), local('SimHei');
++			unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF;
++			size-adjust: 90%;
++		}
++		
++		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'code-chinese', 'Courier New', monospace, var(--vscode-font-family);
+ 	}
+ 
+ 	pre > code {
+diff --git a/webview-ui/src/components/common/MarkdownBlock.tsx b/webview-ui/src/components/common/MarkdownBlock.tsx
+index fe033efe..4375acb4 100644
+--- a/webview-ui/src/components/common/MarkdownBlock.tsx
++++ b/webview-ui/src/components/common/MarkdownBlock.tsx
+@@ -79,7 +79,16 @@ const remarkUrlToLink = () => {
+ 
+ const StyledMarkdown = styled.div`
+ 	code:not(pre > code) {
+-		font-family: var(--vscode-editor-font-family, monospace);
++		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
++    
++		@font-face {
++			font-family: 'code-chinese';
++			src: local('Microsoft YaHei'), local('PingFang SC'), local('SimHei');
++			unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF;
++			size-adjust: 90%;
++		}
++		
++		font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'code-chinese', 'Courier New', monospace, var(--vscode-font-family);
+ 		filter: saturation(110%) brightness(95%);
+ 		color: var(--vscode-textPreformat-foreground) !important;
+ 		background-color: var(--vscode-textPreformat-background) !important;
+diff --git a/webview-ui/src/components/settings/ApiOptions.tsx b/webview-ui/src/components/settings/ApiOptions.tsx
+index 5f869290..8a8fbe06 100644
+--- a/webview-ui/src/components/settings/ApiOptions.tsx
++++ b/webview-ui/src/components/settings/ApiOptions.tsx
+@@ -16,6 +16,7 @@ import {
+ 	claudeCodeDefaultModelId,
+ 	geminiDefaultModelId,
+ 	deepSeekDefaultModelId,
++	modelScopeDefaultModelId,
+ 	mistralDefaultModelId,
+ 	xaiDefaultModelId,
+ 	groqDefaultModelId,
+@@ -39,6 +40,7 @@ import {
+ 	Chutes,
+ 	ClaudeCode,
+ 	DeepSeek,
++	ModelScope,
+ 	Gemini,
+ 	Glama,
+ 	Groq,
+@@ -260,6 +262,7 @@ const ApiOptions = ({
+ 				"openai-native": { field: "apiModelId", default: openAiNativeDefaultModelId },
+ 				gemini: { field: "apiModelId", default: geminiDefaultModelId },
+ 				deepseek: { field: "apiModelId", default: deepSeekDefaultModelId },
++				modelscope: { field: "apiModelId", default: modelScopeDefaultModelId },
+ 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
+ 				xai: { field: "apiModelId", default: xaiDefaultModelId },
+ 				groq: { field: "apiModelId", default: groqDefaultModelId },
+@@ -433,6 +436,10 @@ const ApiOptions = ({
+ 				<LMStudio apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+ 			)}
+ 
++			{selectedProvider === "modelscope" && (
++				<ModelScope apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
++			)}
++
+ 			{selectedProvider === "deepseek" && (
+ 				<DeepSeek apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+ 			)}
+diff --git a/webview-ui/src/components/settings/constants.ts b/webview-ui/src/components/settings/constants.ts
+index bbee8f99..417e6e5f 100644
+--- a/webview-ui/src/components/settings/constants.ts
++++ b/webview-ui/src/components/settings/constants.ts
+@@ -12,6 +12,7 @@ import {
+ 	xaiModels,
+ 	groqModels,
+ 	chutesModels,
++	modelScopeModels
+ } from "@roo-code/types"
+ 
+ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, ModelInfo>>> = {
+@@ -26,28 +27,29 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
+ 	xai: xaiModels,
+ 	groq: groqModels,
+ 	chutes: chutesModels,
++	modelscope: modelScopeModels,
+ }
+ 
+ export const PROVIDERS = [
+ 	{ value: "openrouter", label: "OpenRouter" },
+-	{ value: "anthropic", label: "Anthropic" },
+-	{ value: "claude-code", label: "Claude Code" },
++	// { value: "anthropic", label: "Anthropic" },
+ 	{ value: "gemini", label: "Google Gemini" },
+ 	{ value: "deepseek", label: "DeepSeek" },
+ 	{ value: "openai-native", label: "OpenAI" },
+ 	{ value: "openai", label: "OpenAI Compatible" },
+-	{ value: "vertex", label: "GCP Vertex AI" },
+-	{ value: "bedrock", label: "Amazon Bedrock" },
+-	{ value: "glama", label: "Glama" },
+-	{ value: "vscode-lm", label: "VS Code LM API" },
+-	{ value: "mistral", label: "Mistral" },
+-	{ value: "lmstudio", label: "LM Studio" },
+-	{ value: "ollama", label: "Ollama" },
+-	{ value: "unbound", label: "Unbound" },
+-	{ value: "requesty", label: "Requesty" },
+-	{ value: "human-relay", label: "Human Relay" },
+-	{ value: "xai", label: "xAI (Grok)" },
+-	{ value: "groq", label: "Groq" },
+-	{ value: "chutes", label: "Chutes AI" },
+-	{ value: "litellm", label: "LiteLLM" },
++	{ value: "modelscope", label: "ModelScope" },
++	// { value: "vertex", label: "GCP Vertex AI" },
++	// { value: "bedrock", label: "Amazon Bedrock" },
++	// { value: "glama", label: "Glama" },
++	// { value: "vscode-lm", label: "VS Code LM API" },
++	// { value: "mistral", label: "Mistral" },
++	// { value: "lmstudio", label: "LM Studio" },
++	// { value: "ollama", label: "Ollama" },
++	// { value: "unbound", label: "Unbound" },
++	// { value: "requesty", label: "Requesty" },
++	// { value: "human-relay", label: "Human Relay" },
++	// { value: "xai", label: "xAI (Grok)" },
++	// { value: "groq", label: "Groq" },
++	// { value: "chutes", label: "Chutes AI" },
++	// { value: "litellm", label: "LiteLLM" },
+ ].sort((a, b) => a.label.localeCompare(b.label))
+diff --git a/webview-ui/src/components/settings/providers/index.ts b/webview-ui/src/components/settings/providers/index.ts
+index b1956074..4e1fa6a3 100644
+--- a/webview-ui/src/components/settings/providers/index.ts
++++ b/webview-ui/src/components/settings/providers/index.ts
+@@ -7,6 +7,7 @@ export { Gemini } from "./Gemini"
+ export { Glama } from "./Glama"
+ export { Groq } from "./Groq"
+ export { LMStudio } from "./LMStudio"
++export { ModelScope } from "./ModelScope"
+ export { Mistral } from "./Mistral"
+ export { Ollama } from "./Ollama"
+ export { OpenAI } from "./OpenAI"
+diff --git a/webview-ui/src/components/ui/hooks/useOpenRouterModelProviders.ts b/webview-ui/src/components/ui/hooks/useOpenRouterModelProviders.ts
+index dc50c0f6..439b328c 100644
+--- a/webview-ui/src/components/ui/hooks/useOpenRouterModelProviders.ts
++++ b/webview-ui/src/components/ui/hooks/useOpenRouterModelProviders.ts
+@@ -43,7 +43,7 @@ async function getOpenRouterProvidersForModel(modelId: string) {
+ 	const models: Record<string, OpenRouterModelProvider> = {}
+ 
+ 	try {
+-		const response = await axios.get(`https://openrouter.ai/api/v1/models/${modelId}/endpoints`)
++		const response = await axios.get(`https://riddler.mynatapp.cc/api/openrouter/v1/models/${modelId}/endpoints`)
+ 		const result = openRouterEndpointsSchema.safeParse(response.data)
+ 
+ 		if (!result.success) {
+diff --git a/webview-ui/src/components/ui/hooks/useSelectedModel.ts b/webview-ui/src/components/ui/hooks/useSelectedModel.ts
+index 40c1ff24..859bc025 100644
+--- a/webview-ui/src/components/ui/hooks/useSelectedModel.ts
++++ b/webview-ui/src/components/ui/hooks/useSelectedModel.ts
+@@ -8,6 +8,8 @@ import {
+ 	bedrockModels,
+ 	deepSeekDefaultModelId,
+ 	deepSeekModels,
++	modelScopeDefaultModelId,
++	modelScopeModels,
+ 	geminiDefaultModelId,
+ 	geminiModels,
+ 	mistralDefaultModelId,
+@@ -162,6 +164,11 @@ function getSelectedModel({
+ 			const info = deepSeekModels[id as keyof typeof deepSeekModels]
+ 			return { id, info }
+ 		}
++		case "modelscope": {
++			const id = apiConfiguration.apiModelId ?? modelScopeDefaultModelId
++			const info = modelScopeModels[id as keyof typeof modelScopeModels]
++			return { id, info }
++		}
+ 		case "openai-native": {
+ 			const id = apiConfiguration.apiModelId ?? openAiNativeDefaultModelId
+ 			const info = openAiNativeModels[id as keyof typeof openAiNativeModels]
+diff --git a/webview-ui/src/context/ExtensionStateContext.tsx b/webview-ui/src/context/ExtensionStateContext.tsx
+index bf927211..fc59c908 100644
+--- a/webview-ui/src/context/ExtensionStateContext.tsx
++++ b/webview-ui/src/context/ExtensionStateContext.tsx
+@@ -221,6 +221,14 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
+ 			codebaseIndexEmbedderModelId: "",
+ 			codebaseIndexSearchMaxResults: undefined,
+ 			codebaseIndexSearchMinScore: undefined,
++
++			embeddingBaseUrl: "",
++			embeddingModelID: "",
++			enhancementBaseUrl: "",
++			enhancementModelID: "",
++			ragPath: "",
++			llmFilter: false,
++			codeBaseLogging: false,
+ 		},
+ 		codebaseIndexModels: { ollama: {}, openai: {} },
+ 		alwaysAllowUpdateTodoList: true,
+diff --git a/webview-ui/src/i18n/locales/zh-CN/chat.json b/webview-ui/src/i18n/locales/zh-CN/chat.json
+index e8dbbb97..ef46fadb 100644
+--- a/webview-ui/src/i18n/locales/zh-CN/chat.json
++++ b/webview-ui/src/i18n/locales/zh-CN/chat.json
+@@ -107,7 +107,7 @@
+ 	"sendMessage": "发送消息",
+ 	"stopTts": "停止文本转语音",
+ 	"typeMessage": "输入消息...",
+-	"typeTask": "在此处输入您的任务...",
++	"typeTask": "在此处输入您的任务... (按 Enter 键发送，Ctrl+Enter 或 Shift+Enter 换行)",
+ 	"addContext": "@添加上下文，/切换模式",
+ 	"dragFiles": "Shift+拖拽文件",
+ 	"dragFilesImages": "Shift+拖拽文件/图片",
+diff --git a/webview-ui/src/utils/context-mentions.ts b/webview-ui/src/utils/context-mentions.ts
+index 889dca9d..d5340b23 100644
+--- a/webview-ui/src/utils/context-mentions.ts
++++ b/webview-ui/src/utils/context-mentions.ts
+@@ -105,6 +105,9 @@ export enum ContextMenuOptionType {
+ 	Git = "git",
+ 	NoResults = "noResults",
+ 	Mode = "mode", // Add mode type
++	Codebase = "codebase", // Add codebase type
++	Summary = "summary", // Add summary type
++	Memory = "memory", // Add memory type
+ }
+ 
+ export interface ContextMenuQueryItem {
+@@ -170,6 +173,7 @@ export function getContextMenuOptions(
+ 			const files = queryItems
+ 				.filter(
+ 					(item) =>
++						// item.type === ContextMenuOptionType.OpenedFile,
+ 						item.type === ContextMenuOptionType.File || item.type === ContextMenuOptionType.OpenedFile,
+ 				)
+ 				.map((item) => ({
+@@ -192,12 +196,15 @@ export function getContextMenuOptions(
+ 		}
+ 
+ 		return [
++			{ type: ContextMenuOptionType.Git },
+ 			{ type: ContextMenuOptionType.Problems },
+-			{ type: ContextMenuOptionType.Terminal },
+-			{ type: ContextMenuOptionType.URL },
+-			{ type: ContextMenuOptionType.Folder },
++			// { type: ContextMenuOptionType.Terminal },
++			// { type: ContextMenuOptionType.URL },
++			// { type: ContextMenuOptionType.Folder },
+ 			{ type: ContextMenuOptionType.File },
+-			{ type: ContextMenuOptionType.Git },
++			{ type: ContextMenuOptionType.Codebase },
++			{ type: ContextMenuOptionType.Summary },
++			{ type: ContextMenuOptionType.Memory },
+ 		]
+ 	}
+ 
+@@ -218,6 +225,15 @@ export function getContextMenuOptions(
+ 	if ("problems".startsWith(lowerQuery)) {
+ 		suggestions.push({ type: ContextMenuOptionType.Problems })
+ 	}
++	if ("codebase".startsWith(lowerQuery)) {
++		suggestions.push({ type: ContextMenuOptionType.Codebase })
++	}
++	if ("summary".startsWith(lowerQuery)) {
++		suggestions.push({ type: ContextMenuOptionType.Summary })
++	}
++	if ("memory".startsWith(lowerQuery)) {
++		suggestions.push({ type: ContextMenuOptionType.Memory })
++	}
+ 	if ("terminal".startsWith(lowerQuery)) {
+ 		suggestions.push({ type: ContextMenuOptionType.Terminal })
+ 	}

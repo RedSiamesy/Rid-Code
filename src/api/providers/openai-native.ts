@@ -20,6 +20,8 @@ import { getModelParams } from "../transform/model-params"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-rid"
+
 export type OpenAiNativeModel = ReturnType<OpenAiNativeHandler["getModel"]>
 
 export class OpenAiNativeHandler extends BaseProvider implements SingleCompletionHandler {
@@ -30,7 +32,8 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		super()
 		this.options = options
 		const apiKey = this.options.openAiNativeApiKey ?? "not-provided"
-		this.client = new OpenAI({ baseURL: this.options.openAiNativeBaseUrl, apiKey })
+		const baseURL = this.options.openAiNativeBaseUrl ?? "https://riddler.mynatapp.cc/api/openai/v1"
+		this.client = new OpenAI({ baseURL, apiKey })
 	}
 
 	override async *createMessage(
@@ -66,7 +69,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		// o1 supports developer prompt with formatting
 		// o1-preview and o1-mini only support user messages
 		const isOriginalO1 = model.id === "o1"
-		const response = await this.client.chat.completions.create({
+		const response = await chatCompletions_Stream(this.client, {
 			model: model.id,
 			messages: [
 				{
@@ -90,7 +93,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 	): ApiStream {
 		const { reasoning } = this.getModel()
 
-		const stream = await this.client.chat.completions.create({
+		const stream = await chatCompletions_Stream(this.client, {
 			model: family,
 			messages: [
 				{
@@ -112,7 +115,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
 	): ApiStream {
-		const stream = await this.client.chat.completions.create({
+		const stream = await chatCompletions_Stream(this.client, {
 			model: model.id,
 			temperature: this.options.modelTemperature ?? OPENAI_NATIVE_DEFAULT_TEMPERATURE,
 			messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
@@ -127,10 +130,21 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>,
 		model: OpenAiNativeModel,
 	): ApiStream {
+		let startTime = Date.now()
+		let firstTokenTime: number | null = null
+		let hasFirstToken = false
+		let lastUsage
+
 		for await (const chunk of stream) {
 			const delta = chunk.choices[0]?.delta
 
 			if (delta?.content) {
+				// Record first token time
+				if (!hasFirstToken && delta.content.trim()) {
+					firstTokenTime = Date.now()
+					hasFirstToken = true
+				}
+
 				yield {
 					type: "text",
 					text: delta.content,
@@ -138,8 +152,26 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 			}
 
 			if (chunk.usage) {
-				yield* this.yieldUsage(model.info, chunk.usage)
+				lastUsage = chunk.usage
 			}
+		}
+
+		if (lastUsage) {
+			const endTime = Date.now()
+			const totalLatency = endTime - startTime
+			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
+			
+			// Add timing information to usage
+			const enhancedUsage = {
+				...lastUsage,
+				startTime,
+				firstTokenTime,
+				endTime,
+				totalLatency,
+				firstTokenLatency
+			}
+
+			yield* this.yieldUsage(model.info, enhancedUsage)
 		}
 	}
 
@@ -151,6 +183,21 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		const totalCost = calculateApiCostOpenAI(info, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
 		const nonCachedInputTokens = Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens)
 
+		// Calculate TPS and latency from enhanced usage
+		const totalLatency = (usage as any)?.totalLatency || 10
+		const firstTokenLatency = (usage as any)?.firstTokenLatency || 10
+		
+		// Calculate TPS excluding first token latency
+		let tps = 0 // default fallback
+		if (outputTokens > 1 && totalLatency > firstTokenLatency) {
+			const tokensAfterFirst = outputTokens - 1
+			const timeAfterFirstToken = totalLatency - firstTokenLatency
+			tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
+		} else if (outputTokens > 0 && totalLatency > 0) {
+			// Fallback: calculate TPS for all tokens including first
+			tps = (outputTokens * 1000) / totalLatency
+		}
+
 		yield {
 			type: "usage",
 			inputTokens: nonCachedInputTokens,
@@ -158,6 +205,8 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 			cacheWriteTokens: cacheWriteTokens,
 			cacheReadTokens: cacheReadTokens,
 			totalCost: totalCost,
+			tps: tps, // Round to 2 decimal places
+			latency: firstTokenLatency, // Use first token latency as the latency metric
 		}
 	}
 
@@ -193,8 +242,8 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 				...(reasoning && reasoning),
 			}
 
-			const response = await this.client.chat.completions.create(params)
-			return response.choices[0]?.message.content || ""
+			const content = await chatCompletions_NonStream(this.client, params)
+			return content || ""
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`OpenAI Native completion error: ${error.message}`)

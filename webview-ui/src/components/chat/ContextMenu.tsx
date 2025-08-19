@@ -143,6 +143,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return <span>Paste URL to fetch contents</span>
 			case ContextMenuOptionType.NoResults:
 				return <span>No results found</span>
+			case ContextMenuOptionType.Codebase:
+				return <span>Codebase</span>
+			case ContextMenuOptionType.Summary:
+				return <span>Summary</span>
+			case ContextMenuOptionType.Memory:
+				return <span>Memory</span>
 			case ContextMenuOptionType.Git:
 				if (option.value) {
 					return (
@@ -221,6 +227,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return "folder"
 			case ContextMenuOptionType.Problems:
 				return "warning"
+			case ContextMenuOptionType.Codebase:
+				return "library"
+			case ContextMenuOptionType.Summary:
+				return "notebook"
+			case ContextMenuOptionType.Memory:
+				return "database"
 			case ContextMenuOptionType.Terminal:
 				return "terminal"
 			case ContextMenuOptionType.URL:
@@ -271,7 +283,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 					zIndex: 1000,
 					display: "flex",
 					flexDirection: "column",
-					maxHeight: "300px",
+					maxHeight: "405px", // 增加可以显示更多选项
 					overflowY: "auto",
 					overflowX: "hidden",
 				}}>

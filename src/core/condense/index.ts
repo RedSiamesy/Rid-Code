@@ -11,38 +11,47 @@ export const N_MESSAGES_TO_KEEP = 3
 export const MIN_CONDENSE_THRESHOLD = 5 // Minimum percentage of context window to trigger condensing
 export const MAX_CONDENSE_THRESHOLD = 100 // Maximum percentage of context window to trigger condensing
 
-const SUMMARY_PROMPT = `\
+export const SUMMARY_PROMPT = `\
 Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the conversation and supporting any continuing tasks.
 
 Your summary should be structured as follows:
 Context: The context to continue the conversation with. If applicable based on the current task, this should include:
   1. Previous Conversation: High level details about what was discussed throughout the entire conversation with the user. This should be written to allow someone to be able to follow the general overarching conversation flow.
-  2. Current Work: Describe in detail what was being worked on prior to this request to summarize the conversation. Pay special attention to the more recent messages in the conversation.
-  3. Key Technical Concepts: List all important technical concepts, technologies, coding conventions, and frameworks discussed, which might be relevant for continuing with this work.
-  4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes.
-  5. Problem Solving: Document problems solved thus far and any ongoing troubleshooting efforts.
+  2. Current Work: Describe in detail what was being worked on prior to this request to summarize the conversation. Pay special attention to the more recent messages in the conversation. The focus should not be on the tools used, but on the process: for each significant step, explain the action you attempted, the result it produced, the conclusion you drew from that information, and how it served your overall purpose.
+  3. Key Technical Concepts: List all important technical concepts, technologies, coding conventions, and frameworks discussed, which might be relevant for continuing with this work. 
+  4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes, and retain as much of the code snippet content and its location that the main task might depend on as possible.
+  5. Design and Problem Solving: Document key architectural choices, rejected alternatives, and the rationale behind them. List any technical, performance, or dependency constraints imposed by the user. Document problems solved thus far and any ongoing troubleshooting efforts. 
   6. Pending Tasks and Next Steps: Outline all pending tasks that you have explicitly been asked to work on, as well as list the next steps you will take for all outstanding work, if applicable. Include code snippets where they add clarity. For any next steps, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no information loss in context between tasks.
 
 Example summary structure:
 1. Previous Conversation:
   [Detailed description]
+  [...]
 2. Current Work:
-  [Detailed description]
+  [Detailed description 1 (e.g. By reading the 'a.py' file, it is learned...)]
+  [Detailed description 2 (e.g. By searching "xxx" with the codebase index tool, I learned that...)]
+  [Detailed description 3 (e.g. By searching "abc", it was found that "abc" is used in file 'b.py', 'c.py', 'd.py', specifically, they are used for...)]
+  [Detailed description 4 (e.g. I implemented the "yyy" function and wrote it to line F in the 'e.py' file)]
+  [Detailed description 5 (e.g. I modified the implementation... in line H of file 'g.py')]
+  [Detailed description 6]
+  [...]
 3. Key Technical Concepts:
   - [Concept 1]
   - [Concept 2]
   - [...]
 4. Relevant Files and Code:
   - [File Name 1]
-    - [Summary of why this file is important]
-    - [Summary of the changes made to this file, if any]
-    - [Important Code Snippet]
+	- [Summary of why this file is important]
+	- [Summary of the changes made to this file, if any]
+	- [Important Code Snippet (e.g. In line I to line J \n''' python\n ...\n ...\n ...\n''')]
   - [File Name 2]
-    - [Important Code Snippet]
+	- [Important Code Snippet]
   - [...]
-5. Problem Solving:
-  [Detailed description]
+5. Design and Problem Solving:
+  [Detailed description 1]
+  [Detailed description 2]
+  [...]
 6. Pending Tasks and Next Steps:
   - [Task 1 details & next steps]
   - [Task 2 details & next steps]
@@ -59,16 +68,6 @@ export type SummarizeResponse = {
 	error?: string // Populated iff the operation fails: error message shown to the user on failure (see Task.ts)
 }
 
-/**
- * Summarizes the conversation messages using an LLM call
- *
- * @param {ApiMessage[]} messages - The conversation messages
- * @param {ApiHandler} apiHandler - The API handler to use for token counting.
- * @param {string} systemPrompt - The system prompt for API requests, which should be considered in the context token count
- * @param {string} taskId - The task ID for the conversation, used for telemetry
- * @param {boolean} isAutomaticTrigger - Whether the summarization is triggered automatically
- * @returns {SummarizeResponse} - The result of the summarization operation (see above)
- */
 /**
  * Summarizes the conversation messages using an LLM call
  *

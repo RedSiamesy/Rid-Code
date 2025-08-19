@@ -13,6 +13,7 @@ export async function processUserContentMentions({
 	fileContextTracker,
 	rooIgnoreController,
 	showRooIgnoredFiles = true,
+	globalStoragePath,
 	includeDiagnosticMessages = true,
 	maxDiagnosticMessages = 50,
 	maxReadFileLine,
@@ -23,6 +24,7 @@ export async function processUserContentMentions({
 	fileContextTracker: FileContextTracker
 	rooIgnoreController?: any
 	showRooIgnoredFiles?: boolean
+	globalStoragePath?: string
 	includeDiagnosticMessages?: boolean
 	maxDiagnosticMessages?: number
 	maxReadFileLine?: number
@@ -59,6 +61,7 @@ export async function processUserContentMentions({
 							includeDiagnosticMessages,
 							maxDiagnosticMessages,
 							maxReadFileLine,
+							globalStoragePath,
 						),
 					}
 				}
@@ -79,6 +82,7 @@ export async function processUserContentMentions({
 								includeDiagnosticMessages,
 								maxDiagnosticMessages,
 								maxReadFileLine,
+								globalStoragePath,
 							),
 						}
 					}
@@ -100,6 +104,7 @@ export async function processUserContentMentions({
 										includeDiagnosticMessages,
 										maxDiagnosticMessages,
 										maxReadFileLine,
+										globalStoragePath,
 									),
 								}
 							}

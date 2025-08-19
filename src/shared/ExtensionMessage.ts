@@ -69,6 +69,7 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "mcpServers"
 		| "enhancedPrompt"
+		| "savedMemory"
 		| "commitSearchResults"
 		| "listApiConfig"
 		| "routerModels"
@@ -425,6 +426,8 @@ export interface ClineApiReqInfo {
 	cancelReason?: ClineApiReqCancelReason
 	streamingFailedMessage?: string
 	apiProtocol?: "anthropic" | "openai"
+	tps?: number
+	latency?: number // optional latency in milliseconds
 }
 
 export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled"

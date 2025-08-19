@@ -18,11 +18,18 @@ export interface CodeIndexConfig {
 	qdrantApiKey?: string
 	searchMinScore?: number
 	searchMaxResults?: number
+
+	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
+	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }
 
 /**
- * Snapshot of previous configuration used to determine if a restart is required
- */
+	* Snapshot of previous configuration used to determine if a restart is required
+	*/
 export type PreviousConfigSnapshot = {
 	enabled: boolean
 	configured: boolean
@@ -37,4 +44,16 @@ export type PreviousConfigSnapshot = {
 	mistralApiKey?: string
 	qdrantUrl?: string
 	qdrantApiKey?: string
+
+	embeddingBaseUrl?: string
+	embeddingApiKey?: string
+	embeddingModelID?: string
+
+	enhancementBaseUrl?: string
+	enhancementApiKey?: string
+	enhancementModelID?: string
+
+	ragPath?: string
+	llmFilter?: boolean
+	codeBaseLogging?: boolean
 }

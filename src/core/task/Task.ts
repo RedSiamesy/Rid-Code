@@ -90,6 +90,7 @@ import {
 import { processUserContentMentions } from "../mentions/processUserContentMentions"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
+import { summarizeSubTask } from "../summarize-subtask"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { restoreTodoListForTask } from "../tools/updateTodoListTool"
 
@@ -800,6 +801,83 @@ export class Task extends EventEmitter<TaskEvents> {
 		)
 	}
 
+	public async summarizeSubTaskContext(): Promise<string> {
+		const systemPrompt = await this.getSystemPrompt()
+
+		// Get condensing configuration
+		// Using type assertion to handle the case where Phase 1 hasn't been implemented yet
+		const state = await this.providerRef.deref()?.getState()
+		const customCondensingPrompt = state ? (state as any).customCondensingPrompt : undefined
+		const condensingApiConfigId = state ? (state as any).condensingApiConfigId : undefined
+		const listApiConfigMeta = state ? (state as any).listApiConfigMeta : undefined
+
+		// Determine API handler to use
+		let condensingApiHandler: ApiHandler | undefined
+		if (condensingApiConfigId && listApiConfigMeta && Array.isArray(listApiConfigMeta)) {
+			// Using type assertion for the id property to avoid implicit any
+			const matchingConfig = listApiConfigMeta.find((config: any) => config.id === condensingApiConfigId)
+			if (matchingConfig) {
+				const profile = await this.providerRef.deref()?.providerSettingsManager.getProfile({
+					id: condensingApiConfigId,
+				})
+				// Ensure profile and apiProvider exist before trying to build handler
+				if (profile && profile.apiProvider) {
+					condensingApiHandler = buildApiHandler(profile)
+				}
+			}
+		}
+
+		const { contextTokens: prevContextTokens } = this.getTokenUsage()
+		const {
+			messages,
+			summary,
+			cost,
+			newContextTokens = 0,
+			error,
+			inputTokens = 0,
+			outputTokens = 0,
+			cacheWriteTokens = 0,
+			cacheReadTokens = 0,
+		} = await summarizeSubTask(
+			this,
+			this.apiConversationHistory,
+			this.api, // Main API handler (fallback)
+			systemPrompt, // Default summarization prompt (fallback)
+			this.taskId,
+			prevContextTokens,
+			false, // manual trigger
+			customCondensingPrompt, // User's custom prompt
+			condensingApiHandler, // Specific handler for condensing
+		)
+		
+		const maybe_cost:number = cost > 0 ? cost :
+			calculateApiCostAnthropic(
+				this.api.getModel().info,
+				inputTokens,
+				outputTokens,
+				cacheWriteTokens,
+				cacheReadTokens,
+			)
+		// Record cost using the new cost_tracking message type
+		if (maybe_cost > 0) {
+			const contextCondense: ContextCondense = { summary, cost:maybe_cost, newContextTokens, prevContextTokens }
+			await this.say(
+				"cost_tracking",
+				undefined /* text */,
+				undefined /* images */,
+				false /* partial */,
+				undefined /* checkpoint */,
+				undefined /* progressStatus */,
+				{ isNonInteractive: true } /* options */,
+				contextCondense,
+			)
+		}
+		if (error) {
+			return ""
+		}
+		return summary
+	}
+
 	async say(
 		type: ClineSay,
 		text?: string,
@@ -1415,6 +1493,7 @@ export class Task extends EventEmitter<TaskEvents> {
 			fileContextTracker: this.fileContextTracker,
 			rooIgnoreController: this.rooIgnoreController,
 			showRooIgnoredFiles,
+			globalStoragePath: this.globalStoragePath,
 			includeDiagnosticMessages,
 			maxDiagnosticMessages,
 			maxReadFileLine,
@@ -1449,6 +1528,8 @@ export class Task extends EventEmitter<TaskEvents> {
 			let inputTokens = 0
 			let outputTokens = 0
 			let totalCost: number | undefined
+			let tps: number = 0
+			let latency: number = 0
 
 			// We can't use `api_req_finished` anymore since it's a unique case
 			// where it could come after a streaming message (i.e. in the middle
@@ -1465,6 +1546,8 @@ export class Task extends EventEmitter<TaskEvents> {
 					tokensOut: outputTokens,
 					cacheWrites: cacheWriteTokens,
 					cacheReads: cacheReadTokens,
+					tps: tps ?? 0, // tokens per second
+					latency: latency ?? 0, // latency in milliseconds
 					cost:
 						totalCost ??
 						calculateApiCostAnthropic(
@@ -1561,6 +1644,8 @@ export class Task extends EventEmitter<TaskEvents> {
 							outputTokens += chunk.outputTokens
 							cacheWriteTokens += chunk.cacheWriteTokens ?? 0
 							cacheReadTokens += chunk.cacheReadTokens ?? 0
+							latency += chunk.latency ?? 0
+							tps = chunk.tps ?? 0
 							totalCost = chunk.totalCost
 							break
 						case "text": {

@@ -212,6 +212,18 @@ export async function applyDiffToolLegacy(
 
 				// Call saveChanges to update the DiffViewProvider properties
 				await cline.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
+
+				let newContent: string | undefined = await fs.readFile(absolutePath, "utf-8")
+
+				const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent ?? undefined)
+				const say: ClineSayTool = {
+					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
+					path: getReadablePath(cline.cwd, relPath),
+					diff: `# agentEdits\n${agentEdits}\n`,
+				}
+	
+				// Send the user feedback
+				await cline.say("user_feedback_diff", JSON.stringify(say))
 			}
 
 			// Track file edit operation

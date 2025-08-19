@@ -32,6 +32,7 @@ import {
 	ClaudeCodeHandler,
 	SambaNovaHandler,
 	DoubaoHandler,
+	ModelScopeHandler,
 } from "./providers"
 
 export interface SingleCompletionHandler {
@@ -83,6 +84,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 				: new VertexHandler(options)
 		case "openai":
 			return new OpenAiHandler(options)
+		case "modelscope":
+			return new ModelScopeHandler(options)
 		case "ollama":
 			return new OllamaHandler(options)
 		case "lmstudio":

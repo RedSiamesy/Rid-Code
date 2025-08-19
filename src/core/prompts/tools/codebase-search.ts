@@ -1,9 +1,21 @@
 export function getCodebaseSearchDescription(): string {
 	return `## codebase_search
-Description: Find files most relevant to the search query.\nThis is a semantic search tool, so the query should ask for something semantically matching what is needed.\nIf it makes sense to only search in a particular directory, please specify it in the path parameter.\nUnless there is a clear reason to use your own search query, please just reuse the user's exact query with their wording.\nTheir exact wording/phrasing can often be helpful for the semantic search query. Keeping the same exact question format can also be helpful.\nIMPORTANT: Queries MUST be in English. Translate non-English queries before searching.
+### codebase_search (Search)
+Description: This tool performs a semantic search on a vector database of code and documentation. It retrieves the most relevant contextual information needed to answer user questions or resolve their requirements. The search is based on semantic meaning, not just keyword matching.
+
+When generating a 'query', follow these guidelines:
+
+- **Extract from Code:** If the conversation includes code snippets, extract key identifiers like class names, function names, method names, or variable names. These are often the most crucial elements to search for to understand the code's purpose and functionality.
+- **Infer from Context:** Go beyond the literal words in the conversation.
+    - **For Code-related Questions:** Infer potential function names, class names, or design patterns that might exist in the codebase to solve the user's problem.
+    - **For Documentation-related Questions:** Infer concepts, features, or "how-to" topics that would likely be covered in the documentation.
+- **Be Specific and Clear:**
+    - Formulate clear, descriptive queries. Avoid using overly short or ambiguous abbreviations.
+    - If the context strongly suggests the information is in a specific location, use the 'path' parameter to narrow the search.
+
 Parameters:
-- query: (required) The search query to find relevant code. You should reuse the user's exact query/most recent message with their wording unless there is a clear reason not to.
-- path: (optional) The path to the directory to search in relative to the current working directory. This parameter should only be a directory path, file paths are not supported. Defaults to the current working directory.
+- query: (required) A semantic query (or queries) to find relevant code or documentation. You can provide up to 4 queries, separated by " | ". Each query should be a meaningful phrase (at least 4 Chinese characters or 2 English words). Provide queries in both Chinese and English. 
+- path: (optional) The relative path to a file or directory to restrict the search. Defaults to the entire codebase.
 Usage:
 <codebase_search>
 <query>Your natural language query here</query>
@@ -14,6 +26,30 @@ Example: Searching for functions related to user authentication
 <codebase_search>
 <query>User login and password hashing</query>
 <path>/path/to/directory</path>
+</codebase_search>
+
+
+### codebase_search (Summary)
+Description: Generates a detailed summary of a file or a directory's contents.
+
+This tool provides a high-level overview to help you quickly understand a codebase.
+- **If the path points to a file:** It returns a summary of the entire file, plus summaries of key sections (e.g., classes, functions) with their corresponding line numbers.
+- **If the path points to a directory:** It returns summaries for all supported files within that directory.
+
+Use this tool when you need to grasp the purpose and structure of a file or directory before diving into the details.
+
+**Important Note:** The tool is named 'codebase_search', but its function in this parameters rule is to **summarize**, not to search for a query.
+
+Parameters:
+- path: (optional) The relative path to the file or directory to be summarized. Defaults to the current working directory ('.').
+Usage:
+<codebase_search>
+<path>Path to the directory or file to summarize (optional)</path>
+</codebase_search>
+
+Example: Get a summary of a specific file or all supported files in '/path/to/directory_or_file'.
+<codebase_search>
+<path>/path/to/directory_or_file</path>
 </codebase_search>
 `
 }

@@ -8,6 +8,8 @@ import {
 	bedrockModels,
 	deepSeekDefaultModelId,
 	deepSeekModels,
+	modelScopeDefaultModelId,
+	modelScopeModels,
 	moonshotDefaultModelId,
 	moonshotModels,
 	geminiDefaultModelId,
@@ -176,6 +178,11 @@ function getSelectedModel({
 		case "deepseek": {
 			const id = apiConfiguration.apiModelId ?? deepSeekDefaultModelId
 			const info = deepSeekModels[id as keyof typeof deepSeekModels]
+			return { id, info }
+		}
+		case "modelscope": {
+			const id = apiConfiguration.apiModelId ?? modelScopeDefaultModelId
+			const info = modelScopeModels[id as keyof typeof modelScopeModels]
 			return { id, info }
 		}
 		case "doubao": {

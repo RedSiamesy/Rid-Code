@@ -1,0 +1,935 @@
+diff --git a/src/core/mentions/processUserContentMentions.ts b/src/core/mentions/processUserContentMentions.ts
+index 3f131a1c..7f7556b7 100644
+--- a/src/core/mentions/processUserContentMentions.ts
++++ b/src/core/mentions/processUserContentMentions.ts
+@@ -13,6 +13,7 @@ export async function processUserContentMentions({
+ 	fileContextTracker,
+ 	rooIgnoreController,
+ 	showRooIgnoredFiles = true,
++	globalStoragePath
+ }: {
+ 	userContent: Anthropic.Messages.ContentBlockParam[]
+ 	cwd: string
+@@ -20,6 +21,7 @@ export async function processUserContentMentions({
+ 	fileContextTracker: FileContextTracker
+ 	rooIgnoreController?: any
+ 	showRooIgnoredFiles?: boolean
++	globalStoragePath?: string
+ }) {
+ 	// Process userContent array, which contains various block types:
+ 	// TextBlockParam, ImageBlockParam, ToolUseBlockParam, and ToolResultBlockParam.
+@@ -46,6 +48,7 @@ export async function processUserContentMentions({
+ 							fileContextTracker,
+ 							rooIgnoreController,
+ 							showRooIgnoredFiles,
++							globalStoragePath,
+ 						),
+ 					}
+ 				}
+@@ -63,6 +66,7 @@ export async function processUserContentMentions({
+ 								fileContextTracker,
+ 								rooIgnoreController,
+ 								showRooIgnoredFiles,
++								globalStoragePath,
+ 							),
+ 						}
+ 					}
+@@ -81,6 +85,7 @@ export async function processUserContentMentions({
+ 										fileContextTracker,
+ 										rooIgnoreController,
+ 										showRooIgnoredFiles,
++										globalStoragePath,
+ 									),
+ 								}
+ 							}
+diff --git a/src/core/prompts/sections/markdown-formatting.ts b/src/core/prompts/sections/markdown-formatting.ts
+index 87f922e9..ecfd3564 100644
+--- a/src/core/prompts/sections/markdown-formatting.ts
++++ b/src/core/prompts/sections/markdown-formatting.ts
+@@ -1,7 +1,17 @@
++// In all responses, any reference that requires specifying a location, such as guiding users to a certain file or a specific language structure within a file, or indicating that certain content is located at a specific position in a file, MUST be set as clickable MARKDOWN hyperlinks, such as guiding users to find a certain function within a file
++
+ export function markdownFormattingSection(): string {
+ 	return `====
+ 
+ MARKDOWN RULES
+ 
+-ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>`
++ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>
++Format: [declaration](relative_path:line)
++Note:
++- 'declaration' is a clickable language structure or filename
++- 'relative_path' is a relative path relative to the current working path
++- 'line' is a number of line in the file.
++Example:
++[fibonacci()](src/test.py:12)
++`
+ }
+diff --git a/src/core/prompts/tools/codebase-search.ts b/src/core/prompts/tools/codebase-search.ts
+index 0fc8f68f..6e0ec175 100644
+--- a/src/core/prompts/tools/codebase-search.ts
++++ b/src/core/prompts/tools/codebase-search.ts
+@@ -1,9 +1,21 @@
+ export function getCodebaseSearchDescription(): string {
+ 	return `## codebase_search
+-Description: Find files most relevant to the search query.\nThis is a semantic search tool, so the query should ask for something semantically matching what is needed.\nIf it makes sense to only search in a particular directory, please specify it in the path parameter.\nUnless there is a clear reason to use your own search query, please just reuse the user's exact query with their wording.\nTheir exact wording/phrasing can often be helpful for the semantic search query. Keeping the same exact question format can also be helpful.\nIMPORTANT: Queries MUST be in English. Translate non-English queries before searching.
++### codebase_search (Search)
++Description: This tool performs a semantic search on a vector database of code and documentation. It retrieves the most relevant contextual information needed to answer user questions or resolve their requirements. The search is based on semantic meaning, not just keyword matching.
++
++When generating a 'query', follow these guidelines:
++
++- **Extract from Code:** If the conversation includes code snippets, extract key identifiers like class names, function names, method names, or variable names. These are often the most crucial elements to search for to understand the code's purpose and functionality.
++- **Infer from Context:** Go beyond the literal words in the conversation.
++    - **For Code-related Questions:** Infer potential function names, class names, or design patterns that might exist in the codebase to solve the user's problem.
++    - **For Documentation-related Questions:** Infer concepts, features, or "how-to" topics that would likely be covered in the documentation.
++- **Be Specific and Clear:**
++    - Formulate clear, descriptive queries. Avoid using overly short or ambiguous abbreviations.
++    - If the context strongly suggests the information is in a specific location, use the 'path' parameter to narrow the search.
++
+ Parameters:
+-- query: (required) The search query to find relevant code. You should reuse the user's exact query/most recent message with their wording unless there is a clear reason not to.
+-- path: (optional) The path to the directory to search in relative to the current working directory. This parameter should only be a directory path, file paths are not supported. Defaults to the current working directory.
++- query: (required) A semantic query (or queries) to find relevant code or documentation. You can provide up to 4 queries, separated by " | ". Each query should be a meaningful phrase (at least 4 Chinese characters or 2 English words). Provide queries in both Chinese and English. 
++- path: (optional) The relative path to a file or directory to restrict the search. Defaults to the entire codebase.
+ Usage:
+ <codebase_search>
+ <query>Your natural language query here</query>
+@@ -15,5 +27,29 @@ Example: Searching for functions related to user authentication
+ <query>User login and password hashing</query>
+ <path>/path/to/directory</path>
+ </codebase_search>
++
++
++### codebase_search (Summary)
++Description: Generates a detailed summary of a file or a directory's contents.
++
++This tool provides a high-level overview to help you quickly understand a codebase.
++- **If the path points to a file:** It returns a summary of the entire file, plus summaries of key sections (e.g., classes, functions) with their corresponding line numbers.
++- **If the path points to a directory:** It returns summaries for all supported files within that directory.
++
++Use this tool when you need to grasp the purpose and structure of a file or directory before diving into the details.
++
++**Important Note:** The tool is named 'codebase_search', but its function in this parameters rule is to **summarize**, not to search for a query.
++
++Parameters:
++- path: (optional) The relative path to the file or directory to be summarized. Defaults to the current working directory ('.').
++Usage:
++<codebase_search>
++<path>Path to the directory or file to summarize (optional)</path>
++</codebase_search>
++
++Example: Get a summary of a specific file or all supported files in '/path/to/directory_or_file'.
++<codebase_search>
++<path>/path/to/directory_or_file</path>
++</codebase_search>
+ `
+ }
+diff --git a/src/core/task/Task.ts b/src/core/task/Task.ts
+index 31260cd6..20bcb3d6 100644
+--- a/src/core/task/Task.ts
++++ b/src/core/task/Task.ts
+@@ -1224,6 +1224,7 @@ export class Task extends EventEmitter<ClineEvents> {
+ 			fileContextTracker: this.fileContextTracker,
+ 			rooIgnoreController: this.rooIgnoreController,
+ 			showRooIgnoredFiles,
++			globalStoragePath: this.globalStoragePath,
+ 		})
+ 
+ 		const environmentDetails = await getEnvironmentDetails(this, includeFileDetails)
+diff --git a/src/core/tools/applyDiffTool.ts b/src/core/tools/applyDiffTool.ts
+index f5b4ab7d..a4f3d3e1 100644
+--- a/src/core/tools/applyDiffTool.ts
++++ b/src/core/tools/applyDiffTool.ts
+@@ -99,7 +99,7 @@ export async function applyDiffToolLegacy(
+ 			}
+ 
+ 			// Release the original content from memory as it's no longer needed
+-			originalContent = null
++			// originalContent = null
+ 
+ 			if (!diffResult.success) {
+ 				cline.consecutiveMistakeCount++
+@@ -172,6 +172,18 @@ export async function applyDiffToolLegacy(
+ 			// Call saveChanges to update the DiffViewProvider properties
+ 			await cline.diffViewProvider.saveChanges()
+ 
++			let newContent: string | null = await fs.readFile(absolutePath, "utf-8")
++
++			const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent)
++			const say: ClineSayTool = {
++				tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
++				path: getReadablePath(cline.cwd, relPath),
++				diff: `# agentEdits\n${agentEdits}\n`,
++			}
++
++			// Send the user feedback
++			await cline.say("user_feedback_diff", JSON.stringify(say))
++
+ 			// Track file edit operation
+ 			if (relPath) {
+ 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+diff --git a/src/core/tools/attemptCompletionTool.ts b/src/core/tools/attemptCompletionTool.ts
+index 57f58700..cc5675f4 100644
+--- a/src/core/tools/attemptCompletionTool.ts
++++ b/src/core/tools/attemptCompletionTool.ts
+@@ -77,6 +77,8 @@ export async function attemptCompletionTool(
+ 				if (!didApprove) {
+ 					return
+ 				}
++				
++				// const summary = await getFinishSubTaskSummary(cline, result)
+ 
+ 				// tell the provider to remove the current subtask and resume the previous task in the stack
+ 				await cline.providerRef.deref()?.finishSubTask(result)
+@@ -115,3 +117,133 @@ export async function attemptCompletionTool(
+ 		return
+ 	}
+ }
++
++
++
++// import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
++// import { truncateConversationIfNeeded } from "../sliding-window"
++// import { ApiMessage } from "../task-persistence/apiMessages"
++// import {
++// 	type ContextCondense,
++// } from "@roo-code/types"
++
++
++// async function getFinishSubTaskSummary(cline: Task, result:string) 
++// : Promise<string>
++// {
++// 	const state = await cline.providerRef.deref()?.getState()
++
++// 	const {
++// 		autoCondenseContext = true,
++// 		autoCondenseContextPercent = 100,
++// 		profileThresholds = {},
++// 	} = state ?? {}
++
++// 	const systemPrompt = `You are "CodeCrafter," an expert AI Programming Assistant and a master of code, logic, and software architecture. Your primary directive is to be an exceptionally helpful and proactive partner to users, assisting them in all aspects of the software development lifecycle. Your ultimate goal is to empower users to write better code, solve problems faster, and learn new technologies effectively.
++
++// **Core Responsibilities:**
++
++// *   **Code Generation & Completion:** Write clean, efficient, and well-documented code in any requested programming language.
++// *   **Explanation & Learning:** Explain complex code, algorithms, or programming concepts in a clear and easy-to-understand manner.
++// *   **Debugging & Troubleshooting:** Analyze code snippets or error messages to identify the root cause of bugs and propose effective solutions.
++// *   **Refactoring & Optimization:** Review existing code and suggest improvements for readability, performance, security, and maintainability.
++// *   **Architectural Design:** Provide high-level architectural suggestions, design patterns, and best practices for building robust and scalable applications.
++// *   **Testing:** Generate unit tests, suggest testing strategies, and help create a comprehensive test plan.
++
++// **Key Capability: Tool Utilization**
++
++// Beyond your extensive knowledge, you are equipped with a set of practical tools to interact with the user's development environment. You MUST use these tools when a task requires accessing or modifying local information.
++
++// **Available Tools:**
++// *   'file_reader': To read the content of one or more files.
++// *   'file_writer': To write new content to a file or create a new file.
++// *   'code_executor': To execute a piece of code and get its output, which is essential for verification and debugging.
++// *   'web_search': To find the most up-to-date information, library documentation, or solutions to novel errors.
++// ...
++
++// **Rules for Tool Use:**
++// 1.  **Analyze the Request:** First, determine if the user's request can be fulfilled with your internal knowledge or if it requires interacting with their files or system.
++// 2.  **Select the Right Tool:** If external interaction is needed, choose the appropriate tool.
++// *   *Example:* If a user says, "Fix the bug in my 'utils.py' file," your first step should be to use 'file_reader' to read 'utils.py'.
++// 3.  **Think Step-by-Step:** Formulate a plan. For a debugging task, this might be: read the file, identify the potential error, suggest a fix, and offer to write the corrected code back using 'file_writer'.
++// 4.  **Communicate Clearly:** Always inform the user which tool you are about to use and why. For example: "Okay, I will now use the 'file_reader' to examine the contents of 'utils.py' to understand the context of the bug."
++
++// **Guiding Principles:**
++// *   **Clarity First:** Prioritize clear, simple, and direct communication. Avoid jargon where possible.
++// *   **Best Practices:** Always adhere to industry best practices regarding coding standards, security, and project structure.
++// *   **Proactivity:** Don't just answer the question. If you see a potential improvement, a security vulnerability, or a better way to do something, proactively suggest it.
++// *   **Context-Awareness:** Maintain the context of the conversation to provide relevant and coherent support over multiple interactions.`
++// 	const customCondensingPrompt = state?.customCondensingPrompt
++// 	const condensingApiConfigId = state?.condensingApiConfigId
++// 	const listApiConfigMeta = state?.listApiConfigMeta
++
++// 	let condensingApiHandler: ApiHandler | undefined
++// 			if (condensingApiConfigId && listApiConfigMeta && Array.isArray(listApiConfigMeta)) {
++// 				// Using type assertion for the id property to avoid implicit any
++// 				const matchingConfig = listApiConfigMeta.find((config: any) => config.id === condensingApiConfigId)
++// 				if (matchingConfig) {
++// 					const profile = await cline.providerRef.deref()?.providerSettingsManager.getProfile({
++// 						id: condensingApiConfigId,
++// 					})
++// 					// Ensure profile and apiProvider exist before trying to build handler
++// 					if (profile && profile.apiProvider) {
++// 						condensingApiHandler = buildApiHandler(profile)
++// 					}
++// 				}
++// 			}
++	
++
++// 	const DEFAULT_THINKING_MODEL_MAX_TOKENS = 16_384
++// 	const modelInfo = cline.api.getModel().info
++// 	const { contextTokens } = cline.getTokenUsage()
++// 	const maxTokens = modelInfo.supportsReasoningBudget
++// 		? cline.apiConfiguration.modelMaxTokens || DEFAULT_THINKING_MODEL_MAX_TOKENS
++// 		: modelInfo.maxTokens || DEFAULT_THINKING_MODEL_MAX_TOKENS
++
++// 	const contextWindow = modelInfo.contextWindow
++
++// 	const currentProfileId =
++// 		state?.listApiConfigMeta.find((profile) => profile.name === state?.currentApiConfigName)?.id ??
++// 		"default"
++
++// 	if (contextTokens > 0.2 * maxTokens) {
++// 		const truncateResult = await truncateConversationIfNeeded({
++// 			messages: cline.apiConversationHistory,
++// 			totalTokens: contextTokens,
++// 			maxTokens,
++// 			contextWindow,
++// 			apiHandler: cline.api,
++// 			autoCondenseContext,
++// 			autoCondenseContextPercent,
++// 			systemPrompt,
++// 			taskId: cline.taskId,
++// 			customCondensingPrompt,
++// 			condensingApiHandler,
++// 			profileThresholds,
++// 			currentProfileId,
++// 		})
++
++// 		// ApiMessage[]
++// 		// const { summary, cost, prevContextTokens, newContextTokens = 0 } = truncateResult
++// 		// const contextCondense: ContextCondense = { summary, cost, newContextTokens, prevContextTokens }
++// 		// await cline.say(
++// 		// 	"condense_context",
++// 		// 	undefined /* text */,
++// 		// 	undefined /* images */,
++// 		// 	false /* partial */,
++// 		// 	undefined /* checkpoint */,
++// 		// 	undefined /* progressStatus */,
++// 		// 	{ isNonInteractive: true } /* options */,
++// 		// 	contextCondense,
++// 		// )
++
++// 		if (truncateResult.error) {
++// 			return truncateResult.summary
++// 		} 
++// 		return JSON.stringify(cline.apiConversationHistory)
++		
++// 	} else {
++// 		// 直接返回所有对话序列化组成的字符串
++// 		return JSON.stringify(cline.apiConversationHistory)
++// 	}
++// }
+\ No newline at end of file
+diff --git a/src/core/tools/codebaseSearchTool.ts b/src/core/tools/codebaseSearchTool.ts
+index 236b0663..6b9a213c 100644
+--- a/src/core/tools/codebaseSearchTool.ts
++++ b/src/core/tools/codebaseSearchTool.ts
+@@ -29,6 +29,11 @@ export async function codebaseSearchTool(
+ 	let query: string | undefined = block.params.query
+ 	let directoryPrefix: string | undefined = block.params.path
+ 
++	if (query === undefined) {
++		await getSummary(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
++		return
++	}
++
+ 	query = removeClosingTag("query", query)
+ 
+ 	if (directoryPrefix) {
+@@ -82,7 +87,7 @@ export async function codebaseSearchTool(
+ 			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
+ 		}
+ 
+-		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, directoryPrefix)
++		const searchResults: string[] = await manager.searchIndex(query, directoryPrefix)
+ 
+ 		// 3. Format and push results
+ 		if (!searchResults || searchResults.length === 0) {
+@@ -105,18 +110,18 @@ export async function codebaseSearchTool(
+ 		}
+ 
+ 		searchResults.forEach((result) => {
+-			if (!result.payload) return
+-			if (!("filePath" in result.payload)) return
+-
+-			const relativePath = vscode.workspace.asRelativePath(result.payload.filePath, false)
+-
+-			jsonResult.results.push({
+-				filePath: relativePath,
+-				score: result.score,
+-				startLine: result.payload.startLine,
+-				endLine: result.payload.endLine,
+-				codeChunk: result.payload.codeChunk.trim(),
+-			})
++			if (result) {
++				const res = JSON.parse(result) // Ensure the result is valid JSON
++				for (const key in res) {
++					jsonResult.results.push({
++						filePath: res[key]["file_path"],
++						score: res[key].score ?? 1,
++						startLine: Math.min(...res[key]["lines"]),
++						endLine: Math.max(...res[key]["lines"]),
++						codeChunk: res[key]["code"],
++					})
++				}
++			}
+ 		})
+ 
+ 		// Send results to UI
+@@ -124,21 +129,135 @@ export async function codebaseSearchTool(
+ 		await cline.say("codebase_search_result", JSON.stringify(payload))
+ 
+ 		// Push results to AI
+-		const output = `Query: ${query}
+-Results:
+-
+-${jsonResult.results
+-	.map(
+-		(result) => `File path: ${result.filePath}
+-Score: ${result.score}
+-Lines: ${result.startLine}-${result.endLine}
+-Code Chunk: ${result.codeChunk}
+-`,
+-	)
+-	.join("\n")}`
++		const output = `${jsonResult.results.map(result => `# File: ${result.filePath}\n${result.codeChunk}`).join("\n\n")}`
+ 
+ 		pushToolResult(output)
+ 	} catch (error: any) {
+ 		await handleError(toolName, error) // Use the standard error handler
+ 	}
+ }
++
++
++
++async function getSummary(
++	cline: Task,
++	block: ToolUse,
++	askApproval: AskApproval,
++	handleError: HandleError,
++	pushToolResult: PushToolResult,
++	removeClosingTag: RemoveClosingTag
++) {
++	const toolName = "codebase_search"
++	const workspacePath = getWorkspacePath()
++
++	if (!workspacePath) {
++		// This case should ideally not happen if Cline is initialized correctly
++		await handleError(toolName, new Error("Could not determine workspace path."))
++		return
++	}
++
++	// --- Parameter Extraction and Validation ---
++	let directoryPrefix: string | undefined = block.params.path
++	
++	if (directoryPrefix) {
++		directoryPrefix = removeClosingTag("path", directoryPrefix)
++		directoryPrefix = path.normalize(directoryPrefix)
++	} else {
++		directoryPrefix = '.'
++	}
++
++	const sharedMessageProps = {
++		tool: "codebaseSearch",
++		query: "（获取摘要）",
++		path: directoryPrefix,
++		isOutsideWorkspace: false,
++	}
++
++	if (block.partial) {
++		await cline.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})
++		return
++	}
++
++	// if (!query) {
++	// 	cline.consecutiveMistakeCount++
++	// 	pushToolResult(await cline.sayAndCreateMissingParamError(toolName, "query"))
++	// 	return
++	// }
++
++	const didApprove = await askApproval("tool", JSON.stringify(sharedMessageProps))
++	if (!didApprove) {
++		pushToolResult(formatResponse.toolDenied())
++		return
++	}
++
++	cline.consecutiveMistakeCount = 0
++
++	// --- Core Logic ---
++	try {
++		const context = cline.providerRef.deref()?.context
++		if (!context) {
++			throw new Error("Extension context is not available.")
++		}
++
++		const manager = CodeIndexManager.getInstance(context)
++
++		if (!manager) {
++			throw new Error("CodeIndexManager is not available.")
++		}
++
++		if (!manager.isFeatureEnabled) {
++			throw new Error("Code Indexing is disabled in the settings.")
++		}
++		if (!manager.isFeatureConfigured) {
++			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
++		}
++
++		const summaryResults: string[] = await manager.searchSummary(directoryPrefix)
++
++		// 3. Format and push results
++		if (!summaryResults || summaryResults.length === 0) {
++			pushToolResult(`No summary found in path: "${directoryPrefix}"`) // Use simple string for no results
++			return
++		}
++
++		const jsonResult = {
++			query: "（获取摘要）",
++			results: [],
++		} as {
++			query: string
++			results: Array<{
++				filePath: string
++				score: number
++				startLine: number
++				endLine: number
++				codeChunk: string[]
++			}>
++		}
++
++		summaryResults.forEach((result) => {
++			if (result) {
++				const res = JSON.parse(result) // Ensure the result is valid JSON
++				for (const key in res) {
++					jsonResult.results.push({
++						filePath: res[key]["file_path"],
++						score: 1,
++						startLine: 0,
++						endLine: 0,
++						codeChunk: res[key]["code"],
++					})
++				}
++			}
++		})
++
++		// Send results to UI
++		const payload = { tool: "codebaseSearch", content: jsonResult }
++		await cline.say("codebase_search_result", JSON.stringify(payload))
++
++		// Push results to AI
++		const output = `# Codebase summary in ${directoryPrefix}:\n\n${jsonResult.results.map(result => `## File: ${result.filePath}\n${result.codeChunk.join("\n")}`).join("\n\n")}`
++
++		pushToolResult(output)
++	} catch (error: any) {
++		await handleError(toolName, error) // Use the standard error handler
++	}
++}
+\ No newline at end of file
+diff --git a/src/core/tools/multiApplyDiffTool.ts b/src/core/tools/multiApplyDiffTool.ts
+index 8057f779..5b8bc5cc 100644
+--- a/src/core/tools/multiApplyDiffTool.ts
++++ b/src/core/tools/multiApplyDiffTool.ts
+@@ -425,7 +425,7 @@ Original error: ${errorMessage}`
+ 				}
+ 
+ 				// Release the original content from memory as it's no longer needed
+-				originalContent = null
++				// originalContent = null
+ 
+ 				if (!diffResult.success) {
+ 					cline.consecutiveMistakeCount++
+@@ -555,6 +555,20 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
+ 				// Call saveChanges to update the DiffViewProvider properties
+ 				await cline.diffViewProvider.saveChanges()
+ 
++				
++				let newContent: string | null = await fs.readFile(absolutePath, "utf-8")
++				
++				const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent)
++				const say: ClineSayTool = {
++					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
++					path: getReadablePath(cline.cwd, relPath),
++					diff: `# agentEdits\n${agentEdits}\n`,
++				}
++	
++				// Send the user feedback
++				await cline.say("user_feedback_diff", JSON.stringify(say))
++				
++
+ 				// Track file edit operation
+ 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+ 
+diff --git a/src/core/tools/readFileTool.ts b/src/core/tools/readFileTool.ts
+index 1459838f..293a0921 100644
+--- a/src/core/tools/readFileTool.ts
++++ b/src/core/tools/readFileTool.ts
+@@ -500,7 +500,7 @@ export async function readFileTool(
+ 						if (defResult) {
+ 							xmlInfo += `<list_code_definition_names>${defResult}</list_code_definition_names>\n`
+ 						}
+-						xmlInfo += `<notice>Showing only ${maxReadFileLine} of ${totalLines} total lines. Use line_range if you need to read more lines</notice>\n`
++						xmlInfo += `<notice>Showing only ${maxReadFileLine} of ${totalLines} total lines. Use line_range if you need to read more lines. Read the specified line number range to learn more details you want to know</notice>\n`
+ 						updateFileResult(relPath, {
+ 							xmlContent: `<file><path>${relPath}</path>\n${xmlInfo}</file>`,
+ 						})
+diff --git a/src/core/webview/ClineProvider.ts b/src/core/webview/ClineProvider.ts
+index 4a934e9f..bc11ad60 100644
+--- a/src/core/webview/ClineProvider.ts
++++ b/src/core/webview/ClineProvider.ts
+@@ -1186,7 +1186,7 @@ export class ClineProvider
+ 		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
+ 	}
+ 
+-	// this function deletes a task from task hidtory, and deletes it's checkpoints and delete the task folder
++	// this function deletes a task from task history, and deletes it's checkpoints and delete the task folder
+ 	async deleteTaskWithId(id: string) {
+ 		try {
+ 			// get the task directory full path
+@@ -1515,6 +1515,15 @@ export class ClineProvider
+ 				codebaseIndexEmbedderProvider: "openai",
+ 				codebaseIndexEmbedderBaseUrl: "",
+ 				codebaseIndexEmbedderModelId: "",
++
++				embeddingBaseUrl: "",
++				embeddingModelID: "",
++				enhancementBaseUrl: "",
++				enhancementModelID: "",
++
++				ragPath: "",
++				llmFilter: false,
++				codeBaseLogging: false,
+ 			},
+ 			mdmCompliant: this.checkMdmCompliance(),
+ 			profileThresholds: profileThresholds ?? {},
+@@ -1673,6 +1682,15 @@ export class ClineProvider
+ 				codebaseIndexEmbedderProvider: "openai",
+ 				codebaseIndexEmbedderBaseUrl: "",
+ 				codebaseIndexEmbedderModelId: "",
++				
++				embeddingBaseUrl: "",
++				embeddingModelID: "",
++				enhancementBaseUrl: "",
++				enhancementModelID: "",
++				
++				ragPath: "",
++				llmFilter: false,
++				codeBaseLogging: false,
+ 			},
+ 			profileThresholds: stateValues.profileThresholds ?? {},
+ 		}
+diff --git a/src/core/webview/webviewMessageHandler.ts b/src/core/webview/webviewMessageHandler.ts
+index a6577fb2..65dc6a7f 100644
+--- a/src/core/webview/webviewMessageHandler.ts
++++ b/src/core/webview/webviewMessageHandler.ts
+@@ -50,6 +50,8 @@ import { GetModelsOptions } from "../../shared/api"
+ import { generateSystemPrompt } from "./generateSystemPrompt"
+ import { getCommand } from "../../utils/commands"
+ 
++import { saveMemory } from "./Memory-rid"
++
+ const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
+ 
+ import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
+@@ -1284,6 +1286,10 @@ export const webviewMessageHandler = async (
+ 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
+ 			await provider.postStateToWebview()
+ 			break
++		case "saveMemory":
++			// 调用保存记忆函数，函数内部会发送相应的消息
++			await saveMemory(provider, message.text??"")
++			break
+ 		case "enhancePrompt":
+ 			if (message.text) {
+ 				try {
+@@ -1947,6 +1953,17 @@ export const webviewMessageHandler = async (
+ 					codebaseIndexOpenAiCompatibleBaseUrl: settings.codebaseIndexOpenAiCompatibleBaseUrl,
+ 					codebaseIndexSearchMaxResults: settings.codebaseIndexSearchMaxResults,
+ 					codebaseIndexSearchMinScore: settings.codebaseIndexSearchMinScore,
++
++					embeddingBaseUrl: settings.embeddingBaseUrl,
++					embeddingModelID: settings.embeddingModelID,
++					enhancementBaseUrl: settings.enhancementBaseUrl,
++					enhancementModelID: settings.enhancementModelID,
++					// embeddingApiKey: settings.embeddingApiKey,
++					// enhancementApiKey: settings.enhancementApiKey,
++
++					ragPath: settings.ragPath,
++					llmFilter: settings.llmFilter,
++					codeBaseLogging: settings.codeBaseLogging,
+ 				}
+ 
+ 				// Save global state first
+@@ -1972,6 +1989,19 @@ export const webviewMessageHandler = async (
+ 					)
+ 				}
+ 
++				if (settings.codeIndexOpenAiKey !== undefined) {
++					await provider.contextProxy.storeSecret("codeIndexOpenAiKey", settings.codeIndexOpenAiKey)
++				}
++
++				
++				if (settings.embeddingApiKey !== undefined) {
++					await provider.contextProxy.storeSecret("embeddingApiKey", settings.embeddingApiKey)
++				}
++				if (settings.enhancementApiKey !== undefined) {
++					await provider.contextProxy.storeSecret("enhancementApiKey", settings.enhancementApiKey)
++				}
++				
++
+ 				// Send success response first - settings are saved regardless of validation
+ 				await provider.postMessageToWebview({
+ 					type: "codeIndexSettingsSaved",
+@@ -2063,6 +2093,8 @@ export const webviewMessageHandler = async (
+ 				"codebaseIndexOpenAiCompatibleApiKey",
+ 			))
+ 			const hasGeminiApiKey = !!(await provider.context.secrets.get("codebaseIndexGeminiApiKey"))
++			const hasEmbeddingApiKey = !!(await provider.context.secrets.get("embeddingApiKey"))
++			const hasEnhancementApiKey = !!(await provider.context.secrets.get("enhancementApiKey"))
+ 
+ 			provider.postMessageToWebview({
+ 				type: "codeIndexSecretStatus",
+@@ -2071,6 +2103,8 @@ export const webviewMessageHandler = async (
+ 					hasQdrantApiKey,
+ 					hasOpenAiCompatibleApiKey,
+ 					hasGeminiApiKey,
++					hasEmbeddingApiKey,
++					hasEnhancementApiKey
+ 				},
+ 			})
+ 			break
+diff --git a/src/services/code-index/config-manager.ts b/src/services/code-index/config-manager.ts
+index 245621a1..02385051 100644
+--- a/src/services/code-index/config-manager.ts
++++ b/src/services/code-index/config-manager.ts
+@@ -22,6 +22,12 @@ export class CodeIndexConfigManager {
+ 	private searchMinScore?: number
+ 	private searchMaxResults?: number
+ 
++	private embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
++	private enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
++	private ragPath?: string
++	private llmFilter?: boolean
++	private codeBaseLogging?: boolean
++
+ 	constructor(private readonly contextProxy: ContextProxy) {
+ 		// Initialize with current configuration to avoid false restart triggers
+ 		this._loadAndSetConfiguration()
+@@ -48,6 +54,14 @@ export class CodeIndexConfigManager {
+ 			codebaseIndexEmbedderModelId: "",
+ 			codebaseIndexSearchMinScore: undefined,
+ 			codebaseIndexSearchMaxResults: undefined,
++
++			embeddingBaseUrl: "",
++			embeddingModelID: "",
++			enhancementBaseUrl: "",
++			enhancementModelID: "",
++			ragPath: "",
++			llmFilter: false,
++			codeBaseLogging: false,
+ 		}
+ 
+ 		const {
+@@ -58,6 +72,14 @@ export class CodeIndexConfigManager {
+ 			codebaseIndexEmbedderModelId,
+ 			codebaseIndexSearchMinScore,
+ 			codebaseIndexSearchMaxResults,
++
++			embeddingBaseUrl,
++			embeddingModelID,
++			enhancementBaseUrl,
++			enhancementModelID,
++			ragPath,
++			llmFilter,
++			codeBaseLogging,
+ 		} = codebaseIndexConfig
+ 
+ 		const openAiKey = this.contextProxy?.getSecret("codeIndexOpenAiKey") ?? ""
+@@ -67,6 +89,10 @@ export class CodeIndexConfigManager {
+ 		const openAiCompatibleApiKey = this.contextProxy?.getSecret("codebaseIndexOpenAiCompatibleApiKey") ?? ""
+ 		const geminiApiKey = this.contextProxy?.getSecret("codebaseIndexGeminiApiKey") ?? ""
+ 
++		const embeddingApiKey = this.contextProxy?.getSecret("embeddingApiKey") ?? ""
++		const enhancementApiKey = this.contextProxy?.getSecret("enhancementApiKey") ?? ""
++
++
+ 		// Update instance variables with configuration
+ 		// Note: codebaseIndexEnabled is no longer used as the feature is always enabled
+ 		this.qdrantUrl = codebaseIndexQdrantUrl
+@@ -118,6 +144,30 @@ export class CodeIndexConfigManager {
+ 				: undefined
+ 
+ 		this.geminiOptions = geminiApiKey ? { apiKey: geminiApiKey } : undefined
++
++		this.embeddingOptions =
++			embeddingBaseUrl && embeddingApiKey && embeddingModelID
++				? {
++						baseUrl: embeddingBaseUrl,
++						apiKey: embeddingApiKey,
++						modelID: embeddingModelID,
++					}
++				: undefined
++
++		this.enhancementOptions =
++			enhancementBaseUrl && enhancementApiKey && enhancementModelID
++				? {
++						baseUrl: enhancementBaseUrl,
++						apiKey: enhancementApiKey,
++						modelID: enhancementModelID,
++					}
++				: undefined
++
++
++		this.ragPath = ragPath ? ragPath : undefined
++		this.llmFilter = llmFilter ? llmFilter : false
++		this.codeBaseLogging = codeBaseLogging ? codeBaseLogging : false
++ 	
+ 	}
+ 
+ 	/**
+@@ -154,6 +204,18 @@ export class CodeIndexConfigManager {
+ 			geminiApiKey: this.geminiOptions?.apiKey ?? "",
+ 			qdrantUrl: this.qdrantUrl ?? "",
+ 			qdrantApiKey: this.qdrantApiKey ?? "",
++
++			embeddingApiKey: this.embeddingOptions?.apiKey ?? "",
++			embeddingBaseUrl: this.embeddingOptions?.baseUrl ?? "",
++			embeddingModelID: this.embeddingOptions?.modelID ?? "",
++
++			enhancementApiKey: this.enhancementOptions?.apiKey ?? "",
++			enhancementBaseUrl: this.enhancementOptions?.baseUrl ?? "",
++			enhancementModelID: this.enhancementOptions?.modelID ?? "",
++
++			ragPath: this.ragPath ?? "",
++			llmFilter: this.llmFilter ?? false,
++			codeBaseLogging: this.codeBaseLogging ?? false
+ 		}
+ 
+ 		// Refresh secrets from VSCode storage to ensure we have the latest values
+@@ -197,10 +259,10 @@ export class CodeIndexConfigManager {
+ 			const qdrantUrl = this.qdrantUrl
+ 			return !!(ollamaBaseUrl && qdrantUrl)
+ 		} else if (this.embedderProvider === "openai-compatible") {
+-			const baseUrl = this.openAiCompatibleOptions?.baseUrl
+-			const apiKey = this.openAiCompatibleOptions?.apiKey
+-			const qdrantUrl = this.qdrantUrl
+-			const isConfigured = !!(baseUrl && apiKey && qdrantUrl)
++			const baseUrl = this.embeddingOptions?.baseUrl
++			const apiKey = this.embeddingOptions?.apiKey
++			const modelID = this.embeddingOptions?.modelID
++			const isConfigured = !!(baseUrl && apiKey && modelID)
+ 			return isConfigured
+ 		} else if (this.embedderProvider === "gemini") {
+ 			const apiKey = this.geminiOptions?.apiKey
+@@ -243,6 +305,18 @@ export class CodeIndexConfigManager {
+ 		const prevQdrantUrl = prev?.qdrantUrl ?? ""
+ 		const prevQdrantApiKey = prev?.qdrantApiKey ?? ""
+ 
++		const prevembeddingApiKey = prev?.embeddingApiKey ?? ""
++		const prevembeddingBaseUrl = prev?.embeddingBaseUrl ?? ""
++		const prevembeddingModelID = prev?.embeddingModelID ?? ""
++
++		const prevenhancementApiKey = prev?.enhancementApiKey ?? ""
++		const prevenhancementBaseUrl = prev?.enhancementBaseUrl ?? ""
++		const prevenhancementModelID = prev?.enhancementModelID ?? ""
++
++		const prevragPath = prev?.ragPath ?? ""
++		const prevcodeBaseLogging = prev?.codeBaseLogging ?? false
++
++
+ 		// 1. Transition from unconfigured to configured
+ 		// Since the feature is always enabled, we only check configuration status
+ 		if (!prevConfigured && nowConfigured) {
+@@ -301,6 +375,48 @@ export class CodeIndexConfigManager {
+ 			return true
+ 		}
+ 
++		// Enhancement configuration changes
++		const currentEmbeddingApiKey = this.embeddingOptions?.apiKey ?? ""
++		const currentEmbeddingBaseUrl = this.embeddingOptions?.baseUrl ?? ""
++		const currentEmbeddingModelID = this.embeddingOptions?.modelID ?? ""
++
++		if (
++			prevembeddingApiKey !== currentEmbeddingApiKey ||
++			prevembeddingBaseUrl !== currentEmbeddingBaseUrl ||
++			prevembeddingModelID !== currentEmbeddingModelID
++		) {
++			return true
++		}
++
++		// Enhancement configuration changes
++		const currentEnhancementApiKey = this.enhancementOptions?.apiKey ?? ""
++		const currentEnhancementBaseUrl = this.enhancementOptions?.baseUrl ?? ""
++		const currentEnhancementModelID = this.enhancementOptions?.modelID ?? ""
++		
++
++		if (
++			prevenhancementApiKey !== currentEnhancementApiKey ||
++			prevenhancementBaseUrl !== currentEnhancementBaseUrl ||
++			prevenhancementModelID !== currentEnhancementModelID
++		) {
++			return true
++		}
++
++
++		const currentRagPath = this.ragPath ?? ""
++		if (
++			prevragPath !== currentRagPath
++		) {
++			return true
++		}
++
++		const currentCodeBaseLogging = this.codeBaseLogging ?? false
++		if (
++			prevcodeBaseLogging !== currentCodeBaseLogging
++		) {
++			return true
++		}
++
+ 		return false
+ 	}
+ 
+@@ -347,6 +463,13 @@ export class CodeIndexConfigManager {
+ 			qdrantApiKey: this.qdrantApiKey,
+ 			searchMinScore: this.currentSearchMinScore,
+ 			searchMaxResults: this.currentSearchMaxResults,
++
++			embeddingOptions: this.embeddingOptions,
++			enhancementOptions: this.enhancementOptions,
++
++			ragPath: this.ragPath,
++			llmFilter: this.llmFilter,
++			codeBaseLogging: this.codeBaseLogging,
+ 		}
+ 	}
+ 
+diff --git a/src/services/code-index/interfaces/config.ts b/src/services/code-index/interfaces/config.ts
+index 190a23e2..9a7cc4f5 100644
+--- a/src/services/code-index/interfaces/config.ts
++++ b/src/services/code-index/interfaces/config.ts
+@@ -17,6 +17,13 @@ export interface CodeIndexConfig {
+ 	qdrantApiKey?: string
+ 	searchMinScore?: number
+ 	searchMaxResults?: number
++
++	embeddingOptions?: { baseUrl: string; apiKey: string; modelID: string }
++	enhancementOptions?: { baseUrl: string; apiKey: string; modelID: string }
++
++	ragPath?: string
++	llmFilter?: boolean
++	codeBaseLogging?: boolean
+ }
+ 
+ /**
+@@ -35,4 +42,16 @@ export type PreviousConfigSnapshot = {
+ 	geminiApiKey?: string
+ 	qdrantUrl?: string
+ 	qdrantApiKey?: string
++
++	embeddingBaseUrl?: string
++	embeddingApiKey?: string
++	embeddingModelID?: string
++
++	enhancementBaseUrl?: string
++	enhancementApiKey?: string
++	enhancementModelID?: string
++
++	ragPath?: string
++	llmFilter?: boolean
++	codeBaseLogging?: boolean
+ }

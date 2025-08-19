@@ -81,7 +81,7 @@ async function generatePrompt(
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
 		shouldIncludeMcp
-			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
+			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation, mode)
 			: Promise.resolve(""),
 	])
 
@@ -169,6 +169,29 @@ export const SYSTEM_PROMPT = async (
 
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
+
+	if (mode === "native") {
+		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
+			mode,
+			promptComponent,
+			customModes,
+		)
+		const customInstructions = await addCustomInstructions(
+			baseInstructionsForFile,
+			globalCustomInstructions || "",
+			cwd,
+			mode,
+			{
+				language: language ?? formatLanguage(vscode.env.language),
+				rooIgnoreInstructions,
+				settings,
+			},
+		)
+
+		return `${roleDefinition}
+
+${customInstructions}`
+	}
 
 	// If a file-based custom system prompt exists, use it
 	if (fileCustomSystemPrompt) {

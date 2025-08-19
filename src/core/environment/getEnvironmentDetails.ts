@@ -18,8 +18,22 @@ import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 
+import { EditorUtils } from "../../integrations/editor/EditorUtils"
+import { readLines } from "../../integrations/misc/read-lines"
+import { addLineNumbers } from "../../integrations/misc/extract-text"
+
 import { Task } from "../task/Task"
 import { formatReminderSection } from "./reminder"
+
+import { getMemoryFilePaths, readMemoryFiles, formatMemoryContent } from "../mentions/index"
+
+const generateDiagnosticText = (diagnostics?: any[]) => {
+	if (!diagnostics?.length) return ""
+	return `\nCurrent problems detected:\n${diagnostics
+		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
+		.join("\n")}`
+}
+
 
 export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
 	let details = ""
@@ -265,6 +279,45 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 
 				details += result
 			}
+		
+			const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
+			if (globalStoragePath) {
+				try {
+					const memoryFiles = await getMemoryFilePaths(globalStoragePath)
+					const memoryData = await readMemoryFiles(memoryFiles)
+					const formattedMemory = formatMemoryContent(memoryData)
+					details += `\n\n# Agent Memory Content\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n`
+				} catch (error) {
+					details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
+				}
+			}
+		}
+	}
+
+	let filePath: string
+	let selectedText: string
+	let startLine: number | undefined
+	let endLine: number | undefined
+	let diagnostics: any[] | undefined
+	const context = EditorUtils.getEditorContext()
+	if (context) {
+		;({ filePath, selectedText, startLine, endLine, diagnostics } = context)
+		const fullPath = path.resolve(cline.cwd, filePath)
+		if (endLine !== undefined && startLine != undefined) {
+			try {
+				// Check if file is readable
+				await vscode.workspace.fs.stat(vscode.Uri.file(fullPath))
+				details += `\n\n# The File Where The Cursor In\n${fullPath}\n`
+				const content = addLineNumbers(
+					await readLines(fullPath, endLine + 5, startLine - 5),
+					startLine - 4 > 1 ? startLine - 4: 1,
+				)
+				details += `\n# Line near the Cursor\n${content}\n(The cursor is on the line ${endLine}. Determine if the user's question is related to the code near the cursor.)\n\n`
+				if (diagnostics) {
+					const diagno = generateDiagnosticText(diagnostics)
+					details += `\n# Issues near the Cursor\n${diagno}\n`
+				}
+			} catch (error) {}
 		}
 	}
 
