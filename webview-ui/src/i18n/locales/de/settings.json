@@ -677,10 +677,6 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Hintergrundbearbeitung",
 			"description": "Verhindert Editor-Fokus-Störungen wenn aktiviert. Dateibearbeitungen erfolgen im Hintergrund ohne Öffnung von Diff-Ansichten oder Fokus-Diebstahl. Du kannst ungestört weiterarbeiten, während Roo Änderungen vornimmt. Dateien können ohne Fokus geöffnet werden, um Diagnosen zu erfassen oder vollständig geschlossen bleiben."
-		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "Mehrere Tool-Aufrufe pro Nachricht erlauben",
-			"description": "Wenn aktiviert, kann Roo mehrere Tools in einer einzigen Nachricht verwenden. Wenn deaktiviert, muss Roo ein Tool pro Nachricht verwenden. Das Aktivieren kann die Interaktionen beschleunigen, aber bei einigen Modellen zu unerwartetem Verhalten führen."
 		}
 	},
 	"promptCaching": {

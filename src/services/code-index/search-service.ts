@@ -55,7 +55,7 @@ export class CodeIndexSearchService {
 			}
 
 			// Perform search
-			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore, maxResults, query)
+			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore, maxResults)
 			return results
 		} catch (error) {
 			console.error("[CodeIndexSearchService] Error during search:", error)
@@ -71,48 +71,4 @@ export class CodeIndexSearchService {
 			throw error // Re-throw the error after setting state
 		}
 	}
-
-	/**
-	 * Gets summary information from the code index.
-	 * @param directoryPrefix Optional directory path to filter results by
-	 * @returns Array of summary strings
-	 * @throws Error if the service is not properly configured or ready
-	 */
-	public async searchSummary(directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
-		if (!this.configManager.isFeatureEnabled || !this.configManager.isFeatureConfigured) {
-			throw new Error("Code index feature is disabled or not configured.")
-		}
-
-		const currentState = this.stateManager.getCurrentStatus().systemStatus
-		if (currentState !== "Indexed" && currentState !== "Indexing") {
-			// Allow summary during Indexing too
-			throw new Error(`Code index is not ready for summary. Current state: ${currentState}`)
-		}
-
-		try {
-			// Handle directory prefix
-			let normalizedPrefix: string | undefined = undefined
-			if (directoryPrefix) {
-				normalizedPrefix = path.normalize(directoryPrefix)
-			}
-
-			// Perform summary request
-			const results = await this.vectorStore.summary(normalizedPrefix)
-			return results
-		} catch (error) {
-			console.error("[CodeIndexSearchService] Error during summary:", error)
-			this.stateManager.setSystemState("Error", `Summary failed: ${(error as Error).message}`)
-
-			// Capture telemetry for the error
-			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-				error: (error as Error).message,
-				stack: (error as Error).stack,
-				location: "searchSummary",
-			})
-
-			throw error // Re-throw the error after setting state
-		}
-	}
-
-
 }

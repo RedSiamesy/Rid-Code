@@ -33,7 +33,6 @@ export const providerNames = [
 	"groq",
 	"chutes",
 	"litellm",
-	"modelscope",
 	"huggingface",
 	"sambanova",
 ] as const
@@ -218,11 +217,6 @@ const requestySchema = baseProviderSettingsSchema.extend({
 	requestyModelId: z.string().optional(),
 })
 
-const modelscopeSchema = apiModelIdProviderModelSchema.extend({
-	modelscopeApiKey: z.string().optional(),
-	modelscopeBaseUrl: z.string().optional(),
-})
-
 const humanRelaySchema = baseProviderSettingsSchema
 
 const fakeAiSchema = baseProviderSettingsSchema.extend({
@@ -289,7 +283,6 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	huggingFaceSchema.merge(z.object({ apiProvider: z.literal("huggingface") })),
 	chutesSchema.merge(z.object({ apiProvider: z.literal("chutes") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
-	modelscopeSchema.merge(z.object({ apiProvider: z.literal("modelscope") })),
 	sambaNovaSchema.merge(z.object({ apiProvider: z.literal("sambanova") })),
 	defaultSchema,
 ])
@@ -322,8 +315,7 @@ export const providerSettingsSchema = z.object({
 	...huggingFaceSchema.shape,
 	...chutesSchema.shape,
 	...litellmSchema.shape,
-	...modelscopeSchema.shape,
-    ...sambaNovaSchema.shape,
+	...sambaNovaSchema.shape,
 	...codebaseIndexProviderSchema.shape,
 })
 

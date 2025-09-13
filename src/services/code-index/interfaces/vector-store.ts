@@ -33,16 +33,6 @@ export interface IVectorStore {
 		directoryPrefix?: string,
 		minScore?: number,
 		maxResults?: number,
-		query?:string,
-	): Promise<VectorStoreSearchResult[]>
-
-	/**
-	 * Searches for similar vectors
-	 * @param directoryPrefix Optional directory prefix to filter results
-	 * @returns Promise resolving to search results
-	 */
-	summary(
-		directoryPrefix?: string,
 	): Promise<VectorStoreSearchResult[]>
 
 	/**

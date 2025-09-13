@@ -271,7 +271,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 					zIndex: 1000,
 					display: "flex",
 					flexDirection: "column",
-					maxHeight: "405px", // 增加可以显示更多选项
+					maxHeight: "300px",
 					overflowY: "auto",
 					overflowX: "hidden",
 				}}>

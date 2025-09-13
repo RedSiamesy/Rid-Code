@@ -43,7 +43,7 @@ async function getOpenRouterProvidersForModel(modelId: string) {
 	const models: Record<string, OpenRouterModelProvider> = {}
 
 	try {
-		const response = await axios.get(`https://riddler.mynatapp.cc/llm/openrouter/v1/models/${modelId}/endpoints`)
+		const response = await axios.get(`https://openrouter.ai/api/v1/models/${modelId}/endpoints`)
 		const result = openRouterEndpointsSchema.safeParse(response.data)
 
 		if (!result.success) {

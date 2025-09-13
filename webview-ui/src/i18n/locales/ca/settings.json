@@ -677,10 +677,6 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Edició en segon pla",
 			"description": "Quan s'activa, evita la interrupció del focus de l'editor. Les edicions de fitxers es produeixen en segon pla sense obrir la vista diff o robar el focus. Pots continuar treballant sense interrupcions mentre Roo fa canvis. Els fitxers poden obrir-se sense focus per capturar diagnòstics o romandre completament tancats."
-		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "Permetre múltiples crides d'eines per missatge",
-			"description": "Quan està activat, Roo pot utilitzar múltiples eines en un sol missatge. Quan està desactivat, Roo ha d'utilitzar una eina per missatge. Activar això pot fer que les interaccions siguin més ràpides, però pot causar comportaments inesperats amb alguns models."
 		}
 	},
 	"promptCaching": {

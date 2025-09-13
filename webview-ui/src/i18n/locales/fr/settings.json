@@ -677,10 +677,6 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Édition en arrière-plan",
 			"description": "Empêche la perturbation du focus de l'éditeur lorsqu'activé. Les modifications de fichiers se font en arrière-plan sans ouvrir de vues de différences ou voler le focus. Vous pouvez continuer à travailler sans interruption pendant que Roo effectue des changements. Les fichiers peuvent être ouverts sans focus pour capturer les diagnostics ou rester complètement fermés."
-		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "Autoriser plusieurs appels d'outils par message",
-			"description": "Lorsque cette option est activée, Roo peut utiliser plusieurs outils dans un seul message. Lorsque désactivé, Roo doit utiliser un outil par message. Activer cette option peut accélérer les interactions mais peut provoquer un comportement inattendu avec certains modèles."
 		}
 	},
 	"promptCaching": {

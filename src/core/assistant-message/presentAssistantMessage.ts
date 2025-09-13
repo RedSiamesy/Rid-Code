@@ -27,8 +27,6 @@ import { newTaskTool } from "../tools/newTaskTool"
 
 import { checkpointSave } from "../checkpoints"
 import { updateTodoListTool } from "../tools/updateTodoListTool"
-import { webSearchTool } from "../tools/webSearchTool"
-import { urlFetchTool } from "../tools/urlFetchTool"
 
 import { formatResponse } from "../prompts/responses"
 import { validateToolUse } from "../tools/validateToolUse"
@@ -210,10 +208,6 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.query}']`
 					case "update_todo_list":
 						return `[${block.name}]`
-					case "web_search":
-						return `[${block.name} for '${block.params.query}']`
-					case "url_fetch":
-						return `[${block.name} for '${block.params.url}']`
 					case "new_task": {
 						const mode = block.params.mode ?? defaultModeSlug
 						const message = block.params.message ?? "(no message)"
@@ -263,10 +257,7 @@ export async function presentAssistantMessage(cline: Task) {
 				// Once a tool result has been collected, ignore all other tool
 				// uses since we should only ever present one tool result per
 				// message.
-				const provider = cline.providerRef.deref()
-				const state = provider?.getValues()
-				const allowedMultiCall = state?.experiments?.allowedMultiCall ?? false
-				cline.didAlreadyUseTool = !allowedMultiCall
+				cline.didAlreadyUseTool = true
 			}
 
 			const askApproval = async (
@@ -470,12 +461,6 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_search":
 					await codebaseSearchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
-					break
-				case "web_search":
-					await webSearchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
-					break
-				case "url_fetch":
-					await urlFetchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
 					break
 				case "list_code_definition_names":
 					await listCodeDefinitionNamesTool(

@@ -1,8 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { parseMentions } from "./index"
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
-import { Task } from "../task/Task"
 
 /**
  * Process mentions in user content, specifically within task and feedback tags
@@ -14,7 +13,6 @@ export async function processUserContentMentions({
 	fileContextTracker,
 	rooIgnoreController,
 	showRooIgnoredFiles = true,
-	globalStoragePath,
 	includeDiagnosticMessages = true,
 	maxDiagnosticMessages = 50,
 	maxReadFileLine,
@@ -25,7 +23,6 @@ export async function processUserContentMentions({
 	fileContextTracker: FileContextTracker
 	rooIgnoreController?: any
 	showRooIgnoredFiles?: boolean
-	globalStoragePath?: string
 	includeDiagnosticMessages?: boolean
 	maxDiagnosticMessages?: number
 	maxReadFileLine?: number
@@ -62,7 +59,6 @@ export async function processUserContentMentions({
 							includeDiagnosticMessages,
 							maxDiagnosticMessages,
 							maxReadFileLine,
-							globalStoragePath,
 						),
 					}
 				}
@@ -83,7 +79,6 @@ export async function processUserContentMentions({
 								includeDiagnosticMessages,
 								maxDiagnosticMessages,
 								maxReadFileLine,
-								globalStoragePath,
 							),
 						}
 					}
@@ -105,7 +100,6 @@ export async function processUserContentMentions({
 										includeDiagnosticMessages,
 										maxDiagnosticMessages,
 										maxReadFileLine,
-										globalStoragePath,
 									),
 								}
 							}

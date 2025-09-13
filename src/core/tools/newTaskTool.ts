@@ -6,9 +6,6 @@ import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
 import { t } from "../../i18n"
 
-import { ApiMessage } from "../task-persistence/apiMessages"
-import { getMessagesSinceLastSummary } from "../condense"
-
 export async function newTaskTool(
 	cline: Task,
 	block: ToolUse,
@@ -88,25 +85,6 @@ export async function newTaskTool(
 			if (!newCline) {
 				pushToolResult(t("tools:newTask.errors.policy_restriction"))
 				return
-			}
-
-			const parentMessages:ApiMessage[] = [
-				...getMessagesSinceLastSummary(cline.apiConversationHistory), 
-				{
-					role: "user",
-					content: `现在得你，是一个由主要智能体创建的子智能体，用于完成父任务中的一个子任务。` +
-						`在此之前的对话都是主要智能体完成父任务时，所进行的对话上下文记录`,
-					ts: Date.now(),
-				},
-				{
-					role: "assistant",
-					content: `那么作为一个子智能体，我当前的任务是什么呢？`,
-					ts: Date.now(),
-				}
-			]
-			// 将父任务的对话上下文传递给子任务
-			if (cline.apiConversationHistory && cline.apiConversationHistory.length > 0) {
-				await newCline.overwriteApiConversationHistory(parentMessages)
 			}
 
 			// Now switch the newly created task to the desired mode

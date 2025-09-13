@@ -49,7 +49,7 @@ const supportPromptConfigs: Record<SupportPromptType, SupportPromptConfig> = {
 	ENHANCE: {
 		template: `Generate an enhanced version of this prompt (reply with only the enhanced prompt - no conversation, explanations, lead-in, bullet points, placeholders, or surrounding quotes):
 
-\${userInput}\n`,
+\${userInput}`,
 	},
 	CONDENSE: {
 		template: `Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
@@ -88,7 +88,7 @@ Example summary structure:
   - [Task 2 details & next steps]
   - [...]
 
-Output only the summary of the conversation so far, without any additional commentary or explanation.\n`,
+Output only the summary of the conversation so far, without any additional commentary or explanation.`,
 	},
 	EXPLAIN: {
 		template: `Explain the following code from file path \${filePath}:\${startLine}-\${endLine}
@@ -101,7 +101,7 @@ Output only the summary of the conversation so far, without any additional comme
 Please provide a clear and concise explanation of what this code does, including:
 1. The purpose and functionality
 2. Key components and their interactions
-3. Important patterns or techniques used\n`,
+3. Important patterns or techniques used`,
 	},
 	FIX: {
 		template: `Fix any issues in the following code from file path \${filePath}:\${startLine}-\${endLine}
@@ -116,7 +116,7 @@ Please:
 1. Address all detected problems listed above (if any)
 2. Identify any other potential bugs or issues
 3. Provide corrected code
-4. Explain what was fixed and why\n`,
+4. Explain what was fixed and why`,
 	},
 	IMPROVE: {
 		template: `Improve the following code from file path \${filePath}:\${startLine}-\${endLine}
@@ -132,20 +132,20 @@ Please suggest improvements for:
 3. Best practices and patterns
 4. Error handling and edge cases
 
-Provide the improved code along with explanations for each enhancement.\n`,
+Provide the improved code along with explanations for each enhancement.`,
 	},
 	ADD_TO_CONTEXT: {
 		template: `\${filePath}:\${startLine}-\${endLine}
 \`\`\`
 \${selectedText}
-\`\`\`\n`,
+\`\`\``,
 	},
 	TERMINAL_ADD_TO_CONTEXT: {
 		template: `\${userInput}
 Terminal output:
 \`\`\`
 \${terminalContent}
-\`\`\`\n`,
+\`\`\``,
 	},
 	TERMINAL_FIX: {
 		template: `\${userInput}
@@ -157,7 +157,7 @@ Fix this terminal command:
 Please:
 1. Identify any issues in the command
 2. Provide the corrected command
-3. Explain what was fixed and why\n`,
+3. Explain what was fixed and why`,
 	},
 	TERMINAL_EXPLAIN: {
 		template: `\${userInput}
@@ -169,10 +169,10 @@ Explain this terminal command:
 Please provide:
 1. What the command does
 2. Explanation of each part/flag
-3. Expected output and behavior\n`,
+3. Expected output and behavior`,
 	},
 	NEW_TASK: {
-		template: `\${userInput}\n`,
+		template: `\${userInput}`,
 	},
 } as const
 

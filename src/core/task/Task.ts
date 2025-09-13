@@ -47,7 +47,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { getModelMaxOutputTokens } from "../../shared/api"
 
 // services
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
 import { BrowserSession } from "../../services/browser/BrowserSession"
 import { McpHub } from "../../services/mcp/McpHub"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
@@ -78,7 +78,7 @@ import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
 import { readApiMessages, saveApiMessages, readTaskMessages, saveTaskMessages, taskMetadata } from "../task-persistence"
-import { getEnvironmentDetails, getUserSuggestions } from "../environment/getEnvironmentDetails"
+import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
 import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
@@ -90,13 +90,8 @@ import {
 import { processUserContentMentions } from "../mentions/processUserContentMentions"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
-import { summarizeSubTask } from "../summarize-subtask"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { restoreTodoListForTask } from "../tools/updateTodoListTool"
-
-
-import { userExecuteCommand } from "../tools/executeCommandTool"
-
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 
@@ -246,7 +241,6 @@ export class Task extends EventEmitter<TaskEvents> {
 	consecutiveMistakeLimit: number
 	consecutiveMistakeCountForApplyDiff: Map<string, number> = new Map()
 	toolUsage: ToolUsage = {}
-	public toolSequence: string[] = [];
 
 	// Checkpoints
 	enableCheckpoints: boolean
@@ -265,11 +259,6 @@ export class Task extends EventEmitter<TaskEvents> {
 	didRejectTool = false
 	didAlreadyUseTool = false
 	didCompleteReadingStream = false
-
-	// Riddler
-	postprocess = {
-		_execute_command: undefined as string | undefined,
-	}
 
 	constructor({
 		provider,
@@ -809,83 +798,6 @@ export class Task extends EventEmitter<TaskEvents> {
 			{ isNonInteractive: true } /* options */,
 			contextCondense,
 		)
-	}
-
-	public async summarizeSubTaskContext(): Promise<string> {
-		const systemPrompt = await this.getSystemPrompt()
-
-		// Get condensing configuration
-		// Using type assertion to handle the case where Phase 1 hasn't been implemented yet
-		const state = await this.providerRef.deref()?.getState()
-		const customCondensingPrompt = state ? (state as any).customCondensingPrompt : undefined
-		const condensingApiConfigId = state ? (state as any).condensingApiConfigId : undefined
-		const listApiConfigMeta = state ? (state as any).listApiConfigMeta : undefined
-
-		// Determine API handler to use
-		let condensingApiHandler: ApiHandler | undefined
-		if (condensingApiConfigId && listApiConfigMeta && Array.isArray(listApiConfigMeta)) {
-			// Using type assertion for the id property to avoid implicit any
-			const matchingConfig = listApiConfigMeta.find((config: any) => config.id === condensingApiConfigId)
-			if (matchingConfig) {
-				const profile = await this.providerRef.deref()?.providerSettingsManager.getProfile({
-					id: condensingApiConfigId,
-				})
-				// Ensure profile and apiProvider exist before trying to build handler
-				if (profile && profile.apiProvider) {
-					condensingApiHandler = buildApiHandler(profile)
-				}
-			}
-		}
-
-		const { contextTokens: prevContextTokens } = this.getTokenUsage()
-		const {
-			messages,
-			summary,
-			cost,
-			newContextTokens = 0,
-			error,
-			inputTokens = 0,
-			outputTokens = 0,
-			cacheWriteTokens = 0,
-			cacheReadTokens = 0,
-		} = await summarizeSubTask(
-			this,
-			this.apiConversationHistory,
-			this.api, // Main API handler (fallback)
-			systemPrompt, // Default summarization prompt (fallback)
-			this.taskId,
-			prevContextTokens,
-			false, // manual trigger
-			customCondensingPrompt, // User's custom prompt
-			condensingApiHandler, // Specific handler for condensing
-		)
-		
-		const maybe_cost:number = cost > 0 ? cost :
-			calculateApiCostAnthropic(
-				this.api.getModel().info,
-				inputTokens,
-				outputTokens,
-				cacheWriteTokens,
-				cacheReadTokens,
-			)
-		// Record cost using the new cost_tracking message type
-		if (maybe_cost > 0) {
-			const contextCondense: ContextCondense = { summary, cost:maybe_cost, newContextTokens, prevContextTokens }
-			await this.say(
-				"cost_tracking",
-				undefined /* text */,
-				undefined /* images */,
-				false /* partial */,
-				undefined /* checkpoint */,
-				undefined /* progressStatus */,
-				{ isNonInteractive: true } /* options */,
-				contextCondense,
-			)
-		}
-		if (error) {
-			return ""
-		}
-		return summary
 	}
 
 	async say(
@@ -1503,7 +1415,6 @@ export class Task extends EventEmitter<TaskEvents> {
 			fileContextTracker: this.fileContextTracker,
 			rooIgnoreController: this.rooIgnoreController,
 			showRooIgnoredFiles,
-			globalStoragePath: this.globalStoragePath,
 			includeDiagnosticMessages,
 			maxDiagnosticMessages,
 			maxReadFileLine,
@@ -1513,20 +1424,8 @@ export class Task extends EventEmitter<TaskEvents> {
 
 		// Add environment details as its own text block, separate from tool
 		// results.
-		let userExecuteCommandResult: string | undefined = undefined
-		if (this.postprocess._execute_command) {
-			const cmd = this.postprocess._execute_command
-			this.postprocess._execute_command = undefined
-			userExecuteCommandResult = await userExecuteCommand(this, cmd)
-		}
+		const finalUserContent = [...parsedUserContent, { type: "text" as const, text: environmentDetails }]
 
-		const finalUserContent = [
-			...parsedUserContent, 
-			...(userExecuteCommandResult !== undefined ? [{ type: "text" as const, text: `User called the command in the task above in the local terminal, and the terminal displayed the following results (the results are in the <user_execute_command_result></user_execute_command_result> tag):\n<user_execute_command_result>\n${userExecuteCommandResult}\n</user_execute_command_result>` }] : []),
-			...(this.parentTask && includeFileDetails ? [{ type: "text" as const, text: "- IMPORTANT: **SUBTASK RULES** - When you complete your tasks and finally call the \`attempt_completion\` tool for summarization, you MUST describe in more detail all the tasks you completed and the conclusions you reached." }] : []), 
-			{ type: "text" as const, text: environmentDetails },
-		]
-		
 		await this.addToApiConversationHistory({ role: "user", content: finalUserContent })
 		TelemetryService.instance.captureConversationMessage(this.taskId, "user")
 
@@ -1550,8 +1449,6 @@ export class Task extends EventEmitter<TaskEvents> {
 			let inputTokens = 0
 			let outputTokens = 0
 			let totalCost: number | undefined
-			let tps: number = 0
-			let latency: number = 0
 
 			// We can't use `api_req_finished` anymore since it's a unique case
 			// where it could come after a streaming message (i.e. in the middle
@@ -1568,8 +1465,6 @@ export class Task extends EventEmitter<TaskEvents> {
 					tokensOut: outputTokens,
 					cacheWrites: cacheWriteTokens,
 					cacheReads: cacheReadTokens,
-					tps: tps ?? 0, // tokens per second
-					latency: latency ?? 0, // latency in milliseconds
 					cost:
 						totalCost ??
 						calculateApiCostAnthropic(
@@ -1666,8 +1561,6 @@ export class Task extends EventEmitter<TaskEvents> {
 							outputTokens += chunk.outputTokens
 							cacheWriteTokens += chunk.cacheWriteTokens ?? 0
 							cacheReadTokens += chunk.cacheReadTokens ?? 0
-							latency += chunk.latency ?? 0
-							tps = chunk.tps ?? 0
 							totalCost = chunk.totalCost
 							break
 						case "text": {
@@ -2075,22 +1968,6 @@ export class Task extends EventEmitter<TaskEvents> {
 			({ role, content }) => ({ role, content }),
 		)
 
-		const userSuggestions = await getUserSuggestions(this)
-		
-		// 如果cleanConversationHistory最后一个对话角色是user，且是一个数组，且userSuggestions不是undefined，
-		// 则把userSuggestions加入数组的最后一个，属性是text
-		if (cleanConversationHistory.length > 0) {
-			const lastMessage = cleanConversationHistory[cleanConversationHistory.length - 1]
-			if (lastMessage.role === "user" && Array.isArray(lastMessage.content)) {
-				if (userSuggestions !== undefined) {
-					lastMessage.content.push({
-						type: "text",
-						text: `<user_suggestions>\n${userSuggestions}\nThis is just a gentle reminder - ignore if not applicable.\n</user_suggestions>`
-					})
-				}
-			}
-		}
-
 		// Check if we've reached the maximum number of auto-approved requests
 		const maxRequests = state?.allowedMaxRequests || Infinity
 
@@ -2237,7 +2114,7 @@ export class Task extends EventEmitter<TaskEvents> {
 		if (!this.toolUsage[toolName]) {
 			this.toolUsage[toolName] = { attempts: 0, failures: 0 }
 		}
-		this.toolSequence.push(toolName);
+
 		this.toolUsage[toolName].attempts++
 	}
 
@@ -2245,6 +2122,7 @@ export class Task extends EventEmitter<TaskEvents> {
 		if (!this.toolUsage[toolName]) {
 			this.toolUsage[toolName] = { attempts: 0, failures: 0 }
 		}
+
 		this.toolUsage[toolName].failures++
 
 		if (error) {

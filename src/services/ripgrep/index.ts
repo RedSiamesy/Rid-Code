@@ -6,9 +6,6 @@ import * as vscode from "vscode"
 
 import { RooIgnoreController } from "../../core/ignore/RooIgnoreController"
 import { fileExistsAtPath } from "../../utils/fs"
-
-// Output mode enum
-export type OutputMode = "content" | "files_with_matches"
 /*
 This file provides functionality to perform regex searches on files using ripgrep.
 Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils
@@ -31,8 +28,6 @@ The search results include:
 
 Usage example:
 const results = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
-// Or with files_with_matches mode (uses -l flag, returns plain text file paths):
-const filesOnly = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts', undefined, 'files_with_matches');
 
 rel/path/to/app.ts
 │----
@@ -101,7 +96,7 @@ export async function getBinPath(vscodeAppRoot: string): Promise<string | undefi
 	)
 }
 
-async function execRipgrep(bin: string, args: string[], mode:string): Promise<string> {
+async function execRipgrep(bin: string, args: string[]): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const rgProcess = childProcess.spawn(bin, args)
 		// cross-platform alternative to head, which is ripgrep author's recommendation for limiting output.
@@ -112,7 +107,7 @@ async function execRipgrep(bin: string, args: string[], mode:string): Promise<st
 
 		let output = ""
 		let lineCount = 0
-		const maxLines = MAX_RESULTS * (mode === "content" ? 5 : 1) // limiting ripgrep output with max lines since there's no other way to limit results. it's okay that we're outputting as json, since we're parsing it line by line and ignore anything that's not part of a match. This assumes each result is at most 5 lines.
+		const maxLines = MAX_RESULTS * 5 // limiting ripgrep output with max lines since there's no other way to limit results. it's okay that we're outputting as json, since we're parsing it line by line and ignore anything that's not part of a match. This assumes each result is at most 5 lines.
 
 		rl.on("line", (line) => {
 			if (lineCount < maxLines) {
@@ -147,7 +142,6 @@ export async function regexSearchFiles(
 	regex: string,
 	filePattern?: string,
 	rooIgnoreController?: RooIgnoreController,
-	outputMode: OutputMode = "content",
 ): Promise<string> {
 	const vscodeAppRoot = vscode.env.appRoot
 	const rgPath = await getBinPath(vscodeAppRoot)
@@ -156,99 +150,65 @@ export async function regexSearchFiles(
 		throw new Error("Could not find ripgrep binary")
 	}
 
-	// Adjust args based on output mode
-	const args = outputMode === "files_with_matches"
-		? ["-l", "-e", regex, "--glob", filePattern || "*", directoryPath]
-		: ["--json", "-e", regex, "--glob", filePattern || "*", "--context", "1", directoryPath]
+	const args = ["--json", "-e", regex, "--glob", filePattern || "*", "--context", "1", directoryPath]
 
 	let output: string
 	try {
-		output = await execRipgrep(rgPath, args, outputMode)
+		output = await execRipgrep(rgPath, args)
 	} catch (error) {
 		console.error("Error executing ripgrep:", error)
 		return "No results found"
 	}
 
-	try {
-		if (((outputMode === "files_with_matches" && !output) || (outputMode === "content" && output.split("\n").length < 3)) && filePattern?.includes(",")) {
-			let outs:any[] = []
-			const _filePattern = filePattern?.split(",")
-			_filePattern.forEach((pattern) => {
-				const args = outputMode === "files_with_matches"
-					? ["-l", "-e", regex, "--glob", pattern.trim(), directoryPath]
-					: ["--json", "-e", regex, "--glob", pattern.trim(), "--context", "1", directoryPath]
-				outs.push(execRipgrep(rgPath, args, outputMode))
-			})
-			output = (await Promise.all(outs)).join("\n")
-		}
-	} catch (error) {
-		output = ""
-	}
-
 	const results: SearchFileResult[] = []
 	let currentFile: SearchFileResult | null = null
 
-	// Handle files_with_matches mode differently - ripgrep with -l outputs plain text file paths
-	if (outputMode === "files_with_matches") {
-		// Parse plain text output (one file path per line)
-		output.split("\n").forEach((line) => {
-			const trimmedLine = line.trim()
-			if (trimmedLine) {
-				results.push({
-					file: trimmedLine,
-					searchResults: [], // Empty for files_with_matches mode
-				})
-			}
-		})
-	} else {
-		// Original content mode logic - parse JSON output
-		output.split("\n").forEach((line) => {
-			if (line) {
-				try {
-					const parsed = JSON.parse(line)
-					if (parsed.type === "begin") {
-						currentFile = {
-							file: parsed.data.path.text.toString(),
-							searchResults: [],
-						}
-					} else if (parsed.type === "end") {
-						// Reset the current result when a new file is encountered
-						results.push(currentFile as SearchFileResult)
-						currentFile = null
-					} else if ((parsed.type === "match" || parsed.type === "context") && currentFile) {
-						const line = {
-							line: parsed.data.line_number,
-							text: truncateLine(parsed.data.lines.text),
-							isMatch: parsed.type === "match",
-							...(parsed.type === "match" && { column: parsed.data.absolute_offset }),
-						}
+	output.split("\n").forEach((line) => {
+		if (line) {
+			try {
+				const parsed = JSON.parse(line)
+				if (parsed.type === "begin") {
+					currentFile = {
+						file: parsed.data.path.text.toString(),
+						searchResults: [],
+					}
+				} else if (parsed.type === "end") {
+					// Reset the current result when a new file is encountered
+					results.push(currentFile as SearchFileResult)
+					currentFile = null
+				} else if ((parsed.type === "match" || parsed.type === "context") && currentFile) {
+					const line = {
+						line: parsed.data.line_number,
+						text: truncateLine(parsed.data.lines.text),
+						isMatch: parsed.type === "match",
+						...(parsed.type === "match" && { column: parsed.data.absolute_offset }),
+					}
 
-						const lastResult = currentFile.searchResults[currentFile.searchResults.length - 1]
-						if (lastResult?.lines.length > 0) {
-							const lastLine = lastResult.lines[lastResult.lines.length - 1]
+					const lastResult = currentFile.searchResults[currentFile.searchResults.length - 1]
+					if (lastResult?.lines.length > 0) {
+						const lastLine = lastResult.lines[lastResult.lines.length - 1]
 
-							// If this line is contiguous with the last result, add to it
-							if (parsed.data.line_number <= lastLine.line + 1) {
-								lastResult.lines.push(line)
-							} else {
-								// Otherwise create a new result
-								currentFile.searchResults.push({
-									lines: [line],
-								})
-							}
+						// If this line is contiguous with the last result, add to it
+						if (parsed.data.line_number <= lastLine.line + 1) {
+							lastResult.lines.push(line)
 						} else {
-							// First line in file
+							// Otherwise create a new result
 							currentFile.searchResults.push({
 								lines: [line],
 							})
 						}
+					} else {
+						// First line in file
+						currentFile.searchResults.push({
+							lines: [line],
+						})
 					}
-				} catch (error) {
-					console.error("Error parsing ripgrep output:", error)
 				}
+			} catch (error) {
+				console.error("Error parsing ripgrep output:", error)
 			}
-		})
-	}
+		}
+	})
 
 	// console.log(results)
 
@@ -257,39 +217,18 @@ export async function regexSearchFiles(
 		? results.filter((result) => rooIgnoreController.validateAccess(result.file))
 		: results
 
-	return formatResults(filteredResults, cwd, outputMode)
+	return formatResults(filteredResults, cwd)
 }
 
-function formatResults(fileResults: SearchFileResult[], cwd: string, outputMode: OutputMode = "content"): string {
-	// Handle files_with_matches mode
-	if (outputMode === "files_with_matches") {
-		let output = ""
-		const totalFiles = fileResults.length
-		
-		if (totalFiles >= MAX_RESULTS) {
-			output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ files with matches. **You should use a more specific search, or switch to multiple SMALLER DIRECTORY SCOPES to searching separately. Do not give up on the search, as it may lead to the loss of relevant contextual information.**\n\n`
-		} else {
-			output += `Found ${totalFiles === 1 ? "1 file" : `${totalFiles.toLocaleString()} files`} with matches${totalFiles === 0 ? ". You should try switching the search scope or changing the search content." : ''}.\n\n`
-		}
-
-		// List files only
-		fileResults.slice(0, MAX_RESULTS).forEach((file) => {
-			const relativeFilePath = path.relative(cwd, file.file)
-			output += `${relativeFilePath.toPosix()}\n`
-		})
-
-		return output.trim()
-	}
-
-	// Original content mode logic
+function formatResults(fileResults: SearchFileResult[], cwd: string): string {
 	const groupedResults: { [key: string]: SearchResult[] } = {}
 
 	let totalResults = fileResults.reduce((sum, file) => sum + file.searchResults.length, 0)
 	let output = ""
 	if (totalResults >= MAX_RESULTS) {
-		output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ results. **You should use a more specific search, or switch to multiple SMALLER DIRECTORY SCOPES to searching separately. Do not give up on the search, as it may lead to the loss of relevant contextual information.**\n\n`
+		output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ results. Use a more specific search if necessary.\n\n`
 	} else {
-		output += `Found ${totalResults === 1 ? "1 result" : `${totalResults.toLocaleString()} results${totalResults === 0 ? ". You should try switching the search scope or changing the search content." : ''}`}.\n\n`
+		output += `Found ${totalResults === 1 ? "1 result" : `${totalResults.toLocaleString()} results`}.\n\n`
 	}
 
 	// Group results by file name

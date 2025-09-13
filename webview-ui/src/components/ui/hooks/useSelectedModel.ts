@@ -8,8 +8,6 @@ import {
 	bedrockModels,
 	deepSeekDefaultModelId,
 	deepSeekModels,
-	modelScopeDefaultModelId,
-	modelScopeModels,
 	moonshotDefaultModelId,
 	moonshotModels,
 	geminiDefaultModelId,
@@ -64,7 +62,7 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 					routerModels: routerModels.data,
 					openRouterModelProviders: openRouterModelProviders.data,
 				})
-			: { id: "__undefined__", info: undefined }
+			: { id: anthropicDefaultModelId, info: undefined }
 
 	return {
 		provider,
@@ -178,11 +176,6 @@ function getSelectedModel({
 		case "deepseek": {
 			const id = apiConfiguration.apiModelId ?? deepSeekDefaultModelId
 			const info = deepSeekModels[id as keyof typeof deepSeekModels]
-			return { id, info }
-		}
-		case "modelscope": {
-			const id = apiConfiguration.apiModelId ?? modelScopeDefaultModelId
-			const info = modelScopeModels[id as keyof typeof modelScopeModels]
 			return { id, info }
 		}
 		case "doubao": {

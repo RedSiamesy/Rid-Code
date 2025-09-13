@@ -60,6 +60,7 @@ async function generatePrompt(
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
 ): Promise<string> {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -80,20 +81,17 @@ async function generatePrompt(
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
 		shouldIncludeMcp
-			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation, mode)
+			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
 			: Promise.resolve(""),
 	])
 
 	const codeIndexManager = CodeIndexManager.getInstance(context)
 
-	// Extract allowedMultiCall from experiments
-	const allowedMultiCall = experiments?.allowedMultiCall ?? false
-
 	const basePrompt = `${roleDefinition}
 
 ${markdownFormattingSection()}
 
-${getSharedToolUseSection(allowedMultiCall)}
+${getSharedToolUseSection()}
 
 ${getToolDescriptionsForMode(
 	mode,
@@ -109,19 +107,19 @@ ${getToolDescriptionsForMode(
 	settings,
 )}
 
-${true?"":getToolUseGuidelinesSection(codeIndexManager)}
+${getToolUseGuidelinesSection(codeIndexManager)}
 
 ${mcpServersSection}
 
-${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
 
 ${modesSection}
 
-${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
+${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager)}
 
 ${getSystemInfoSection(cwd)}
 
-${true?"":getObjectiveSection(codeIndexManager, experiments)}
+${getObjectiveSection(codeIndexManager, experiments)}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(vscode.env.language),
@@ -150,6 +148,7 @@ export const SYSTEM_PROMPT = async (
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
 ): Promise<string> => {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -170,29 +169,6 @@ export const SYSTEM_PROMPT = async (
 
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
-
-	if (mode === "native") {
-		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
-			mode,
-			promptComponent,
-			customModes,
-		)
-		const customInstructions = await addCustomInstructions(
-			baseInstructionsForFile,
-			globalCustomInstructions || "",
-			cwd,
-			mode,
-			{
-				language: language ?? formatLanguage(vscode.env.language),
-				rooIgnoreInstructions,
-				settings,
-			},
-		)
-
-		return `${roleDefinition}
-
-${customInstructions}`
-	}
 
 	// If a file-based custom system prompt exists, use it
 	if (fileCustomSystemPrompt) {
@@ -243,5 +219,6 @@ ${customInstructions}`
 		rooIgnoreInstructions,
 		partialReadsEnabled,
 		settings,
+		todoList,
 	)
 }

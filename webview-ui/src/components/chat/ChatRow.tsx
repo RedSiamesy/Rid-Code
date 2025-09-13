@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { appendImages } from "@src/utils/imageUtils"
 import { McpExecution } from "./McpExecution"
-import { ToolExecution } from "./ToolExecution"
 import { useSize } from "react-use"
 import { useTranslation, Trans } from "react-i18next"
 import deepEqual from "fast-deep-equal"
@@ -46,7 +45,6 @@ import { CommandExecution } from "./CommandExecution"
 import { CommandExecutionError } from "./CommandExecutionError"
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
 import { CondenseContextErrorRow, CondensingContextRow, ContextCondenseRow } from "./ContextCondenseRow"
-import { SaveMemoryErrorRow, SavingMemoryRow, SaveMemoryRow } from "./saveMemoryRow-rid"
 import CodebaseSearchResultsDisplay from "./CodebaseSearchResultsDisplay"
 
 interface ChatRowProps {
@@ -125,7 +123,7 @@ export const ChatRowContent = ({
 	const [editMode, setEditMode] = useState<Mode>(mode || "code")
 	const [editImages, setEditImages] = useState<string[]>([])
 	const { copyWithFeedback } = useCopyToClipboard()
-	
+
 	// Handle message events for image selection during edit mode
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
@@ -179,22 +177,14 @@ export const ChatRowContent = ({
 		vscode.postMessage({ type: "selectImages", context: "edit", messageTs: message.ts })
 	}, [message.ts])
 
-	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage, tps, latency] = useMemo(() => {
+	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
 		if (message.text !== null && message.text !== undefined && message.say === "api_req_started") {
 			const info = safeJsonParse<ClineApiReqInfo>(message.text)
-			return [info?.cost, info?.cancelReason, info?.streamingFailedMessage, info?.tps, info?.latency]
+			return [info?.cost, info?.cancelReason, info?.streamingFailedMessage]
 		}
 
-		return [undefined, undefined, undefined, undefined, undefined]
+		return [undefined, undefined, undefined]
 	}, [message.text, message.say])
-
-
-
-	console.log(`lastModifiedMessage.ask = ${lastModifiedMessage?.ask || ''}, 
-		Message.ask = ${message.ask}
-		tps = ${tps}
-		cost = ${cost}`)
-	
 
 	// When resuming task, last wont be api_req_failed but a resume_task
 	// message, so api_req_started will show loading spinner. That's why we just
@@ -269,20 +259,6 @@ export const ChatRowContent = ({
 						style={{ color: successColor, marginBottom: "-1.5px" }}></span>,
 					<span style={{ color: successColor, fontWeight: "bold" }}>{t("chat:taskCompleted")}</span>,
 				]
-			case "user_feedback":
-				return [
-					<span
-						className="codicon codicon-account"
-						style={{ color: "var(--vscode-charts-blue)", marginBottom: "-1.5px" }}></span>,
-					<span style={{ color: "var(--vscode-charts-blue)", fontWeight: "bold" }}>{"用户反馈"}</span>,
-				]
-			case "save_memory_tag":
-				return [
-					<span
-						className="codicon codicon-save"
-						style={{ color: "#00a3af44", marginBottom: "-1.5px" }}></span>,
-					<span style={{  color: "#00a3af77", fontWeight: "bold" }}>{"记忆说明"}</span>,
-				]
 			case "api_req_retry_delayed":
 				return []
 			case "api_req_started":
@@ -340,32 +316,6 @@ export const ChatRowContent = ({
 						style={{ color: normalColor, marginBottom: "-1.5px" }}
 					/>,
 					<span style={{ color: normalColor, fontWeight: "bold" }}>{t("chat:questions.hasQuestion")}</span>,
-				]
-			case "web_search":
-				return [
-					isMcpServerResponding ? (
-						<ProgressIndicator />
-					) : (
-						<span
-							className="codicon codicon-search"
-							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
-					),
-					<span style={{ color: normalColor, fontWeight: "bold" }}>
-						{isMcpServerResponding ? "网络搜索" : "网络搜索完成"}
-					</span>,
-				]
-			case "url_fetch":
-				return [
-					isMcpServerResponding ? (
-						<ProgressIndicator />
-					) : (
-						<span
-							className="codicon codicon-globe"
-							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
-					),
-					<span style={{ color: normalColor, fontWeight: "bold" }}>
-						{isMcpServerResponding ? "URL内容分析" : "URL内容分析完成"}
-					</span>,
 				]
 			default:
 				return [null, null]
@@ -1022,8 +972,6 @@ export const ChatRowContent = ({
 									style={{
 										padding: "12px 16px",
 										backgroundColor: "var(--vscode-editor-background)",
-										maxHeight: "360px",
-										overflowY: "auto",
 									}}>
 									<MarkdownBlock markdown={message.text} />
 								</div>
@@ -1064,14 +1012,6 @@ export const ChatRowContent = ({
 									<VSCodeBadge
 										style={{ opacity: cost !== null && cost !== undefined && cost > 0 ? 1 : 0 }}>
 										${Number(cost || 0)?.toFixed(4)}
-									</VSCodeBadge>
-									<VSCodeBadge
-										style={{ opacity: tps !== null && tps !== undefined && tps > 0 ? 1 : 0 }}>
-										{Number(tps || 0).toFixed(1)} tokens/s
-									</VSCodeBadge>
-									<VSCodeBadge
-										style={{ opacity: latency !== null && latency !== undefined && latency > 0 ? 1 : 0 }}>
-										{Number(latency || 0)} ms
 									</VSCodeBadge>
 								</div>
 								<span className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}></span>
@@ -1120,30 +1060,59 @@ export const ChatRowContent = ({
 					)
 				case "user_feedback":
 					return (
-						// <div className="bg-vscode-editor-background border rounded-xs p-1 overflow-hidden whitespace-pre-wrap">
-						<div>
-							<div style={headerStyle}>
-								{icon}
-								{title}
-							</div>
-							<div className="flex justify-between">
-								<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "var(--vscode-charts-blue)" , paddingTop: 10 }}>
-									{/* <Mention text={message.text} withShadow /> */}
-									<Markdown markdown={message.text} partial={message.partial} />
+						<div className="bg-vscode-editor-background border rounded-xs p-1 overflow-hidden whitespace-pre-wrap">
+							{isEditing ? (
+								<div className="flex flex-col gap-2 p-2">
+									<ChatTextArea
+										inputValue={editedContent}
+										setInputValue={setEditedContent}
+										sendingDisabled={false}
+										selectApiConfigDisabled={true}
+										placeholderText={t("chat:editMessage.placeholder")}
+										selectedImages={editImages}
+										setSelectedImages={setEditImages}
+										onSend={handleSaveEdit}
+										onSelectImages={handleSelectImages}
+										shouldDisableImages={false}
+										mode={editMode}
+										setMode={setEditMode}
+										modeShortcutText=""
+										isEditMode={true}
+										onCancel={handleCancelEdit}
+									/>
 								</div>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="shrink-0"
-									disabled={isStreaming}
-									onClick={(e) => {
-										e.stopPropagation()
-										vscode.postMessage({ type: "deleteMessage", value: message.ts })
-									}}>
-									<span className="codicon codicon-trash" />
-								</Button>
-							</div>
-							{message.images && message.images.length > 0 && (
+							) : (
+								<div className="flex justify-between">
+									<div className="flex-grow px-2 py-1 wrap-anywhere">
+										<Mention text={message.text} withShadow />
+									</div>
+									<div className="flex">
+										<Button
+											variant="ghost"
+											size="icon"
+											className="shrink-0 hidden"
+											disabled={isStreaming}
+											onClick={(e) => {
+												e.stopPropagation()
+												handleEditClick()
+											}}>
+											<span className="codicon codicon-edit" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="shrink-0"
+											disabled={isStreaming}
+											onClick={(e) => {
+												e.stopPropagation()
+												vscode.postMessage({ type: "deleteMessage", value: message.ts })
+											}}>
+											<span className="codicon codicon-trash" />
+										</Button>
+									</div>
+								</div>
+							)}
+							{!isEditing && message.images && message.images.length > 0 && (
 								<Thumbnails images={message.images} style={{ marginTop: "8px" }} />
 							)}
 						</div>
@@ -1196,25 +1165,6 @@ export const ChatRowContent = ({
 							checkpoint={message.checkpoint}
 						/>
 					)
-				case "save_memory":
-					if (message.partial) {
-						return <SavingMemoryRow />
-					}
-					return message.contextCondense ? <SaveMemoryRow {...message.contextCondense} /> : null
-				case "save_memory_error":
-					return <SaveMemoryErrorRow errorText={message.text} />
-				case "save_memory_tag":
-					return (<div>
-						<div style={headerStyle}>
-							{icon}
-							{title}
-						</div>
-						<div className="flex justify-between">
-							<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "#00a3af77" , paddingTop: 10 }}>
-								<Markdown markdown={message.text} partial={message.partial} />
-							</div>
-						</div>
-					</div>)
 				case "condense_context":
 					if (message.partial) {
 						return <CondensingContextRow />
@@ -1391,84 +1341,6 @@ export const ChatRowContent = ({
 				case "auto_approval_max_req_reached": {
 					return <AutoApprovedRequestLimitWarning message={message} />
 				}
-				case "web_search":
-					// Parse the message text to get the web search request
-					const webSearchJson = safeJsonParse<any>(message.text, {})
-
-					// Extract the response field if it exists
-					const { response: webSearchResponse, ...webSearchRequest } = webSearchJson
-
-					// Create the webSearch object with the response field
-					const webSearch = {
-						...webSearchRequest,
-						response: webSearchResponse,
-					}
-
-					const webSearchParameters = [
-						{
-							name: "query",
-							value: webSearch.query || "",
-							label: "搜索查询",
-						},
-					]
-
-					return (
-						<>
-							<div style={headerStyle}>
-								{icon}
-								{title}
-							</div>
-							<ToolExecution
-								executionId={message.ts.toString()}
-								toolName="web_search"
-								toolDisplayName="搜索列表"
-								parameters={webSearchParameters}
-								response={webSearch.response}
-								isPartial={message.partial}
-								status={webSearch.status}
-								error={webSearch.error}
-							/>
-						</>
-					)
-				case "url_fetch":
-					// Parse the message text to get the url fetch request
-					const urlFetchJson = safeJsonParse<any>(message.text, {})
-
-					// Extract the response field if it exists
-					const { response: urlFetchResponse, ...urlFetchRequest } = urlFetchJson
-
-					// Create the urlFetch object with the response field
-					const urlFetch = {
-						...urlFetchRequest,
-						response: urlFetchResponse,
-					}
-
-					const urlFetchParameters = [
-						{
-							name: "url",
-							value: urlFetch.url || "",
-							label: "URL地址",
-						},
-					]
-
-					return (
-						<>
-							<div style={headerStyle}>
-								{icon}
-								{title}
-							</div>
-							<ToolExecution
-								executionId={message.ts.toString()}
-								toolName="url_fetch"
-								toolDisplayName="内容列表"
-								parameters={urlFetchParameters}
-								response={urlFetch.response}
-								isPartial={message.partial}
-								status={urlFetch.status}
-								error={urlFetch.error}
-							/>
-						</>
-					)
 				default:
 					return null
 			}

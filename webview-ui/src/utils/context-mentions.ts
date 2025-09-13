@@ -228,7 +228,6 @@ export function getContextMenuOptions(
 			const files = queryItems
 				.filter(
 					(item) =>
-						// item.type === ContextMenuOptionType.OpenedFile,
 						item.type === ContextMenuOptionType.File || item.type === ContextMenuOptionType.OpenedFile,
 				)
 				.map((item) => ({
@@ -250,21 +249,13 @@ export function getContextMenuOptions(
 			return commits.length > 0 ? [workingChanges, ...commits] : [workingChanges]
 		}
 
-		// return [
-		// 	{ type: ContextMenuOptionType.Problems },
-		// 	{ type: ContextMenuOptionType.Terminal },
-		// 	{ type: ContextMenuOptionType.URL },
-		// 	{ type: ContextMenuOptionType.Folder },
-		// 	{ type: ContextMenuOptionType.File },
-		// 	{ type: ContextMenuOptionType.Git },
-		// ]
 		return [
-			// { type: ContextMenuOptionType.URL },
-			{ type: ContextMenuOptionType.Git },
 			{ type: ContextMenuOptionType.Problems },
 			{ type: ContextMenuOptionType.Terminal },
-			// { type: ContextMenuOptionType.Folder },
+			{ type: ContextMenuOptionType.URL },
+			{ type: ContextMenuOptionType.Folder },
 			{ type: ContextMenuOptionType.File },
+			{ type: ContextMenuOptionType.Git },
 		]
 	}
 

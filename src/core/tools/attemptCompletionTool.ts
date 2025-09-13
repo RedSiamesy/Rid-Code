@@ -98,11 +98,9 @@ export async function attemptCompletionTool(
 				if (!didApprove) {
 					return
 				}
-				
-				const summary = await cline.summarizeSubTaskContext()
 
 				// tell the provider to remove the current subtask and resume the previous task in the stack
-				await cline.providerRef.deref()?.finishSubTask(`## Result \n${result} \n\n## Summary  \n${summary}\n\n`)
+				await cline.providerRef.deref()?.finishSubTask(result)
 				return
 			}
 

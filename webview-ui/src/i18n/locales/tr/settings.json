@@ -678,10 +678,6 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Arka plan düzenleme",
 			"description": "Etkinleştirildiğinde editör odak kesintisini önler. Dosya düzenlemeleri diff görünümlerini açmadan veya odağı çalmadan arka planda gerçekleşir. Roo değişiklikler yaparken kesintisiz çalışmaya devam edebilirsiniz. Dosyalar tanılamayı yakalamak için odaksız açılabilir veya tamamen kapalı kalabilir."
-		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "Mesaj başına birden fazla araç çağrısına izin ver",
-			"description": "Etkinleştirildiğinde, Roo tek bir mesajda birden fazla aracı kullanabilir. Devre dışı bırakıldığında, Roo mesaj başına bir araç kullanmak zorundadır. Bunun etkinleştirilmesi etkileşimleri hızlandırabilir, ancak bazı modellerde beklenmeyen davranışlara neden olabilir."
 		}
 	},
 	"promptCaching": {

@@ -26,6 +26,4 @@ export interface ApiStreamUsageChunk {
 	cacheReadTokens?: number
 	reasoningTokens?: number
 	totalCost?: number
-	tps?: number // tokens per second
-	latency?: number // optional latency in milliseconds
 }

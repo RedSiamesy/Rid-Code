@@ -211,15 +211,9 @@ const OutputContainerInternal = ({ isExpanded, output }: { isExpanded: boolean; 
 	<div
 		className={cn("overflow-hidden", {
 			"max-h-0": !isExpanded,
-			"mt-1 pt-1 border-t border-border/25": isExpanded,
+			"max-h-[100%] mt-1 pt-1 border-t border-border/25": isExpanded,
 		})}>
-		{output.length > 0 && (
-			<CodeBlock 
-				source={output} 
-				language="log" 
-				preStyle={{ overflowY: 'auto', maxHeight: '300px' }}
-			/>
-		)}
+		{output.length > 0 && <CodeBlock source={output} language="log" />}
 	</div>
 )
 

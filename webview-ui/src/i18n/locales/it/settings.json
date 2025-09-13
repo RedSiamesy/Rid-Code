@@ -678,10 +678,6 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Modifica in background",
 			"description": "Previene l'interruzione del focus dell'editor quando abilitato. Le modifiche ai file avvengono in background senza aprire viste di differenze o rubare il focus. Puoi continuare a lavorare senza interruzioni mentre Roo effettua modifiche. I file possono essere aperti senza focus per catturare diagnostiche o rimanere completamente chiusi."
-		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "Consenti chiamate multiple di strumenti per messaggio",
-			"description": "Quando abilitato, Roo può utilizzare più strumenti in un unico messaggio. Quando disabilitato, Roo deve utilizzare uno strumento per messaggio. Abilitare questa opzione può rendere le interazioni più veloci, ma può causare comportamenti imprevisti con alcuni modelli."
 		}
 	},
 	"promptCaching": {

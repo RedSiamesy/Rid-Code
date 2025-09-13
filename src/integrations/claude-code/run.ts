@@ -97,7 +97,7 @@ const claudeCodeTools = [
 	"Grep",
 	"LS",
 	"exit_plan_mode",
-	,
+	"Read",
 	"Edit",
 	"MultiEdit",
 	"Write",
