@@ -13,12 +13,13 @@ import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFile } from "../../integrations/misc/extract-text"
 import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
 
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { getCommand } from "../../services/command/commands"
+import { Task } from "../task/Task"
 
 import { t } from "../../i18n"
 
@@ -45,6 +46,7 @@ function getUrlErrorMessage(error: unknown): string {
 	// Default error message
 	return t("common:errors.url_fetch_failed", { error: errorMessage })
 }
+
 
 export async function openMention(mention?: string): Promise<void> {
 	if (!mention) {
@@ -84,6 +86,7 @@ export async function parseMentions(
 	includeDiagnosticMessages: boolean = true,
 	maxDiagnosticMessages: number = 50,
 	maxReadFileLine?: number,
+	globalStoragePath?: string,
 ): Promise<string> {
 	const mentions: Set<string> = new Set()
 	const commandMentions: Set<string> = new Set()
@@ -215,8 +218,8 @@ export async function parseMentions(
 
 	// Process command mentions
 	for (const commandName of commandMentions) {
-		try {
-			const command = await getCommand(cwd, commandName)
+				try {
+					const command = await getCommand(cwd, commandName)
 			if (command) {
 				let commandOutput = ""
 				if (command.description) {

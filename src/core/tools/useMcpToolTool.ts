@@ -4,6 +4,7 @@ import { formatResponse } from "../prompts/responses"
 import { ClineAskUseMcpServer } from "../../shared/ExtensionMessage"
 import { McpExecutionStatus } from "@roo-code/types"
 import { t } from "../../i18n"
+import { McpToolCallResponse } from "../../shared/mcp"
 
 interface McpToolParams {
 	server_name?: string
@@ -127,7 +128,9 @@ async function executeToolAndProcessResult(
 		toolName,
 	})
 
-	const toolResult = await cline.providerRef.deref()?.getMcpHub()?.callTool(serverName, toolName, parsedArguments)
+	let toolResult: McpToolCallResponse | undefined = undefined
+	// Removed inline tools - now use dedicated tools
+	toolResult = await cline.providerRef.deref()?.getMcpHub()?.callTool(serverName, toolName, parsedArguments)
 
 	let toolResultPretty = "(No response)"
 

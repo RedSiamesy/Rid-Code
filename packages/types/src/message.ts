@@ -38,6 +38,8 @@ export const clineAsks = [
 	"browser_action_launch",
 	"use_mcp_server",
 	"auto_approval_max_req_reached",
+	"web_search",
+	"url_fetch",
 ] as const
 
 export const clineAskSchema = z.enum(clineAsks)
@@ -80,6 +82,7 @@ export type ClineAsk = z.infer<typeof clineAskSchema>
  * - `condense_context`: Context condensation/summarization has started
  * - `condense_context_error`: Error occurred during context condensation
  * - `codebase_search_result`: Results from searching the codebase
+ * - `cost_tracking`: Message type for tracking operation costs
  */
 export const clineSays = [
 	"error",
@@ -106,7 +109,11 @@ export const clineSays = [
 	"condense_context",
 	"condense_context_error",
 	"codebase_search_result",
+	"save_memory",
+	"save_memory_error",
+	"save_memory_tag",
 	"user_edit_todos",
+	"cost_tracking",
 ] as const
 
 export const clineSaySchema = z.enum(clineSays)

@@ -572,48 +572,48 @@ export class ClineProvider
 	public async initClineWithHistoryItem(historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task }) {
 		await this.removeClineFromStack()
 
-		// If the history item has a saved mode, restore it and its associated API configuration
-		if (historyItem.mode) {
-			// Validate that the mode still exists
-			const customModes = await this.customModesManager.getCustomModes()
-			const modeExists = getModeBySlug(historyItem.mode, customModes) !== undefined
+		// // If the history item has a saved mode, restore it and its associated API configuration
+		// if (historyItem.mode) {
+		// 	// Validate that the mode still exists
+		// 	const customModes = await this.customModesManager.getCustomModes()
+		// 	const modeExists = getModeBySlug(historyItem.mode, customModes) !== undefined
 
-			if (!modeExists) {
-				// Mode no longer exists, fall back to default mode
-				this.log(
-					`Mode '${historyItem.mode}' from history no longer exists. Falling back to default mode '${defaultModeSlug}'.`,
-				)
-				historyItem.mode = defaultModeSlug
-			}
+		// 	if (!modeExists) {
+		// 		// Mode no longer exists, fall back to default mode
+		// 		this.log(
+		// 			`Mode '${historyItem.mode}' from history no longer exists. Falling back to default mode '${defaultModeSlug}'.`,
+		// 		)
+		// 		historyItem.mode = defaultModeSlug
+		// 	}
 
-			await this.updateGlobalState("mode", historyItem.mode)
+		// 	await this.updateGlobalState("mode", historyItem.mode)
 
-			// Load the saved API config for the restored mode if it exists
-			const savedConfigId = await this.providerSettingsManager.getModeConfigId(historyItem.mode)
-			const listApiConfig = await this.providerSettingsManager.listConfig()
+		// 	// Load the saved API config for the restored mode if it exists
+		// 	const savedConfigId = await this.providerSettingsManager.getModeConfigId(historyItem.mode)
+		// 	const listApiConfig = await this.providerSettingsManager.listConfig()
 
-			// Update listApiConfigMeta first to ensure UI has latest data
-			await this.updateGlobalState("listApiConfigMeta", listApiConfig)
+		// 	// Update listApiConfigMeta first to ensure UI has latest data
+		// 	await this.updateGlobalState("listApiConfigMeta", listApiConfig)
 
-			// If this mode has a saved config, use it
-			if (savedConfigId) {
-				const profile = listApiConfig.find(({ id }) => id === savedConfigId)
+		// 	// If this mode has a saved config, use it
+		// 	if (savedConfigId) {
+		// 		const profile = listApiConfig.find(({ id }) => id === savedConfigId)
 
-				if (profile?.name) {
-					try {
-						await this.activateProviderProfile({ name: profile.name })
-					} catch (error) {
-						// Log the error but continue with task restoration
-						this.log(
-							`Failed to restore API configuration for mode '${historyItem.mode}': ${
-								error instanceof Error ? error.message : String(error)
-							}. Continuing with default configuration.`,
-						)
-						// The task will continue with the current/default configuration
-					}
-				}
-			}
-		}
+		// 		if (profile?.name) {
+		// 			try {
+		// 				await this.activateProviderProfile({ name: profile.name })
+		// 			} catch (error) {
+		// 				// Log the error but continue with task restoration
+		// 				this.log(
+		// 					`Failed to restore API configuration for mode '${historyItem.mode}': ${
+		// 						error instanceof Error ? error.message : String(error)
+		// 					}. Continuing with default configuration.`,
+		// 				)
+		// 				// The task will continue with the current/default configuration
+		// 			}
+		// 		}
+		// 	}
+		// }
 
 		const {
 			apiConfiguration,
@@ -1254,7 +1254,7 @@ export class ClineProvider
 		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
 	}
 
-	// this function deletes a task from task hidtory, and deletes it's checkpoints and delete the task folder
+	// this function deletes a task from task history, and deletes it's checkpoints and delete the task folder
 	async deleteTaskWithId(id: string) {
 		try {
 			// get the task directory full path

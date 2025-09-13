@@ -178,6 +178,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
 	const [showCheckpointWarning, setShowCheckpointWarning] = useState<boolean>(false)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
+	const [isSavingMemory, setIsSavingMemory] = useState<boolean>(false)
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
 		new LRUCache({
@@ -359,6 +360,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("use_mcp_server")
+							setEnableButtons(!isPartial)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
+						case "web_search":
+							if (!isAutoApproved(lastMessage) && !isPartial) {
+								playSound("notification")
+							}
+							setSendingDisabled(isPartial)
+							setClineAsk("web_search")
+							setEnableButtons(!isPartial)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
+						case "url_fetch":
+							if (!isAutoApproved(lastMessage) && !isPartial) {
+								playSound("notification")
+							}
+							setSendingDisabled(isPartial)
+							setClineAsk("url_fetch")
 							setEnableButtons(!isPartial)
 							setPrimaryButtonText(t("chat:approve.title"))
 							setSecondaryButtonText(t("chat:reject.title"))
@@ -721,6 +742,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "browser_action_launch":
 				case "use_mcp_server":
+				case "web_search":
+				case "url_fetch":
 				case "resume_task":
 				case "mistake_limit_reached":
 					// Only send text/images if they exist
@@ -778,6 +801,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "browser_action_launch":
 				case "use_mcp_server":
+				case "web_search":
+				case "url_fetch":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
 						vscode.postMessage({
@@ -864,6 +889,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setSendingDisabled(false)
 						}
 						setIsCondensing(false)
+					}
+					break
+				case "savedMemory":
+					if (message.success !== undefined) {
+						setIsSavingMemory(false)
+						if (sendingDisabled) {
+							setSendingDisabled(false)
+						}
 					}
 					break
 			}
@@ -1100,8 +1133,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				return alwaysAllowMcp && isMcpToolAlwaysAllowed(message)
 			}
 
+			if (message.ask === "web_search") {
+				return alwaysAllowReadOnly
+			}
+
+			if (message.ask === "url_fetch") {
+				return alwaysAllowReadOnly
+			}
+
+			// 将 message.isProtected 字段作为 forceApproval 字段
 			if (message.ask === "command") {
-				return alwaysAllowExecute && isAllowedCommand(message)
+				return alwaysAllowExecute && isAllowedCommand(message) || message.isProtected
 			}
 
 			// For read/write operations, check if it's outside workspace and if
@@ -1303,8 +1345,18 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			})
 		}
 
+		if (isSavingMemory) {
+			// Show indicator after clicking save memory button
+			result.push({
+				type: "say",
+				say: "save_memory",
+				ts: Date.now(),
+				partial: true,
+			})
+		}
+
 		return result
-	}, [isCondensing, visibleMessages])
+	}, [isCondensing, isSavingMemory, visibleMessages])
 
 	// scrolling
 
@@ -1808,7 +1860,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						{telemetrySetting === "unset" && <TelemetryBanner />}
 
 						<div className="mb-2.5">
-							{cloudIsAuthenticated || taskHistory.length < 4 ? <RooTips /> : <RooCloudCTA />}
+							{cloudIsAuthenticated || tasks.length < 1 ? <RooTips /> : <RooCloudCTA />}
 						</div>
 						{/* Show the task history preview if expanded and tasks exist */}
 						{taskHistory.length > 0 && isExpanded && <HistoryPreview />}
@@ -1973,6 +2025,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				mode={mode}
 				setMode={setMode}
 				modeShortcutText={modeShortcutText}
+				isSavingMemory={isSavingMemory}
+				setIsSavingMemory={setIsSavingMemory}
 			/>
 
 			{isProfileDisabled && (

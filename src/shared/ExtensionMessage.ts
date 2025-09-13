@@ -69,6 +69,7 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "mcpServers"
 		| "enhancedPrompt"
+		| "savedMemory"
 		| "commitSearchResults"
 		| "listApiConfig"
 		| "routerModels"
@@ -103,6 +104,7 @@ export interface ExtensionMessage {
 		| "setHistoryPreviewCollapsed"
 		| "commandExecutionStatus"
 		| "mcpExecutionStatus"
+		| "toolExecutionStatus"
 		| "vsCodeSetting"
 		| "authenticatedUser"
 		| "condenseTaskContextResponse"
@@ -335,6 +337,8 @@ export interface ClineSayTool {
 		| "listFilesRecursive"
 		| "listCodeDefinitionNames"
 		| "searchFiles"
+		| "webSearch"
+		| "urlFetch"
 		| "switchMode"
 		| "newTask"
 		| "finishTask"
@@ -376,6 +380,18 @@ export interface ClineSayTool {
 		}>
 	}>
 	question?: string
+	// Tool execution properties
+	url?: string
+	toolName?: string
+	toolDisplayName?: string
+	parameters?: Array<{
+		name: string
+		value: string
+		label?: string
+	}>
+	response?: string
+	status?: "executing" | "completed" | "error"
+	error?: string
 }
 
 // Must keep in sync with system prompt.
@@ -415,6 +431,16 @@ export interface ClineAskUseMcpServer {
 	response?: string
 }
 
+export interface ClineAskWebSearch {
+	query: string
+	response?: string
+}
+
+export interface ClineAskUrlFetch {
+	url: string
+	response?: string
+}
+
 export interface ClineApiReqInfo {
 	request?: string
 	tokensIn?: number
@@ -425,6 +451,8 @@ export interface ClineApiReqInfo {
 	cancelReason?: ClineApiReqCancelReason
 	streamingFailedMessage?: string
 	apiProtocol?: "anthropic" | "openai"
+	tps?: number
+	latency?: number // optional latency in milliseconds
 }
 
 export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled"

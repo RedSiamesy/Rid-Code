@@ -65,6 +65,7 @@ export const toolParamNames = [
 	"query",
 	"args",
 	"todos",
+	"output_mode",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -110,7 +111,7 @@ export interface CodebaseSearchToolUse extends ToolUse {
 
 export interface SearchFilesToolUse extends ToolUse {
 	name: "search_files"
-	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern">>
+	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode">>
 }
 
 export interface ListFilesToolUse extends ToolUse {
@@ -164,6 +165,16 @@ export interface SearchAndReplaceToolUse extends ToolUse {
 		Partial<Pick<Record<ToolParamName, string>, "use_regex" | "ignore_case" | "start_line" | "end_line">>
 }
 
+export interface WebSearchToolUse extends ToolUse {
+	name: "web_search"
+	params: Partial<Pick<Record<ToolParamName, string>, "query">>
+}
+
+export interface UrlFetchToolUse extends ToolUse {
+	name: "url_fetch"
+	params: Partial<Pick<Record<ToolParamName, string>, "url">>
+}
+
 // Define tool group configuration
 export type ToolGroupConfig = {
 	tools: readonly string[]
@@ -190,6 +201,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	search_and_replace: "search and replace",
 	codebase_search: "codebase search",
 	update_todo_list: "update todo list",
+	web_search: "web search",
+	url_fetch: "fetch url content",
 } as const
 
 // Define available tool groups.
@@ -202,6 +215,8 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"list_files",
 			"list_code_definition_names",
 			"codebase_search",
+			"web_search",
+			"url_fetch",
 		],
 	},
 	edit: {

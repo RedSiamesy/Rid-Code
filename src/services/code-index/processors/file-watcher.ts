@@ -7,7 +7,7 @@ import {
 	INITIAL_RETRY_DELAY_MS,
 } from "../constants"
 import { createHash } from "crypto"
-import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { RooIgnoreController, CodebaseIgnoreController } from "../../../core/ignore/RooIgnoreController"
 import { v5 as uuidv5 } from "uuid"
 import { Ignore } from "ignore"
 import { scannerExtensions } from "../shared/supported-extensions"
@@ -18,8 +18,9 @@ import {
 	IVectorStore,
 	PointStruct,
 	BatchProcessingSummary,
+	ICodeParser,
 } from "../interfaces"
-import { codeParser } from "./parser"
+// import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
 import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
@@ -34,6 +35,7 @@ export class FileWatcher implements IFileWatcher {
 	private ignoreInstance?: Ignore
 	private fileWatcher?: vscode.FileSystemWatcher
 	private ignoreController: RooIgnoreController
+	private cbIgnoreController: CodebaseIgnoreController
 	private accumulatedEvents: Map<string, { uri: vscode.Uri; type: "create" | "change" | "delete" }> = new Map()
 	private batchProcessDebounceTimer?: NodeJS.Timeout
 	private readonly BATCH_DEBOUNCE_DELAY_MS = 500
@@ -67,15 +69,16 @@ export class FileWatcher implements IFileWatcher {
 	 * @param workspacePath Path to the workspace
 	 * @param context VS Code extension context
 	 * @param embedder Optional embedder
-	 * @param vectorStore Optional vector store
+	 * @param qdrantClient Optional vector store
 	 * @param cacheManager Cache manager
 	 */
 	constructor(
 		private workspacePath: string,
 		private context: vscode.ExtensionContext,
 		private readonly cacheManager: CacheManager,
+		private readonly codeParser: ICodeParser,
 		private embedder?: IEmbedder,
-		private vectorStore?: IVectorStore,
+		private qdrantClient?: IVectorStore,
 		ignoreInstance?: Ignore,
 		ignoreController?: RooIgnoreController,
 	) {
@@ -83,6 +86,7 @@ export class FileWatcher implements IFileWatcher {
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
 		}
+		this.cbIgnoreController = new CodebaseIgnoreController(workspacePath)
 	}
 
 	/**
@@ -190,9 +194,9 @@ export class FileWatcher implements IFileWatcher {
 			}
 		}
 
-		if (allPathsToClearFromDB.size > 0 && this.vectorStore) {
+		if (allPathsToClearFromDB.size > 0 && this.qdrantClient) {
 			try {
-				await this.vectorStore.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
+				await this.qdrantClient.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
 
 				for (const path of pathsToExplicitlyDelete) {
 					this.cacheManager.deleteHash(path)
@@ -204,15 +208,20 @@ export class FileWatcher implements IFileWatcher {
 						currentFile: path,
 					})
 				}
-			} catch (error) {
-				overallBatchError = error as Error
+			} catch (error: any) {
+				const errorStatus = error?.status || error?.response?.status || error?.statusCode
+				const errorMessage = error instanceof Error ? error.message : String(error)
+
 				// Log telemetry for deletion error
 				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-					error: sanitizeErrorMessage(overallBatchError.message),
+					error: sanitizeErrorMessage(errorMessage),
 					location: "deletePointsByMultipleFilePaths",
 					errorType: "deletion_error",
+					errorStatus: errorStatus,
 				})
 
+				// Mark all paths as error
+				overallBatchError = error as Error
 				for (const path of pathsToExplicitlyDelete) {
 					batchResults.push({ path, status: "error", error: error as Error })
 					processedCountInBatch++
@@ -334,7 +343,7 @@ export class FileWatcher implements IFileWatcher {
 		batchResults: FileProcessingResult[],
 		overallBatchError?: Error,
 	): Promise<Error | undefined> {
-		if (pointsForBatchUpsert.length > 0 && this.vectorStore && !overallBatchError) {
+		if (pointsForBatchUpsert.length > 0 && this.qdrantClient && !overallBatchError) {
 			try {
 				for (let i = 0; i < pointsForBatchUpsert.length; i += BATCH_SEGMENT_THRESHOLD) {
 					const batch = pointsForBatchUpsert.slice(i, i + BATCH_SEGMENT_THRESHOLD)
@@ -343,7 +352,7 @@ export class FileWatcher implements IFileWatcher {
 
 					while (retryCount < MAX_BATCH_RETRIES) {
 						try {
-							await this.vectorStore.upsertPoints(batch)
+							await this.qdrantClient.upsertPoints(batch)
 							break
 						} catch (error) {
 							upsertError = error as Error
@@ -497,7 +506,7 @@ export class FileWatcher implements IFileWatcher {
 
 			// Check if file should be ignored
 			const relativeFilePath = generateRelativeFilePath(filePath, this.workspacePath)
-			if (
+			if (!this.cbIgnoreController.validateAccess(filePath) ||
 				!this.ignoreController.validateAccess(filePath) ||
 				(this.ignoreInstance && this.ignoreInstance.ignores(relativeFilePath))
 			) {
@@ -535,7 +544,7 @@ export class FileWatcher implements IFileWatcher {
 			}
 
 			// Parse file
-			const blocks = await codeParser.parseFile(filePath, { content, fileHash: newHash })
+			const blocks = await this.codeParser.parseFile(filePath, { content, fileHash: newHash })
 
 			// Prepare points for batch processing
 			let pointsToUpsert: PointStruct[] = []

@@ -34,6 +34,8 @@ export const toolNames = [
 	"fetch_instructions",
 	"codebase_search",
 	"update_todo_list",
+	"web_search",
+	"url_fetch",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -53,3 +55,17 @@ export const toolUsageSchema = z.record(
 )
 
 export type ToolUsage = z.infer<typeof toolUsageSchema>
+
+/**
+ * ToolExecutionStatus
+ */
+
+export const toolExecutionStatusSchema = z.object({
+	executionId: z.string(),
+	status: z.enum(["started", "output", "completed", "error"]),
+	toolName: z.string(),
+	response: z.string().optional(),
+	error: z.string().optional(),
+})
+
+export type ToolExecutionStatus = z.infer<typeof toolExecutionStatusSchema>

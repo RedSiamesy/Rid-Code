@@ -46,6 +46,8 @@ const BaseConfigSchema = z.object({
 	alwaysAllow: z.array(z.string()).default([]),
 	watchPaths: z.array(z.string()).optional(), // paths to watch for changes and restart server
 	disabledTools: z.array(z.string()).default([]),
+	enabledModes: z.array(z.string()).default([]),
+	disabledModes: z.array(z.string()).default([]),
 })
 
 // Custom error messages for better user feedback

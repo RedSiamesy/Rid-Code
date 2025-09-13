@@ -50,6 +50,8 @@ import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { getCommand } from "../../utils/commands"
 
+import { saveMemory } from "./Memory-rid"
+
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
@@ -1336,6 +1338,23 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
+		case "useTerminalCommand":
+			const tryExecuteCommand = async (retryCount = 0) => {
+				const currentCline = provider.getCurrentCline()
+				if (currentCline) {
+					currentCline.postprocess._execute_command = message.text
+				} else if (retryCount < 5) { // 最多重试5次
+					setTimeout(() => tryExecuteCommand(retryCount + 1), 100)
+				} else {
+					console.error("Failed to get current Cline instance for terminal command")
+				}
+			}
+			tryExecuteCommand()
+			break
+		case "saveMemory":
+			// 调用保存记忆函数，函数内部会发送相应的消息
+			await saveMemory(provider, message.text??"")
+			break
 		case "enhancePrompt":
 			if (message.text) {
 				try {
@@ -2042,6 +2061,9 @@ export const webviewMessageHandler = async (
 						settings.codebaseIndexMistralApiKey,
 					)
 				}
+				if (settings.codeIndexOpenAiKey !== undefined) {
+					await provider.contextProxy.storeSecret("codeIndexOpenAiKey", settings.codeIndexOpenAiKey)
+				}
 
 				// Send success response first - settings are saved regardless of validation
 				await provider.postMessageToWebview({
@@ -2194,11 +2216,10 @@ export const webviewMessageHandler = async (
 					provider.log("Cannot start indexing: No workspace folder open")
 					return
 				}
+				if (!manager.isInitialized) {
+					await manager.initialize(provider.contextProxy)
+				}
 				if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
-					if (!manager.isInitialized) {
-						await manager.initialize(provider.contextProxy)
-					}
-
 					manager.startIndexing()
 				}
 			} catch (error) {

@@ -1,6 +1,6 @@
 import { listFiles } from "../../glob/list-files"
 import { Ignore } from "ignore"
-import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { RooIgnoreController, CodebaseIgnoreController } from "../../../core/ignore/RooIgnoreController"
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
@@ -30,6 +30,9 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
 
+import { RiddlerEmbedder } from "../embedders/embedding-riddler"
+
+
 export class DirectoryScanner implements IDirectoryScanner {
 	constructor(
 		private readonly embedder: IEmbedder,
@@ -58,7 +61,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 		const scanWorkspace = getWorkspacePathForContext(directoryPath)
 
 		// Get all files recursively (handles .gitignore automatically)
-		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT_CODE_INDEX)
+		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT_CODE_INDEX + 1000)
 
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
@@ -69,10 +72,18 @@ export class DirectoryScanner implements IDirectoryScanner {
 		await ignoreController.initialize()
 
 		// Filter paths using .rooignore
-		const allowedPaths = ignoreController.filterPaths(filePaths)
+		let allowedPaths = ignoreController.filterPaths(filePaths)
+
+		// Initialize RooIgnoreController if not provided
+		const cbignoreController = new CodebaseIgnoreController(directoryPath)
+
+		await cbignoreController.initialize()
+
+		// Filter paths using .rooignore
+		allowedPaths = cbignoreController.filterPaths(allowedPaths)
 
 		// Filter by supported extensions, ignore patterns, and excluded directories
-		const supportedPaths = allowedPaths.filter((filePath) => {
+		let supportedPaths = allowedPaths.filter((filePath) => {
 			const ext = path.extname(filePath).toLowerCase()
 			const relativeFilePath = generateRelativeFilePath(filePath, scanWorkspace)
 
@@ -83,6 +94,14 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 			return scannerExtensions.includes(ext) && !this.ignoreInstance.ignores(relativeFilePath)
 		})
+
+		const real_limit = this.embedder instanceof RiddlerEmbedder ? 800 : MAX_LIST_FILES_LIMIT_CODE_INDEX
+
+		// Sort files by most recent activity (modified, created, or accessed time)
+		// This ensures recently active files are prioritized for indexing
+		const sortedPaths = await this.sortFilesByRecentActivity(supportedPaths)
+
+		supportedPaths = sortedPaths.slice(0, real_limit)
 
 		// Initialize tracking variables
 		const processedFiles = new Set<string>()
@@ -153,7 +172,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 									addedBlocksFromFile = true
 
 									// Check if batch threshold is met
-									if (currentBatchBlocks.length >= BATCH_SEGMENT_THRESHOLD) {
+									if (currentBatchBlocks.length >= (this.embedder instanceof RiddlerEmbedder?1:BATCH_SEGMENT_THRESHOLD)) {
 										// Wait if we've reached the maximum pending batches
 										while (pendingBatchCount >= MAX_PENDING_BATCHES) {
 											// Wait for at least one batch to complete
@@ -281,17 +300,24 @@ export class DirectoryScanner implements IDirectoryScanner {
 					try {
 						await this.qdrantClient.deletePointsByFilePath(cachedFilePath)
 						await this.cacheManager.deleteHash(cachedFilePath)
-					} catch (error) {
+					} catch (error: any) {
+						const errorStatus = error?.status || error?.response?.status || error?.statusCode
+						const errorMessage = error instanceof Error ? error.message : String(error)
+
 						console.error(
 							`[DirectoryScanner] Failed to delete points for ${cachedFilePath} in workspace ${scanWorkspace}:`,
 							error,
 						)
+
 						TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-							error: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
+							error: sanitizeErrorMessage(errorMessage),
 							stack: error instanceof Error ? sanitizeErrorMessage(error.stack || "") : undefined,
 							location: "scanDirectory:deleteRemovedFiles",
+							errorStatus: errorStatus,
 						})
+
 						if (onError) {
+							// Report error to error handler
 							onError(
 								error instanceof Error
 									? new Error(
@@ -304,7 +330,8 @@ export class DirectoryScanner implements IDirectoryScanner {
 										),
 							)
 						}
-						// Decide if we should re-throw or just log
+						// Log error and continue processing instead of re-throwing
+						console.error(`Failed to delete points for removed file: ${cachedFilePath}`, error)
 					}
 				}
 			}
@@ -347,25 +374,30 @@ export class DirectoryScanner implements IDirectoryScanner {
 				if (uniqueFilePaths.length > 0) {
 					try {
 						await this.qdrantClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
-					} catch (deleteError) {
+					} catch (deleteError: any) {
+						const errorStatus =
+							deleteError?.status || deleteError?.response?.status || deleteError?.statusCode
+						const errorMessage = deleteError instanceof Error ? deleteError.message : String(deleteError)
+
 						console.error(
 							`[DirectoryScanner] Failed to delete points for ${uniqueFilePaths.length} files before upsert in workspace ${scanWorkspace}:`,
 							deleteError,
 						)
+
 						TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-							error: sanitizeErrorMessage(
-								deleteError instanceof Error ? deleteError.message : String(deleteError),
-							),
+							error: sanitizeErrorMessage(errorMessage),
 							stack:
 								deleteError instanceof Error
 									? sanitizeErrorMessage(deleteError.stack || "")
 									: undefined,
 							location: "processBatch:deletePointsByMultipleFilePaths",
 							fileCount: uniqueFilePaths.length,
+							errorStatus: errorStatus,
 						})
-						// Re-throw the error with workspace context
+
+						// Re-throw with workspace context
 						throw new Error(
-							`Failed to delete points for ${uniqueFilePaths.length} files. Workspace: ${scanWorkspace}. ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+							`Failed to delete points for ${uniqueFilePaths.length} files. Workspace: ${scanWorkspace}. ${errorMessage}`,
 							{ cause: deleteError },
 						)
 					}
@@ -442,5 +474,56 @@ export class DirectoryScanner implements IDirectoryScanner {
 				)
 			}
 		}
+	}
+
+	/**
+	 * Sort files by most recent activity (modified, created, or accessed time)
+	 * @param filePaths Array of file paths to sort
+	 * @returns Promise<string[]> Sorted array with most recently active files first
+	 */
+	private async sortFilesByRecentActivity(filePaths: string[]): Promise<string[]> {
+		interface FileWithTime {
+			path: string
+			mostRecentTime: number
+		}
+
+		const filesWithTimes: FileWithTime[] = []
+
+		// Get file stats for all files with concurrency control
+		const statLimiter = pLimit(50) // Limit concurrent stat operations
+		const statPromises = filePaths.map((filePath) =>
+			statLimiter(async () => {
+				try {
+					const stats = await stat(filePath)
+					
+					// Get the most recent time from modification, creation, and access times
+					const mostRecentTime = Math.max(
+						stats.mtimeMs, // Modified time
+						stats.birthtimeMs, // Creation time
+						stats.atimeMs // Access time
+					)
+
+					return {
+						path: filePath,
+						mostRecentTime
+					}
+				} catch (error) {
+					// If we can't stat the file, give it a very old timestamp so it goes to the end
+					console.warn(`Failed to stat file ${filePath}:`, error)
+					return {
+						path: filePath,
+						mostRecentTime: 0
+					}
+				}
+			})
+		)
+
+		const results = await Promise.all(statPromises)
+		filesWithTimes.push(...results)
+
+		// Sort by most recent time (descending - newest first)
+		filesWithTimes.sort((a, b) => b.mostRecentTime - a.mostRecentTime)
+
+		return filesWithTimes.map(file => file.path)
 	}
 }

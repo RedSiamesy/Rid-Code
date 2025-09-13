@@ -16,5 +16,9 @@ Example: Requesting to list all files in the current directory
 <list_files>
 <path>.</path>
 <recursive>false</recursive>
-</list_files>`
+</list_files>
+
+
+Tips: You should use the \`list_files\` tool as LITTLE as possible, and instead use the \`search_files\` (Grep/Glob) tool, which is a powerful search tool that also has the function of matching specific filenames in a directory according to certain patterns.`
 }
+// IMPORTANT: Use \`list_files\` as LITTLE as possible, and instead use the \`Glob\` usage of \`search_files\` for more precise matching searches.

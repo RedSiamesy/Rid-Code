@@ -98,11 +98,11 @@ const createValidationSchema = (provider: EmbedderProvider, t: any) => {
 					.string()
 					.min(1, t("settings:codeIndex.validation.ollamaBaseUrlRequired"))
 					.url(t("settings:codeIndex.validation.invalidOllamaUrl")),
-				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
-				codebaseIndexEmbedderModelDimension: z
-					.number()
-					.min(1, t("settings:codeIndex.validation.modelDimensionRequired"))
-					.optional(),
+				// codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+				// codebaseIndexEmbedderModelDimension: z
+				// 	.number()
+				// 	.min(1, t("settings:codeIndex.validation.modelDimensionRequired"))
+				// 	.optional(),
 			})
 
 		case "openai-compatible":
@@ -147,7 +147,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 }) => {
 	const SECRET_PLACEHOLDER = "••••••••••••••••"
 	const { t } = useAppTranslation()
-	const { codebaseIndexConfig, codebaseIndexModels } = useExtensionState()
+	const { codebaseIndexConfig, codebaseIndexModels, cwd } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false)
 	const [isSetupSettingsOpen, setIsSetupSettingsOpen] = useState(false)
@@ -168,7 +168,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	const getDefaultSettings = (): LocalCodeIndexSettings => ({
 		codebaseIndexEnabled: true,
 		codebaseIndexQdrantUrl: "",
-		codebaseIndexEmbedderProvider: "openai",
+		codebaseIndexEmbedderProvider: "openai-compatible",
 		codebaseIndexEmbedderBaseUrl: "",
 		codebaseIndexEmbedderModelId: "",
 		codebaseIndexEmbedderModelDimension: undefined,
@@ -199,7 +199,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 			const settings = {
 				codebaseIndexEnabled: codebaseIndexConfig.codebaseIndexEnabled ?? true,
 				codebaseIndexQdrantUrl: codebaseIndexConfig.codebaseIndexQdrantUrl || "",
-				codebaseIndexEmbedderProvider: codebaseIndexConfig.codebaseIndexEmbedderProvider || "openai",
+				codebaseIndexEmbedderProvider: codebaseIndexConfig.codebaseIndexEmbedderProvider || "openai-compatible",
 				codebaseIndexEmbedderBaseUrl: codebaseIndexConfig.codebaseIndexEmbedderBaseUrl || "",
 				codebaseIndexEmbedderModelId: codebaseIndexConfig.codebaseIndexEmbedderModelId || "",
 				codebaseIndexEmbedderModelDimension:
@@ -229,6 +229,18 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 			vscode.postMessage({ type: "requestIndexingStatus" })
 			vscode.postMessage({ type: "requestCodeIndexSecretStatus" })
 		}
+		const handleMessage = (event: MessageEvent) => {
+			if (event.data.type === "workspaceUpdated") {
+				// When workspace changes, request updated indexing status
+				if (open) {
+					vscode.postMessage({ type: "requestIndexingStatus" })
+					vscode.postMessage({ type: "requestCodeIndexSecretStatus" })
+				}
+			}
+		}
+
+		window.addEventListener("message", handleMessage)
+		return () => window.removeEventListener("message", handleMessage)
 	}, [open])
 
 	// Use a ref to capture current settings for the save handler
@@ -239,13 +251,15 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent<any>) => {
 			if (event.data.type === "indexingStatusUpdate") {
-				setIndexingStatus({
-					systemStatus: event.data.values.systemStatus,
-					message: event.data.values.message || "",
-					processedItems: event.data.values.processedItems,
-					totalItems: event.data.values.totalItems,
-					currentItemUnit: event.data.values.currentItemUnit || "items",
-				})
+				if (!event.data.values.workspacePath || event.data.values.workspacePath === cwd) {
+					setIndexingStatus({
+						systemStatus: event.data.values.systemStatus,
+						message: event.data.values.message || "",
+						processedItems: event.data.values.processedItems,
+						totalItems: event.data.values.totalItems,
+						currentItemUnit: event.data.values.currentItemUnit || "items",
+					})
+				}
 			} else if (event.data.type === "codeIndexSettingsSaved") {
 				if (event.data.success) {
 					setSaveStatus("saved")
@@ -273,7 +287,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [t])
+	}, [t, cwd])
 
 	// Listen for secret status
 	useEffect(() => {
@@ -613,21 +627,21 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
-												<SelectItem value="openai">
-													{t("settings:codeIndex.openaiProvider")}
-												</SelectItem>
-												<SelectItem value="ollama">
-													{t("settings:codeIndex.ollamaProvider")}
-												</SelectItem>
 												<SelectItem value="openai-compatible">
 													{t("settings:codeIndex.openaiCompatibleProvider")}
+												</SelectItem>
+												<SelectItem value="ollama">
+													{"Codebase-Service"}
+												</SelectItem>
+												{/* <SelectItem value="openai">
+													{t("settings:codeIndex.openaiProvider")}
 												</SelectItem>
 												<SelectItem value="gemini">
 													{t("settings:codeIndex.geminiProvider")}
 												</SelectItem>
 												<SelectItem value="mistral">
 													{t("settings:codeIndex.mistralProvider")}
-												</SelectItem>
+												</SelectItem> */}
 											</SelectContent>
 										</Select>
 									</div>
@@ -702,7 +716,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 										<>
 											<div className="space-y-2">
 												<label className="text-sm font-medium">
-													{t("settings:codeIndex.ollamaBaseUrlLabel")}
+													{"Codebase-Service URL"}
 												</label>
 												<VSCodeTextField
 													value={currentSettings.codebaseIndexEmbedderBaseUrl || ""}
@@ -731,7 +745,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												)}
 											</div>
 
-											<div className="space-y-2">
+											{/* <div className="space-y-2">
 												<label className="text-sm font-medium">
 													{t("settings:codeIndex.modelLabel")}
 												</label>
@@ -778,7 +792,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 														{formErrors.codebaseIndexEmbedderModelDimension}
 													</p>
 												)}
-											</div>
+											</div> */}
 										</>
 									)}
 
@@ -1021,6 +1035,8 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									)}
 
 									{/* Qdrant Settings */}
+									{currentSettings.codebaseIndexEmbedderProvider !== "ollama" && (
+										<>
 									<div className="space-y-2">
 										<label className="text-sm font-medium">
 											{t("settings:codeIndex.qdrantUrlLabel")}
@@ -1068,6 +1084,8 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 											</p>
 										)}
 									</div>
+									</>
+									)}
 								</div>
 							)}
 						</div>

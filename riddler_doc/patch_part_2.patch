@@ -1,0 +1,1944 @@
+diff --git a/src/api/transform/stream.ts b/src/api/transform/stream.ts
+index 89655a3f..16be7a6b 100644
+--- a/src/api/transform/stream.ts
++++ b/src/api/transform/stream.ts
+@@ -26,4 +26,6 @@ export interface ApiStreamUsageChunk {
+ 	cacheReadTokens?: number
+ 	reasoningTokens?: number
+ 	totalCost?: number
++	tps?: number // tokens per second
++	latency?: number // optional latency in milliseconds
+ }
+diff --git a/src/core/assistant-message/presentAssistantMessage.ts b/src/core/assistant-message/presentAssistantMessage.ts
+index ee3fa148..661e69e2 100644
+--- a/src/core/assistant-message/presentAssistantMessage.ts
++++ b/src/core/assistant-message/presentAssistantMessage.ts
+@@ -27,6 +27,8 @@ import { newTaskTool } from "../tools/newTaskTool"
+ 
+ import { checkpointSave } from "../checkpoints"
+ import { updateTodoListTool } from "../tools/updateTodoListTool"
++import { webSearchTool } from "../tools/webSearchTool"
++import { urlFetchTool } from "../tools/urlFetchTool"
+ 
+ import { formatResponse } from "../prompts/responses"
+ import { validateToolUse } from "../tools/validateToolUse"
+@@ -208,6 +210,10 @@ export async function presentAssistantMessage(cline: Task) {
+ 						return `[${block.name} for '${block.params.query}']`
+ 					case "update_todo_list":
+ 						return `[${block.name}]`
++					case "web_search":
++						return `[${block.name} for '${block.params.query}']`
++					case "url_fetch":
++						return `[${block.name} for '${block.params.url}']`
+ 					case "new_task": {
+ 						const mode = block.params.mode ?? defaultModeSlug
+ 						const message = block.params.message ?? "(no message)"
+@@ -257,7 +263,10 @@ export async function presentAssistantMessage(cline: Task) {
+ 				// Once a tool result has been collected, ignore all other tool
+ 				// uses since we should only ever present one tool result per
+ 				// message.
+-				cline.didAlreadyUseTool = true
++				const provider = cline.providerRef.deref()
++				const state = provider?.getValues()
++				const allowedMultiCall = state?.experiments?.allowedMultiCall ?? false
++				cline.didAlreadyUseTool = !allowedMultiCall
+ 			}
+ 
+ 			const askApproval = async (
+@@ -462,6 +471,12 @@ export async function presentAssistantMessage(cline: Task) {
+ 				case "codebase_search":
+ 					await codebaseSearchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
+ 					break
++				case "web_search":
++					await webSearchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
++					break
++				case "url_fetch":
++					await urlFetchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
++					break
+ 				case "list_code_definition_names":
+ 					await listCodeDefinitionNamesTool(
+ 						cline,
+diff --git a/src/core/condense/index.ts b/src/core/condense/index.ts
+index 3b73b191..70699486 100644
+--- a/src/core/condense/index.ts
++++ b/src/core/condense/index.ts
+@@ -11,44 +11,151 @@ export const N_MESSAGES_TO_KEEP = 3
+ export const MIN_CONDENSE_THRESHOLD = 5 // Minimum percentage of context window to trigger condensing
+ export const MAX_CONDENSE_THRESHOLD = 100 // Maximum percentage of context window to trigger condensing
+ 
+-const SUMMARY_PROMPT = `\
++// export const SUMMARY_PROMPT = `\
++// Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
++// This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the conversation and supporting any continuing tasks.
++
++// Your summary should be structured as follows:
++// Context: The context to continue the conversation with. If applicable based on the current task, this should include:
++//   1. Previous Conversation: High level details about what was discussed throughout the entire conversation with the user. This should be written to allow someone to be able to follow the general overarching conversation flow.
++//   2. Current Work: Describe in detail what was being worked on prior to this request to summarize the conversation. Pay special attention to the more recent messages in the conversation. The focus should not be on the tools used, but on the process: for each significant step, explain the action you attempted, the result it produced, the conclusion you drew from that information, and how it served your overall purpose.
++//   3. Key Technical Concepts: List all important technical concepts, technologies, coding conventions, and frameworks discussed, which might be relevant for continuing with this work. 
++//   4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes, and retain as much of the code snippet content and its location that the main task might depend on as possible.
++//   5. Design and Problem Solving: Document key architectural choices, rejected alternatives, and the rationale behind them. List any technical, performance, or dependency constraints imposed by the user. Document problems solved thus far and any ongoing troubleshooting efforts. Detailed description of interim results and conclusions
++//   6. Pending Tasks and Next Steps: Outline all pending tasks that you have explicitly been asked to work on, as well as list the next steps you will take for all outstanding work, if applicable. Include code snippets where they add clarity. For any next steps, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no information loss in context between tasks.
++
++// Example summary structure:
++// 1. Previous Conversation:
++//   [Detailed description]
++//   [...]
++// 2. Current Work:
++//   [Detailed description 1 (e.g. By reading the 'a.py' file, it is learned...)]
++//   [Detailed description 2 (e.g. By searching "xxx" with the codebase index tool, I learned that...)]
++//   [Detailed description 3 (e.g. By searching "abc", it was found that "abc" is used in file 'b.py', 'c.py', 'd.py', specifically, they are used for...)]
++//   [Detailed description 4 (e.g. I implemented the "yyy" function and wrote it to line F in the 'e.py' file)]
++//   [Detailed description 5 (e.g. I modified the implementation... in line H of file 'g.py')]
++//   [Detailed description 6]
++//   [...]
++// 3. Key Technical Concepts:
++//   - [Concept 1]
++//   - [Concept 2]
++//   - [...]
++// 4. Relevant Files and Code:
++//   - [File Name 1]
++// 	- [Summary of why this file is important]
++// 	- [Summary of the changes made to this file, if any]
++// 	- [Important Code Snippet (e.g. In line I to line J \n''' python\n ...\n ...\n ...\n''')]
++//   - [File Name 2]
++// 	- [Important Code Snippet]
++//   - [...]
++// 5. Design and Problem Solving:
++//   [Detailed description 1]
++//   [Detailed description 2]
++//   [...]
++// 6. Pending Tasks and Next Steps:
++//   - [Task 1 details & next steps]
++//   - [Task 2 details & next steps]
++//   - [...]
++
++// Output only the summary of the conversation so far, without any additional commentary or explanation.
++// `
++
++export const SUMMARY_PROMPT = `
+ Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
+-This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the conversation and supporting any continuing tasks.
+-
+-Your summary should be structured as follows:
+-Context: The context to continue the conversation with. If applicable based on the current task, this should include:
+-  1. Previous Conversation: High level details about what was discussed throughout the entire conversation with the user. This should be written to allow someone to be able to follow the general overarching conversation flow.
+-  2. Current Work: Describe in detail what was being worked on prior to this request to summarize the conversation. Pay special attention to the more recent messages in the conversation.
+-  3. Key Technical Concepts: List all important technical concepts, technologies, coding conventions, and frameworks discussed, which might be relevant for continuing with this work.
+-  4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes.
+-  5. Problem Solving: Document problems solved thus far and any ongoing troubleshooting efforts.
+-  6. Pending Tasks and Next Steps: Outline all pending tasks that you have explicitly been asked to work on, as well as list the next steps you will take for all outstanding work, if applicable. Include code snippets where they add clarity. For any next steps, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no information loss in context between tasks.
+-
+-Example summary structure:
+-1. Previous Conversation:
+-  [Detailed description]
+-2. Current Work:
+-  [Detailed description]
+-3. Key Technical Concepts:
+-  - [Concept 1]
+-  - [Concept 2]
+-  - [...]
+-4. Relevant Files and Code:
+-  - [File Name 1]
+-    - [Summary of why this file is important]
+-    - [Summary of the changes made to this file, if any]
+-    - [Important Code Snippet]
+-  - [File Name 2]
+-    - [Important Code Snippet]
+-  - [...]
++This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
++
++Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. In your analysis process:
++
++1. Chronologically analyze each message and section of the conversation. For each section thoroughly identify:
++   - The user's explicit requests and intents
++   - Your approach to addressing the user's requests
++   - Key decisions, technical concepts and code patterns
++   - Specific details like:
++     - file names
++     - full code snippets
++     - function signatures
++     - file edits
++  - Errors that you ran into and how you fixed them
++  - Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
++2. Double-check for technical accuracy and completeness, addressing each required element thoroughly.
++
++Your summary should include the following sections:
++
++1. Primary Request and Intent: Capture all of the user's explicit requests and intents in detail
++2. Key Technical Concepts: List all important technical concepts, technologies, and frameworks discussed.
++3. Files and Code Sections: Enumerate specific files and code sections examined, modified, or created. Pay special attention to the most recent messages and include full code snippets where applicable and include a summary of why this file read or edit is important.
++4. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
++5. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
++6. All user messages: List ALL user messages that are not tool results. These are critical for understanding the users' feedback and changing intent.
++7. Pending Tasks: Outline any pending tasks that you have explicitly been asked to work on.
++8. Current Work: Describe in detail precisely what was being worked on immediately before this summary request, paying special attention to the most recent messages from both user and assistant. Include file names and code snippets where applicable.
++9. Optional Next Step: List the next step that you will take that is related to the most recent work you were doing. IMPORTANT: ensure that this step is DIRECTLY in line with the user's most recent explicit requests, and the task you were working on immediately before this summary request. If your last task was concluded, then only list next steps if they are explicitly in line with the users request. Do not start on tangential requests or really old requests that were already completed without confirming with the user first.
++10. If there is a next step, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no drift in task interpretation.
++
++Here's an example of how your output should be structured:
++
++<example>
++<analysis>
++[Your thought process, ensuring all points are covered thoroughly and accurately]
++</analysis>
++
++<summary>
++1. Primary Request and Intent:
++   [Detailed description]
++
++2. Key Technical Concepts:
++   - [Concept 1]
++   - [Concept 2]
++   - [...]
++
++3. Files and Code Sections:
++   - [File Name 1]
++      - [Summary of why this file is important]
++      - [Summary of the changes made to this file, if any]
++      - [Important Code Snippet]
++   - [File Name 2]
++      - [Important Code Snippet]
++   - [...]
++
++4. Errors and fixes:
++    - [Detailed description of error 1]:
++      - [How you fixed the error]
++      - [User feedback on the error if any]
++    - [...]
++
+ 5. Problem Solving:
+-  [Detailed description]
+-6. Pending Tasks and Next Steps:
+-  - [Task 1 details & next steps]
+-  - [Task 2 details & next steps]
+-  - [...]
++   [Description of solved problems and ongoing troubleshooting]
++
++6. All user messages: 
++    - [Detailed non tool use user message]
++    - [...]
++
++7. Pending Tasks:
++   - [Task 1]
++   - [Task 2]
++   - [...]
++
++8. Current Work:
++   [Precise description of current work]
++
++9. Optional Next Step:
++   [Optional Next step to take]
++
++</summary>
++</example>
+ 
+-Output only the summary of the conversation so far, without any additional commentary or explanation.
++Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response. 
++
++There may be additional summarization instructions provided in the included context. If so, remember to follow these instructions when creating the above summary. Examples of instructions include:
++<example>
++## Compact Instructions
++When summarizing the conversation focus on typescript code changes and also remember the mistakes you made and how you fixed them.
++</example>
++
++<example>
++# Summary instructions
++When you are using compact - please focus on test output and code changes. Include file reads verbatim.
++</example>
+ `
+ 
+ export type SummarizeResponse = {
+@@ -59,16 +166,6 @@ export type SummarizeResponse = {
+ 	error?: string // Populated iff the operation fails: error message shown to the user on failure (see Task.ts)
+ }
+ 
+-/**
+- * Summarizes the conversation messages using an LLM call
+- *
+- * @param {ApiMessage[]} messages - The conversation messages
+- * @param {ApiHandler} apiHandler - The API handler to use for token counting.
+- * @param {string} systemPrompt - The system prompt for API requests, which should be considered in the context token count
+- * @param {string} taskId - The task ID for the conversation, used for telemetry
+- * @param {boolean} isAutomaticTrigger - Whether the summarization is triggered automatically
+- * @returns {SummarizeResponse} - The result of the summarization operation (see above)
+- */
+ /**
+  * Summarizes the conversation messages using an LLM call
+  *
+@@ -119,19 +216,19 @@ export async function summarizeConversation(
+ 		return { ...response, error }
+ 	}
+ 
++	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
++	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
++	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
++	
+ 	const finalRequestMessage: Anthropic.MessageParam = {
+ 		role: "user",
+-		content: "Summarize the conversation so far, as described in the prompt instructions.",
++		content: [{text: promptToUse, type: "text"}, { text: "Summarize the conversation so far, as described in the prompt instructions." , type: "text" }],
+ 	}
+ 
+ 	const requestMessages = maybeRemoveImageBlocks([...messagesToSummarize, finalRequestMessage], apiHandler).map(
+ 		({ role, content }) => ({ role, content }),
+ 	)
+ 
+-	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
+-	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
+-	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
+-
+ 	// Use condensing API handler if provided, otherwise use main API handler
+ 	let handlerToUse = condensingApiHandler || apiHandler
+ 
+@@ -154,7 +251,7 @@ export async function summarizeConversation(
+ 		}
+ 	}
+ 
+-	const stream = handlerToUse.createMessage(promptToUse, requestMessages)
++	const stream = handlerToUse.createMessage(SUMMARY_PROMPT, requestMessages)
+ 
+ 	let summary = ""
+ 	let cost = 0
+diff --git a/src/core/diff/strategies/multi-file-search-replace.ts b/src/core/diff/strategies/multi-file-search-replace.ts
+index 5ec22347..f2e647ea 100644
+--- a/src/core/diff/strategies/multi-file-search-replace.ts
++++ b/src/core/diff/strategies/multi-file-search-replace.ts
+@@ -301,7 +301,8 @@ Each file requires its own path, start_line, and diff elements.
+ 				"[exact content to find including whitespace]\n" +
+ 				"=======\n" +
+ 				"[new content to replace with]\n" +
+-				">>>>>>> REPLACE\n",
++				">>>>>>> REPLACE\n" + 
++				"Do not quote large sections of content that does not need modification, and minimize quoting to the lines that need modification\n",
+ 		})
+ 
+ 		const reportLineMarkerInReplaceError = (marker: string) => ({
+diff --git a/src/core/environment/getEnvironmentDetails.ts b/src/core/environment/getEnvironmentDetails.ts
+index 5a0a1596..ccea717c 100644
+--- a/src/core/environment/getEnvironmentDetails.ts
++++ b/src/core/environment/getEnvironmentDetails.ts
+@@ -5,7 +5,7 @@ import * as vscode from "vscode"
+ import pWaitFor from "p-wait-for"
+ import delay from "delay"
+ 
+-import type { ExperimentId } from "@roo-code/types"
++import type { ExperimentId, TodoItem, ToolName } from "@roo-code/types"
+ import { DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT } from "@roo-code/types"
+ 
+ import { EXPERIMENT_IDS, experiments as Experiments } from "../../shared/experiments"
+@@ -18,9 +18,172 @@ import { Terminal } from "../../integrations/terminal/Terminal"
+ import { arePathsEqual } from "../../utils/path"
+ import { formatResponse } from "../prompts/responses"
+ 
++import { EditorUtils } from "../../integrations/editor/EditorUtils"
++import { readLines } from "../../integrations/misc/read-lines"
++import { addLineNumbers } from "../../integrations/misc/extract-text"
++
+ import { Task } from "../task/Task"
+ import { formatReminderSection } from "./reminder"
+ 
++import { getWorkspacePath } from "../../utils/path"
++import { fileExistsAtPath } from "../../utils/fs"
++import fs from "fs/promises"
++import { ApiMessage } from "../task-persistence/apiMessages"
++
++
++interface MemoryFiles {
++	globalMemoryPath: string
++	projectMemoryPath: string
++}
++
++interface MemoryData {
++	globalMemories: string[]
++	projectMemories: string[]
++}
++
++/**
++ * 获取记忆文件路径
++ */
++export async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
++	const globalMemoryPath = path.join(globalStoragePath, "global-memory.md")
++
++	const workspacePath = getWorkspacePath()
++	if (!workspacePath) {
++		throw new Error("无法获取工作区路径")
++	}
++
++	const projectMemoryDir = path.join(workspacePath, ".roo")
++	const projectMemoryPath = path.join(projectMemoryDir, "project-memory.md")
++
++	return {
++		globalMemoryPath,
++		projectMemoryPath,
++	}
++}
++
++/**
++ * 读取记忆文件内容
++ */
++export async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
++	const globalMemories: string[] = []
++	const projectMemories: string[] = []
++
++	// 读取全局记忆
++	if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
++		try {
++			const content = await fs.readFile(memoryFiles.globalMemoryPath, "utf-8")
++			const lines = content.split("\n").filter((line) => line.trim())
++			globalMemories.push(...lines)
++		} catch (error) {
++			console.log("无法读取全局记忆文件:", error)
++		}
++	}
++
++	// 读取项目记忆
++	if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
++		try {
++			const content = await fs.readFile(memoryFiles.projectMemoryPath, "utf-8")
++			const lines = content.split("\n").filter((line) => line.trim())
++			projectMemories.push(...lines)
++		} catch (error) {
++			console.log("无法读取项目记忆文件:", error)
++		}
++	}
++
++	return {
++		globalMemories,
++		projectMemories,
++	}
++}
++
++/**
++ * 格式化记忆内容为显示格式
++ */
++export function formatMemoryContent(memoryData: MemoryData): string {
++	if (memoryData.globalMemories.length === 0 && memoryData.projectMemories.length === 0) {
++		return "No memory data available"
++	}
++
++	let formatted = "The content of Agent memory includes records of Roo's understanding of user needs from past work, as well as insights into user habits and projects.\n\n"
++
++	if (memoryData.globalMemories.length > 0) {
++		formatted += "# Global Memory:\n"
++		memoryData.globalMemories.forEach((memory, index) => {
++			formatted += `${memory}\n`
++		})
++		formatted += "\n"
++	}
++
++	if (memoryData.projectMemories.length > 0) {
++		formatted += "# Project Memory:\n"
++		memoryData.projectMemories.forEach((memory, index) => {
++			formatted += `${memory}\n`
++		})
++	}
++
++	return formatted.trim()
++}
++
++/**
++ * 获取代办中所有正在进行的项，如果没有正在进行的项目则获取第一个未进行的项目，
++ * 判断这些项目的类型（analysis/planning/editing），组成一个任务类型set
++ */
++function getTodoTaskTypes(cline: Task): Set<string> | undefined {
++	if (!cline.todoList || cline.todoList.length === 0) {
++		return undefined
++	}
++
++	// 先查找所有正在进行的项目
++	const inProgressTodos = cline.todoList.filter(todo => todo.status === "in_progress")
++	
++	let todosToAnalyze: TodoItem[]
++	if (inProgressTodos.length > 0) {
++		// 如果有正在进行的项目，使用这些项目
++		todosToAnalyze = inProgressTodos
++	} else {
++		// 如果没有正在进行的项目，获取第一个待处理的项目
++		const pendingTodos = cline.todoList.filter(todo => todo.status === "pending")
++		todosToAnalyze = pendingTodos.length > 0 ? [pendingTodos[0]] : []
++	}
++
++	// 分析任务类型
++	const taskTypes = new Set<string>()
++	
++	for (const todo of todosToAnalyze) {
++		// 从任务内容中提取类型标记，例如 [analysis], [planning], [editing]
++		const typeMatch = todo.content.match(/\[(\w+)\]/)
++		if (typeMatch) {
++			const taskType = typeMatch[1].toLowerCase()
++			if (["analysis", "planning", "editing"].includes(taskType)) {
++				taskTypes.add(taskType)
++			}
++		} else {
++			// 如果没有明确的类型标记，根据关键词判断类型
++			const content = todo.content.toLowerCase()
++			if (content.includes("analyz") || content.includes("research") || content.includes("understand") || content.includes("investigate")) {
++				taskTypes.add("analysis")
++			} else if (content.includes("plan") || content.includes("design") || content.includes("architect") || content.includes("structure")) {
++				taskTypes.add("planning")
++			} else if (content.includes("implement") || content.includes("write") || content.includes("create") || content.includes("edit") || content.includes("fix") || content.includes("update")) {
++				taskTypes.add("editing")
++			}
++		}
++	}
++
++	return taskTypes
++}
++
++
++const generateDiagnosticText = (diagnostics?: any[]) => {
++	if (!diagnostics?.length) return ""
++	return `\nCurrent problems detected:\n${diagnostics
++		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
++		.join("\n")}`
++}
++
++
++
++
+ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
+ 	let details = ""
+ 
+@@ -238,36 +401,243 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
+ 	}
+ 
+ 	if (includeFileDetails) {
+-		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
+-		const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
++		// details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
++		// const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
++
++		// if (isDesktop) {
++		// 	// Don't want to immediately access desktop since it would show
++		// 	// permission popup.
++		// 	details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
++		// } else {
++		// 	const maxFiles = maxWorkspaceFiles ?? 200
++
++		// 	// Early return for limit of 0
++		// 	if (maxFiles === 0) {
++		// 		details += "(Workspace files context disabled. Use list_files to explore if needed.)"
++		// 	} else {
++		// 		const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
++		// 		const { showRooIgnoredFiles = true } = state ?? {}
++
++		// 		const result = formatResponse.formatFilesList(
++		// 			cline.cwd,
++		// 			files,
++		// 			didHitLimit,
++		// 			cline.rooIgnoreController,
++		// 			showRooIgnoredFiles,
++		// 		)
++
++		// 		details += result
++		// 	}
++		
++			const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
++			if (globalStoragePath) {
++				try {
++					const memoryFiles = await getMemoryFilePaths(globalStoragePath)
++					const memoryData = await readMemoryFiles(memoryFiles)
++					const formattedMemory = formatMemoryContent(memoryData)
++					details += `\n\n# Agent Memory Content\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n`
++				} catch (error) {
++					details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
++				}
++			}
++		// }
++	}
+ 
+-		if (isDesktop) {
+-			// Don't want to immediately access desktop since it would show
+-			// permission popup.
+-			details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
+-		} else {
+-			const maxFiles = maxWorkspaceFiles ?? 200
+-
+-			// Early return for limit of 0
+-			if (maxFiles === 0) {
+-				details += "(Workspace files context disabled. Use list_files to explore if needed.)"
+-			} else {
+-				const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
+-				const { showRooIgnoredFiles = true } = state ?? {}
+-
+-				const result = formatResponse.formatFilesList(
+-					cline.cwd,
+-					files,
+-					didHitLimit,
+-					cline.rooIgnoreController,
+-					showRooIgnoredFiles,
++	let filePath: string
++	let selectedText: string
++	let startLine: number | undefined
++	let endLine: number | undefined
++	let diagnostics: any[] | undefined
++	const context = EditorUtils.getEditorContext()
++	if (context) {
++		;({ filePath, selectedText, startLine, endLine, diagnostics } = context)
++		const fullPath = path.resolve(cline.cwd, filePath)
++		if (endLine !== undefined && startLine != undefined) {
++			try {
++				// Check if file is readable
++				await vscode.workspace.fs.stat(vscode.Uri.file(fullPath))
++				details += `\n\n# The File Where The Cursor In\n${fullPath}\n`
++				const content = addLineNumbers(
++					await readLines(fullPath, endLine + 5, startLine - 5),
++					startLine - 4 > 1 ? startLine - 4: 1,
+ 				)
+-
+-				details += result
+-			}
++				details += `\n# Line near the Cursor\n${content}\n(The cursor is on the line ${endLine}. Determine if the user's question is related to the code near the cursor.)\n\n`
++				if (diagnostics) {
++					const diagno = generateDiagnosticText(diagnostics)
++					details += `\n# Issues near the Cursor\n${diagno}\n`
++				}
++			} catch (error) {}
+ 		}
+ 	}
+ 
+ 	const reminderSection = formatReminderSection(cline.todoList)
+ 	return `<environment_details>\n${details.trim()}\n${reminderSection}\n</environment_details>`
+ }
++
++
++// /**
++// 	* 删除用户推荐提示词
++// 	* 遍历cline的历史聊天记录后3个用户角色的记录，每个用户消息记录应该都是数组，
++// 	* 不是数组的忽略，删除数组中所有内容类型为"text"，内容由<user_suggestions>开头的对话块，
++// 	* 然后将修改后的聊天记录设回给cline
++// 	*/
++// export async function removeUserSuggestions(cline: Task): Promise<void> {
++// 	// 获取历史聊天记录
++// 	const conversationHistory = [...cline.apiConversationHistory]
++	
++// 	// 找到所有用户角色的消息记录
++// 	const userMessages: ApiMessage[] = conversationHistory.filter(msg => msg.role === "user")
++	
++// 	// 只处理最后3个用户消息
++// 	const lastThreeUserMessages = userMessages.slice(-3)
++	
++// 	// 遍历这3个用户消息
++// 	for (const message of lastThreeUserMessages) {
++// 		// 检查消息内容是否为数组
++// 		if (Array.isArray(message.content)) {
++// 			// 过滤掉内容类型为"text"且内容由<user_suggestions>开头的对话块
++// 			const filteredContent = message.content.filter((block: any) => {
++// 				if (block.type === "text" && typeof block.text === "string") {
++// 					return !block.text.startsWith("<user_suggestions>")
++// 				}
++// 				return true
++// 			})
++			
++// 			// 更新消息内容
++// 			message.content = filteredContent
++// 		}
++// 	}
++	
++// 	// 将修改后的聊天记录设回给cline
++// 	await cline.overwriteApiConversationHistory(conversationHistory)
++// }
++
++import { CodeIndexManager } from "../../services/code-index/manager"
++
++export async function getUserSuggestions(cline: Task): Promise<string|undefined> {
++	if (cline.toolSequence.length >= 10) {
++		cline.toolSequence = cline.toolSequence.slice(-9)
++	}
++
++	const lastTool = cline.toolSequence.length ? cline.toolSequence[cline.toolSequence.length - 1] : undefined
++	let toolRepeat = 1
++	
++	// Count backwards from the second last element
++	for (let i = cline.toolSequence.length - 2; i >= 0; i--) {
++		if (cline.toolSequence[i] === lastTool) {
++			toolRepeat++
++		} else {
++			break
++		}
++	}
++
++	const toolTimes = cline.toolSequence.filter(t => t === lastTool).length
++
++	const provider = cline.providerRef.deref()
++	let isCodebaseSearchAvailable = false
++	if (provider) {
++		const codeIndexManager = CodeIndexManager.getInstance(provider.context)
++		isCodebaseSearchAvailable = provider &&
++		codeIndexManager !== undefined &&
++		codeIndexManager.isFeatureEnabled &&
++		codeIndexManager.isFeatureConfigured &&
++		codeIndexManager.isInitialized
++	}
++
++	const startNewTask = isCodebaseSearchAvailable ? `- The \`codebase_search\` tool is a powerful tool that can help you quickly find clues to start a task using semantic search at the beginning of the task. But its results can be inaccurate and incomplete, often missing a lot of relevant information. After an initial search, you should analyze the results, extract useful information, rewrite your query, and design a new, broader search.
++- Because \`codebase_search\` can miss information, you should, at the appropriate time and based on the information you already have, deeply understand the known code and begin using \`search_files\` (Glob/Grep), \`list_code_definition_names\` or \`list_files\` for more precise and comprehensive searches. Use these tools to gain a more complete understanding of the code structure.
++- Then, start widely using \`search_files\` (Glob/Grep), \`list_files\` and \`list_code_definition_names\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
++- After this, you can use other tools like \`read_file\` to obtain the most complete and detailed contextual information.
++`:
++`- At the beginning of a task, you should widely use \`search_files\` (Glob/Grep) to understand the directory structure, scope of functionality, or keywords involved in the project.
++- You can use the \`read_file\` tool to read files you are interested in. Based on the information obtained from \`search_files\` (Glob/Grep), you can select and read only specific sections (a range of line numbers) to confirm if the file's content is relevant to the task.
++- After finding relevant code clues, combine them with the information you already have to deeply understand the known code. Then, start using \`search_files\` (Glob/Grep), \`list_code_definition_names\` or \`list_files\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
++- Following this, you can use \`read_file\` and other context-gathering tools to obtain the most complete and detailed information.
++` 
++//- When using the \`read_file\` tool, you should precisely locate the specific part you want to read (line number range) instead of reading the entire file wholesale.
++
++	const UserSuggestions : Array<string> = []
++
++	switch (lastTool) {
++		case undefined:
++			UserSuggestions.push("- When you first receive the task, You should to analyze the key points of the task and plan a general direction for solving the problem.")
++			UserSuggestions.push("- Analyze the meaning of each key point in the task within the project.")
++			UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
++			UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
++			UserSuggestions.push("- For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.")
++			UserSuggestions.push(startNewTask)
++			break
++		case "execute_command":
++			break
++		case "read_file":
++			UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
++			if (toolTimes > 3) {
++				UserSuggestions.push("- You cannot understand the scope of the functionality simply by reading the files, as this is very inefficient. You should use search tools to extensively query the files involved in the functionality.")
++			}
++			break
++		case "write_to_file":
++			break
++		case "apply_diff":
++			break
++		case "insert_content":
++			break
++		case "search_and_replace":
++			break
++		case "search_files":
++			UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
++			UserSuggestions.push("- You can try selecting more patterns or keywords from tasks or known information to conduct a broader search.")
++			UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
++			break
++		case "list_files":
++			break
++		case "list_code_definition_names":
++			break
++		case "browser_action":
++			break
++		case "use_mcp_tool":
++			break
++		case "access_mcp_resource":
++			break
++		case "ask_followup_question":
++			break
++		case "attempt_completion":
++			UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
++			UserSuggestions.push(startNewTask)
++			break
++		case "switch_mode":
++			break
++		case "new_task":
++			UserSuggestions.push("- Review whether the subtasks you created return the results you expected. If the subtasks do not return the results you are satisfied with, you can restart the subtasks and describe the requirements more detailedly.")
++			break
++		case "fetch_instructions":
++			break
++		case "codebase_search":
++			UserSuggestions.push("If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
++			if (toolTimes > 3) {
++				UserSuggestions.push(startNewTask)
++			}
++			break
++		case "update_todo_list": {
++			const currentTodos = getTodoTaskTypes(cline)
++			if (!currentTodos) {
++				break
++			}
++			if (currentTodos.size > 0) {
++				if (currentTodos.has("analysis")) {
++					UserSuggestions.push(startNewTask)
++					UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
++					UserSuggestions.push("- For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.")
++				}
++			}
++			break
++		}
++		case "web_search":
++			break
++		case "url_fetch":
++			break
++		default:
++			break
++	}
++
++	return UserSuggestions.join("\n") || undefined
++}
+\ No newline at end of file
+diff --git a/src/core/environment/reminder.ts b/src/core/environment/reminder.ts
+index 6edb2436..39fa206e 100644
+--- a/src/core/environment/reminder.ts
++++ b/src/core/environment/reminder.ts
+@@ -21,12 +21,15 @@ export function formatReminderSection(todoList?: TodoItem[]): string {
+ 		"",
+ 	]
+ 
+-	lines.push("| # | Content | Status |")
+-	lines.push("|---|---------|--------|")
++	// lines.push("| # | Content | Status |")
++	// lines.push("|---|---------|--------|")
++	let l:any[] = []
+ 	todoList.forEach((item, idx) => {
+ 		const escapedContent = item.content.replace(/\\/g, "\\\\").replace(/\|/g, "\\|")
+-		lines.push(`| ${idx + 1} | ${escapedContent} | ${statusMap[item.status] || item.status} |`)
++		// lines.push(`| ${idx + 1} | ${escapedContent} | ${statusMap[item.status] || item.status} |`)
++		l.push({ index: idx + 1, content: escapedContent, status: statusMap[item.status] || item.status })
+ 	})
++	lines.push(`${JSON.stringify(l)}`)
+ 	lines.push("")
+ 
+ 	lines.push(
+diff --git a/src/core/ignore/RooIgnoreController.ts b/src/core/ignore/RooIgnoreController.ts
+index fda6c371..eb0bca95 100644
+--- a/src/core/ignore/RooIgnoreController.ts
++++ b/src/core/ignore/RooIgnoreController.ts
+@@ -196,6 +196,148 @@ export class RooIgnoreController {
+ 			return undefined
+ 		}
+ 
+-		return `# .rooignore\n\n(The following is provided by a root-level .rooignore file where the user has specified files and directories that should not be accessed. When using list_files, you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${this.rooIgnoreContent}\n.rooignore`
++		return `# .rooignore\n\n(The following is provided by a root-level .rooignore file where the user has specified files and directories that should not be accessed. When using 'glob', you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${this.rooIgnoreContent}\n.rooignore`
++	}
++}
++
++
++
++
++
++/**
++ * Controls LLM access to files by enforcing ignore patterns.
++ * Designed to be instantiated once in Cline.ts and passed to file manipulation services.
++ * Uses the 'ignore' library to support standard .gitignore syntax in .rooignore files.
++ */
++export class CodebaseIgnoreController {
++	private cwd: string
++	private ignoreInstance: Ignore
++	private disposables: vscode.Disposable[] = []
++	rooIgnoreContent: string | undefined
++
++	constructor(cwd: string) {
++		this.cwd = cwd
++		this.ignoreInstance = ignore()
++		this.rooIgnoreContent = undefined
++		// Set up file watcher for .rooignore
++		this.setupFileWatcher()
++	}
++
++	/**
++	 * Initialize the controller by loading custom patterns
++	 * Must be called after construction and before using the controller
++	 */
++	async initialize(): Promise<void> {
++		await this.loadRooIgnore()
++	}
++
++	/**
++	 * Set up the file watcher for .rooignore changes
++	 */
++	private setupFileWatcher(): void {
++		const rooignorePattern = new vscode.RelativePattern(this.cwd, ".codebaseignore")
++		const fileWatcher = vscode.workspace.createFileSystemWatcher(rooignorePattern)
++
++		// Watch for changes and updates
++		this.disposables.push(
++			fileWatcher.onDidChange(() => {
++				this.loadRooIgnore()
++			}),
++			fileWatcher.onDidCreate(() => {
++				this.loadRooIgnore()
++			}),
++			fileWatcher.onDidDelete(() => {
++				this.loadRooIgnore()
++			}),
++		)
++
++		// Add fileWatcher itself to disposables
++		this.disposables.push(fileWatcher)
++	}
++
++	/**
++	 * Load custom patterns from .rooignore if it exists
++	 */
++	private async loadRooIgnore(): Promise<void> {
++		try {
++			// Reset ignore instance to prevent duplicate patterns
++			this.ignoreInstance = ignore()
++			const ignorePath = path.join(this.cwd, ".codebaseignore")
++			if (await fileExistsAtPath(ignorePath)) {
++				const content = await fs.readFile(ignorePath, "utf8")
++				this.rooIgnoreContent = content
++				this.ignoreInstance.add(content)
++				this.ignoreInstance.add(".codebaseignore")
++			} else {
++				this.rooIgnoreContent = undefined
++			}
++		} catch (error) {
++			// Should never happen: reading file failed even though it exists
++			console.error("Unexpected error loading .rooignore:", error)
++		}
++	}
++
++	/**
++	 * Check if a file should be accessible to the LLM
++	 * @param filePath - Path to check (relative to cwd)
++	 * @returns true if file is accessible, false if ignored
++	 */
++	validateAccess(filePath: string): boolean {
++		// Always allow access if .rooignore does not exist
++		if (!this.rooIgnoreContent) {
++			return true
++		}
++		try {
++			// Normalize path to be relative to cwd and use forward slashes
++			const absolutePath = path.resolve(this.cwd, filePath)
++			const relativePath = path.relative(this.cwd, absolutePath).toPosix()
++
++			// Ignore expects paths to be path.relative()'d
++			return !this.ignoreInstance.ignores(relativePath)
++		} catch (error) {
++			// console.error(`Error validating access for ${filePath}:`, error)
++			// Ignore is designed to work with relative file paths, so will throw error for paths outside cwd. We are allowing access to all files outside cwd.
++			return true
++		}
++	}
++
++	/**
++	 * Filter an array of paths, removing those that should be ignored
++	 * @param paths - Array of paths to filter (relative to cwd)
++	 * @returns Array of allowed paths
++	 */
++	filterPaths(paths: string[]): string[] {
++		try {
++			return paths
++				.map((p) => ({
++					path: p,
++					allowed: this.validateAccess(p),
++				}))
++				.filter((x) => x.allowed)
++				.map((x) => x.path)
++		} catch (error) {
++			console.error("Error filtering paths:", error)
++			return [] // Fail closed for security
++		}
++	}
++
++	/**
++	 * Clean up resources when the controller is no longer needed
++	 */
++	dispose(): void {
++		this.disposables.forEach((d) => d.dispose())
++		this.disposables = []
++	}
++
++	/**
++	 * Get formatted instructions about the .rooignore file for the LLM
++	 * @returns Formatted instructions or undefined if .rooignore doesn't exist
++	 */
++	getInstructions(): string | undefined {
++		if (!this.rooIgnoreContent) {
++			return undefined
++		}
++
++		return `# .rooignore\n\n(The following is provided by a root-level .rooignore file where the user has specified files and directories that should not be accessed. When using 'glob', you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${this.rooIgnoreContent}\n.rooignore`
+ 	}
+ }
+diff --git a/src/core/mentions/index.ts b/src/core/mentions/index.ts
+index b6a9dd4d..87c9f55f 100644
+--- a/src/core/mentions/index.ts
++++ b/src/core/mentions/index.ts
+@@ -13,12 +13,13 @@ import { openFile } from "../../integrations/misc/open-file"
+ import { extractTextFromFile } from "../../integrations/misc/extract-text"
+ import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
+ 
+-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
++import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
+ 
+ import { FileContextTracker } from "../context-tracking/FileContextTracker"
+ 
+ import { RooIgnoreController } from "../ignore/RooIgnoreController"
+ import { getCommand } from "../../services/command/commands"
++import { Task } from "../task/Task"
+ 
+ import { t } from "../../i18n"
+ 
+@@ -46,6 +47,7 @@ function getUrlErrorMessage(error: unknown): string {
+ 	return t("common:errors.url_fetch_failed", { error: errorMessage })
+ }
+ 
++
+ export async function openMention(mention?: string): Promise<void> {
+ 	if (!mention) {
+ 		return
+@@ -84,6 +86,7 @@ export async function parseMentions(
+ 	includeDiagnosticMessages: boolean = true,
+ 	maxDiagnosticMessages: number = 50,
+ 	maxReadFileLine?: number,
++	globalStoragePath?: string,
+ ): Promise<string> {
+ 	const mentions: Set<string> = new Set()
+ 	const commandMentions: Set<string> = new Set()
+@@ -215,8 +218,8 @@ export async function parseMentions(
+ 
+ 	// Process command mentions
+ 	for (const commandName of commandMentions) {
+-		try {
+-			const command = await getCommand(cwd, commandName)
++				try {
++					const command = await getCommand(cwd, commandName)
+ 			if (command) {
+ 				let commandOutput = ""
+ 				if (command.description) {
+diff --git a/src/core/mentions/processUserContentMentions.ts b/src/core/mentions/processUserContentMentions.ts
+index b903e743..d4768261 100644
+--- a/src/core/mentions/processUserContentMentions.ts
++++ b/src/core/mentions/processUserContentMentions.ts
+@@ -1,7 +1,8 @@
+ import { Anthropic } from "@anthropic-ai/sdk"
+ import { parseMentions } from "./index"
+-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
++import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
+ import { FileContextTracker } from "../context-tracking/FileContextTracker"
++import { Task } from "../task/Task"
+ 
+ /**
+  * Process mentions in user content, specifically within task and feedback tags
+@@ -13,6 +14,7 @@ export async function processUserContentMentions({
+ 	fileContextTracker,
+ 	rooIgnoreController,
+ 	showRooIgnoredFiles = true,
++	globalStoragePath,
+ 	includeDiagnosticMessages = true,
+ 	maxDiagnosticMessages = 50,
+ 	maxReadFileLine,
+@@ -23,6 +25,7 @@ export async function processUserContentMentions({
+ 	fileContextTracker: FileContextTracker
+ 	rooIgnoreController?: any
+ 	showRooIgnoredFiles?: boolean
++	globalStoragePath?: string
+ 	includeDiagnosticMessages?: boolean
+ 	maxDiagnosticMessages?: number
+ 	maxReadFileLine?: number
+@@ -59,6 +62,7 @@ export async function processUserContentMentions({
+ 							includeDiagnosticMessages,
+ 							maxDiagnosticMessages,
+ 							maxReadFileLine,
++							globalStoragePath,
+ 						),
+ 					}
+ 				}
+@@ -79,6 +83,7 @@ export async function processUserContentMentions({
+ 								includeDiagnosticMessages,
+ 								maxDiagnosticMessages,
+ 								maxReadFileLine,
++								globalStoragePath,
+ 							),
+ 						}
+ 					}
+@@ -100,6 +105,7 @@ export async function processUserContentMentions({
+ 										includeDiagnosticMessages,
+ 										maxDiagnosticMessages,
+ 										maxReadFileLine,
++										globalStoragePath,
+ 									),
+ 								}
+ 							}
+diff --git a/src/core/prompts/sections/markdown-formatting.ts b/src/core/prompts/sections/markdown-formatting.ts
+index 87f922e9..3a76bc4a 100644
+--- a/src/core/prompts/sections/markdown-formatting.ts
++++ b/src/core/prompts/sections/markdown-formatting.ts
+@@ -1,7 +1,11 @@
++// In all responses, any reference that requires specifying a location, such as guiding users to a certain file or a specific language structure within a file, or indicating that certain content is located at a specific position in a file, MUST be set as clickable MARKDOWN hyperlinks, such as guiding users to find a certain function within a file
++
+ export function markdownFormattingSection(): string {
+ 	return `====
+ 
+ MARKDOWN RULES
+ 
+-ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>`
++ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](./relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>
++line can be a single line (e.g. [func](./path.ext:12)) or a range (e.g. [func](./path.ext:12-25)).
++`
+ }
+diff --git a/src/core/prompts/sections/mcp-servers.ts b/src/core/prompts/sections/mcp-servers.ts
+index 643233ab..d0f508d9 100644
+--- a/src/core/prompts/sections/mcp-servers.ts
++++ b/src/core/prompts/sections/mcp-servers.ts
+@@ -1,10 +1,12 @@
+ import { DiffStrategy } from "../../../shared/tools"
+ import { McpHub } from "../../../services/mcp/McpHub"
++import { config } from "@dotenvx/dotenvx"
+ 
+ export async function getMcpServersSection(
+ 	mcpHub?: McpHub,
+ 	diffStrategy?: DiffStrategy,
+ 	enableMcpServerCreation?: boolean,
++	mode?: string
+ ): Promise<string> {
+ 	if (!mcpHub) {
+ 		return ""
+@@ -15,6 +17,17 @@ export async function getMcpServersSection(
+ 			? `${mcpHub
+ 					.getServers()
+ 					.filter((server) => server.status === "connected")
++					.filter((server) => {
++						if (!mode) return true
++						const cfg = server.config ? JSON.parse(server.config) : {}
++						const enabledModes = cfg.enabledModes || []
++						const disabledModes = cfg.disabledModes || []
++						
++						if (enabledModes.length > 0) {
++							return enabledModes.includes(mode) && !disabledModes.includes(mode)
++						}
++						return !disabledModes.includes(mode)
++					})
+ 					.map((server) => {
+ 						const tools = server.tools
+ 							?.filter((tool) => tool.enabledForPrompt !== false)
+diff --git a/src/core/prompts/sections/rules.ts b/src/core/prompts/sections/rules.ts
+index a5eaf23c..9db53017 100644
+--- a/src/core/prompts/sections/rules.ts
++++ b/src/core/prompts/sections/rules.ts
+@@ -50,6 +50,7 @@ export function getRulesSection(
+ 	supportsComputerUse: boolean,
+ 	diffStrategy?: DiffStrategy,
+ 	codeIndexManager?: CodeIndexManager,
++	allowedMultiCall?: boolean,
+ ): string {
+ 	const isCodebaseSearchAvailable =
+ 		codeIndexManager &&
+@@ -57,10 +58,164 @@ export function getRulesSection(
+ 		codeIndexManager.isFeatureConfigured &&
+ 		codeIndexManager.isInitialized
+ 
++	const allowedMultiCallEnabled = allowedMultiCall ?? false 
++	const rulesPrompt = `
++====
++
++# RULES
++
++${allowedMultiCallEnabled ? 
++	"1. If multiple actions are needed, you can use multiple tools at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. You should actively use analytical tools to obtain broader clues. \n2. If you need to read multiple files in a single message, you MUST use the \`read_file\` tool's method to read multiple files in one call, rather than calling the read_file tool multiple times. Reserve more calls for search tools.\n"
++	: "1. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result. \n2. By waiting for and carefully considering the user's or tools' response after each tool use, you can react accordingly and make informed decisions about how to proceed with the task. This iterative process helps ensure the overall success and accuracy of your work.\n"}
++3. You should always prefer using other editing tools over write_to_file when making changes to existing files since write_to_file is much slower and cannot handle large files.
++4. When using editing tools to modify a file, use the tool directly with the desired content. You do not need to display the content before using the tool. ALWAYS provide the COMPLETE file content in your response. This is NON-NEGOTIABLE. Partial updates or placeholders like '// rest of code unchanged' are STRICTLY FORBIDDEN. You MUST include ALL parts of the file, even if they haven't been modified. Failure to do so will result in incomplete or broken code, severely impacting the user's project.
++5. When making changes to code, always consider the context in which the code is being used. Ensure that your changes are compatible with the existing codebase and that they follow the project's coding standards and best practices.	
++6. When executing commands, if you don't see the expected output, use the ask_followup_question tool to request the user to copy and paste it back to you.
++7. You MUST use the \`attempt_completion\` tool to show your conclusion. When using the \`attempt_completion\` tool, the <result></result> tag must contain a complete summary of the work. NEVER let the user search for the result in the historical conversation. For example, in the attempt_completion result, you cannot say "I have already summarized the result in the historical conversation."
++8. You MUST ensure that all conclusions presented in the \`attempt_completion\` tool are closely related to and precise about the user's task. DO NOT include content unrelated to the user's task.
++9. Use the available search tools to understand the codebase and the user's query. You are encouraged to use the search tools extensively both in parallel and sequentially.
++10. Be thorough: Check multiple locations, consider different naming conventions, look for related files. 
++11. For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.
++12. ${isCodebaseSearchAvailable?"**CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use the `codebase_search` tool FIRST before using search_files or other file exploration tools.** This requirement applies throughout the entire conversation, not just when starting a task. The codebase_search tool uses semantic search to find relevant code based on meaning, not just keywords, making it much more effective for understanding how features are implemented. Even if you've already explored some parts of the codebase, any new area or functionality you need to understand requires using codebase_search first. The “codebase_search” can help you start from an unknown field but cannot help you find all clues, as it will lose some more accurate and detailed information. Therefore, you **SHOULD NOT** rely entirely on “codebase_search” and should use more explicitly controllable tools like \`search_files\` (Glob/Grep), \`read_file\`, \`list_code_definition_names\` after obtaining the clue. Implement the solution using all tools available to you.":"Implement the solution using all tools available to you. "}
++13. After finding contextual information related to the issue, you should still perform redundant searches using the additional key information and reflect to **ENSURE that no content related to the task is missed**.
++14. IMPORTANT: If you want to reference code in a file, you MUST use a markdown-formatted link pointing to the location of the source code, rather than outputting it as texts or code blocks. It allows you to direct the user to easily navigate to the source code location.
++15. You must complete all pending tasks before you can call the \`attempt_completion\` tool to end the task.
++16. For all file paths, use markdown-formatted links to point to the source files.
++17. You should conduct periodic reviews and reflections at appropriate times, asking yourself if you have missed any clues or key points.
++18. Don't be stingy with search attempts; use various keywords or matching patterns from multiple angles to conduct a broad search.
++19. For key content or logic encountered during the process of understanding source code, you MUST use the search tool to perform verification searches to determine their scope of influence.
++20. Each time you call the \`read_file\` tool, you should try to read as many of your interested files as possible simultaneously to save on \`read_file\` tool calls and obtain more information.
++
++==== 
++
++# TONE and STYLE 
++You should be accurate, concise, direct, and to the point.
++You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.
++IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. 
++IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to. 
++IMPORTANT: DO NOT begin the response with exclamations like "我知道了！" or "太棒了！" and so on. Maintain calm and professional.
++IMPORTANT: Answer the user's question directly, avoiding any elaboration, explanation, introduction, conclusion, or excessive details. You MUST AVOID text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next..." or "现在让我来总结一下我的发现：..." or "现在我理解了xxx..." or "让我来（做一件事）...".
++
++==== 
++
++# PROACTIVENESS
++
++You are allowed to be proactive, but only when the user asks you to do something. You should strive to strike a balance between:
++- Doing the right thing when asked, including taking actions and follow-up actions
++- Not surprising the user with actions you take without asking
++
++For example, if the user asks you how to approach something, you should do your best to answer their question first, and not immediately jump into taking actions.
++
++====
++
++# PROFESSIONAL OBJECTIVITY
++
++Prioritize technical accuracy and truthfulness over validating the user's beliefs. Focus on facts and problem-solving, providing direct, objective technical info without any unnecessary superlatives, praise, or emotional validation. It is best for the user if Claude honestly applies the same rigorous standards to all ideas and disagrees when necessary, even if it may not be what the user wants to hear. Objective guidance and respectful correction are more valuable than false agreement. Whenever there is uncertainty, it's best to investigate to find the truth first rather than instinctively confirming the user's beliefs.
++
++====
++
++# TASK MANAGEMENT
++
++You have access to the \`update_todo_list\` tools to help you manage and plan tasks. Use these tools **VERY frequently** to ensure that you are tracking your tasks and giving the user visibility into your progress.
++These tools are also **EXTREMELY helpful** for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
++
++It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
++
++Examples:
++<example>
++user: Run the build and fix any type errors
++assistant: I'm going to use the \`update_todo_list\` tool to write the following items to the todo list:
++- Run the build
++- Fix any type errors
++
++I'm now going to run the build using Bash.
++
++Looks like I found 10 type errors. I'm going to use the \`update_todo_list\` tool to write 10 items to the todo list.
++
++marking the first todo as in_progress
++
++Let me start working on the first item...
++
++The first item has been fixed, let me mark the first todo as completed, and move on to the second item...
++..
++..
++</example>
++
++<example>
++user: Help me write a new feature that allows users to track their usage metrics and export them to various formats
++assistant: I'll help you implement a usage metrics tracking and export feature. Let me first use the \`update_todo_list\` tool to plan this task.
++Adding the following todos to the todo list:
++1. Research existing metrics tracking in the codebase
++2. Design the metrics collection system
++3. Implement core metrics tracking functionality
++4. Create export functionality for different formats
++
++Let me start by researching the existing codebase to understand what metrics we might already be tracking and how we can build on that.
++
++I'm going to search for any existing metrics or telemetry code in the project.
++
++I've found some existing telemetry code. Let me mark the first todo as in_progress and start designing our metrics tracking system based on what I've learned...
++
++[Assistant continues implementing the feature step by step, marking todos as in_progress and completed as they go]
++</example>
++
++`
++	return rulesPrompt
++
+ 	const codebaseSearchRule = isCodebaseSearchAvailable
+-		? "- **CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use the `codebase_search` tool FIRST before using search_files or other file exploration tools.** This requirement applies throughout the entire conversation, not just when starting a task. The codebase_search tool uses semantic search to find relevant code based on meaning, not just keywords, making it much more effective for understanding how features are implemented. Even if you've already explored some parts of the codebase, any new area or functionality you need to understand requires using codebase_search first.\n"
++		? "- **CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use the `codebase_search` tool FIRST before using search_files or other file exploration tools.** This requirement applies throughout the entire conversation, not just when starting a task. The codebase_search tool uses semantic search to find relevant code based on meaning, not just keywords, making it much more effective for understanding how features are implemented. Even if you've already explored some parts of the codebase, any new area or functionality you need to understand requires using codebase_search first. The “codebase_search” can help you start from an unknown field but cannot help you find all clues, as it will lose some more accurate and detailed information. Therefore, you **SHOULD NOT** rely entirely on “codebase_search” and should use more explicitly controllable tools like search_files (for regex patterns), read_file, list_code_definition_names.\n"
+ 		: ""
+ 
++// # 最佳实践
++
++// ## 获取上下文
++// - `codebase_search` 工具非常强大，但是他得到的结果准确率不高，且不够全面，会丢失很多相关的信息。进行一次搜索后，你应当结合搜索出来的内容，从中提取有效信息，进行问题重写，重新设计query，进行更广泛的搜索。
++// - 由于`codebase_search` 会遗失信息的原因，你应该在适当的时候，结合你已知的信息，深度理解已知代码，开始使用 search_files (for regex patterns) 和 list_code_definition_names 来进行更准确的、更完整的搜索。通过这些工具更加全面地了解代码结构。
++// - 在此之后，可以使用 read_file 等其他工具获取上下文工具，获取最完整最细致的上下文信息。
++// - 在使用 read_file 工具时，你应当准确定位你想要读的部分（行号范围），而不是笼统的阅读整个文件。
++// - **整个获取上下文的过程，你使用工具的精力占比应当为，20%的时间使用`codebase_search`（少量时间，仅用于最开始，切入问题，定位大致范围），30% 时间使用 search_files (for regex patterns) 和 list_code_definition_names 来进行更准确的、更完整的搜索，理解项目结构，50%的时间 使用read_file以及其他工具获得更详细的上下文信息，理解具体实现**
++
++// # 最佳实践
++
++// ## 获取上下文
++// - 最开始，你应该通过`list_files` ，了解项目的目录结构，通过文件或目录名称，大概获悉每个文件或目录的作用，使用list_code_definition_names工具了解文件中的代码结构
++// - 可以使用 read_file 工具对感兴趣的文件进行阅读，根据list_code_definition_names获得的信息，可以只节选部分段落（部分行号范围）以确认文件内容和任务是否相关。
++// - 找到相关的代码线索后，结合你已知的信息，深度理解已知代码，开始使用 search_files (for regex patterns) 和 list_code_definition_names 来进行更准确的、更完整的大范围搜索。通过这些工具更加全面地了解代码结构。
++// - 在此之后，可以使用 read_file 等其他工具获取上下文工具，获取最完整最细致的上下文信息。
++// - 在使用 read_file 工具时，你应当准确定位你想要读的部分（行号范围），而不是笼统的阅读整个文件。
++// - **对于每个任务，整个获取上下文的过程，你的精力占比应当为，20%的时间使用`list_files`, `list_code_definition_names`,`read_file`（最开始初步获悉代码结构），30% 时间使用 search_files (for regex patterns) 和 list_code_definition_names 来进行更准确的、更完整的搜索，理解项目结构，50%的时间 使用read_file以及其他工具获得更详细的上下文信息，理解具体实现**
++
++// 	const bestPractices = isCodebaseSearchAvailable
++// ?`====
++
++// # Best Practices
++
++// ## Obtaining Context
++// - The \`codebase_search\` tool is very powerful, but its results can be inaccurate and incomplete, often missing a lot of relevant information. After an initial search, you should analyze the results, extract useful information, rewrite your query, and design a new, broader search.
++// - Because \`codebase_search\` can miss information, you should, at the appropriate time and based on the information you already have, deeply understand the known code and begin using \`search_files\` (for regex patterns), \`list_code_definition_names\` and \`list_files\` for more precise and comprehensive searches. Use these tools to gain a more complete understanding of the code structure.
++// - After this, you can use other tools like \`read_file\` to obtain the most complete and detailed contextual information.
++// - When using the \`read_file\` tool, you should precisely locate the specific part you want to read (line number range) rather than reading the entire file wholesale.
++// - **For each task, throughout the entire process of obtaining context, the distribution of your effort in using these tools should be: 20% of your time on \`codebase_search\` (a small amount of time, only at the very beginning to approach the problem and locate the general area), 30% on \`search_files\` (for regex patterns) and \`list_code_definition_names\` to conduct more accurate and complete searches and to understand the project structure, and 50% on \`read_file\` and other tools to get more detailed context and understand the specific implementation.**
++// `:`====
++
++// # Best Practices
++
++// ## Obtaining Context
++// - In the beginning, you should use \`list_files\` to understand the project's directory structure. From the file or directory names, you can get a general idea of the purpose of each. Use the \`list_code_definition_names\` tool to understand the code structure within files.
++// - You can use the \`read_file\` tool to read files you are interested in. Based on the information obtained from \`list_code_definition_names\`, you can select and read only specific sections (a range of line numbers) to confirm if the file's content is relevant to the task.
++// - After finding relevant code clues, combine them with the information you already have to deeply understand the known code. Then, start using \`search_files\` (for regex patterns) and \`list_code_definition_names\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
++// - Following this, you can use \`read_file\` and other context-gathering tools to obtain the most complete and detailed information.
++// - When using the \`read_file\` tool, you should precisely locate the specific part you want to read (line number range) instead of reading the entire file wholesale.
++// - **For each task, the distribution of your effort throughout the context-gathering process should be: 20% of your time on \`list_files\`, \`list_code_definition_names\`, and \`read_file\` (to initially get a basic understanding of the code structure), 30% on \`search_files\` (for regex patterns) and \`list_code_definition_names\` to conduct more accurate and complete searches and to understand the project structure, and 50% on \`read_file\` and other tools to obtain more detailed context and understand the specific implementation.**
++// `
++// 	const bestPracticesTodo = `
++// ## To-do list
++
++// - Ambiguous tasks are not allowed; task work must be clear and distinct, and the wording of tasks must be clear and explicit.
++// - Overlapping is not allowed between different tasks in the task list.
++// - When working according to the task list, only one task should be completed at a time to avoid overly frequent updates to the task list; simple tasks should be combined together.	
++// `
++
+ 	return `====
+ 
+ RULES
+@@ -77,9 +232,9 @@ ${getEditingInstructions(diffStrategy)}
+ - Be sure to consider the type of project (e.g. Python, JavaScript, web application) when determining the appropriate structure and files to include. Also consider what files may be most relevant to accomplishing the task, for example looking at a project's manifest file would help you understand the project's dependencies, which you could incorporate into any code you write.
+   * For example, in architect mode trying to edit app.js would be rejected because architect mode can only edit files matching "\\.md$"
+ - When making changes to code, always consider the context in which the code is being used. Ensure that your changes are compatible with the existing codebase and that they follow the project's coding standards and best practices.
+-- Do not ask for more information than necessary. Use the tools provided to accomplish the user's request efficiently and effectively. When you've completed your task, you must use the attempt_completion tool to present the result to the user. The user may provide feedback, which you can use to make improvements and try again.
++- Do not ask for more information than necessary from user. Use tools to obtain them by yourself. Use the tools provided to accomplish the user's request efficiently and effectively. When you've completed your task, you must use the attempt_completion tool to present the result to the user. The user may provide feedback, which you can use to make improvements and try again.
+ - You are only allowed to ask the user questions using the ask_followup_question tool. Use this tool only when you need additional details to complete a task, and be sure to use a clear and concise question that will help you move forward with the task. When you ask a question, provide the user with 2-4 suggested answers based on your question so they don't need to do so much typing. The suggestions should be specific, actionable, and directly related to the completed task. They should be ordered by priority or logical sequence. However if you can use the available tools to avoid having to ask the user questions, you should do so. For example, if the user mentions a file that may be in an outside directory like the Desktop, you should use the list_files tool to list the files in the Desktop and check if the file they are talking about is there, rather than asking the user to provide the file path themselves.
+-- When executing commands, if you don't see the expected output, assume the terminal executed the command successfully and proceed with the task. The user's terminal may be unable to stream the output back properly. If you absolutely need to see the actual terminal output, use the ask_followup_question tool to request the user to copy and paste it back to you.
++- When executing commands, if you don't see the expected output, use the ask_followup_question tool to request the user to copy and paste it back to you.
+ - The user may provide a file's contents directly in their message, in which case you shouldn't use the read_file tool to get the file contents again since you already have it.
+ - Your goal is to try to accomplish the user's task, NOT engage in a back and forth conversation.${
+ 		supportsComputerUse
+diff --git a/src/core/prompts/sections/system-info.ts b/src/core/prompts/sections/system-info.ts
+index 8adc90a1..db801d65 100644
+--- a/src/core/prompts/sections/system-info.ts
++++ b/src/core/prompts/sections/system-info.ts
+@@ -11,9 +11,9 @@ SYSTEM INFORMATION
+ Operating System: ${osName()}
+ Default Shell: ${getShell()}
+ Home Directory: ${os.homedir().toPosix()}
+-Current Workspace Directory: ${cwd.toPosix()}
++Current Workspace Directory: ${cwd.toPosix()}`
+ 
+-The Current Workspace Directory is the active VS Code project directory, and is therefore the default directory for all tool operations. New terminals will be created in the current workspace directory, however if you change directories in a terminal it will then have a different working directory; changing directories in a terminal does not modify the workspace directory, because you do not have access to change the workspace directory. When the user initially gives you a task, a recursive list of all filepaths in the current workspace directory ('/test/path') will be included in environment_details. This provides an overview of the project's file structure, offering key insights into the project from directory/file names (how developers conceptualize and organize their code) and file extensions (the language used). This can also guide decision-making on which files to explore further. If you need to further explore directories such as outside the current workspace directory, you can use the list_files tool. If you pass 'true' for the recursive parameter, it will list files recursively. Otherwise, it will list files at the top level, which is better suited for generic directories where you don't necessarily need the nested structure, like the Desktop.`
++// The Current Workspace Directory is the active VS Code project directory, and is therefore the default directory for all tool operations. New terminals will be created in the current workspace directory, however if you change directories in a terminal it will then have a different working directory; changing directories in a terminal does not modify the workspace directory, because you do not have access to change the workspace directory. When the user initially gives you a task, a recursive list of all filepaths in the current workspace directory ('/test/path') will be included in environment_details. This provides an overview of the project's file structure, offering key insights into the project from directory/file names (how developers conceptualize and organize their code) and file extensions (the language used). This can also guide decision-making on which files to explore further. If you need to further explore directories such as outside the current workspace directory, you can use the list_files tool. If you pass 'true' for the recursive parameter, it will list files recursively. Otherwise, it will list files at the top level, which is better suited for generic directories where you don't necessarily need the nested structure, like the Desktop.`
+ 
+ 	return details
+ }
+diff --git a/src/core/prompts/sections/tool-use-guidelines.ts b/src/core/prompts/sections/tool-use-guidelines.ts
+index a526bbc7..2c068e45 100644
+--- a/src/core/prompts/sections/tool-use-guidelines.ts
++++ b/src/core/prompts/sections/tool-use-guidelines.ts
+@@ -15,6 +15,7 @@ export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager)
+ 	guidelinesList.push(
+ 		`${itemNumber++}. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.`,
+ 	)
++	guidelinesList.push(`${itemNumber++}. Formulate your tool use using the XML format specified for each tool.`)
+ 
+ 	// Conditional codebase search guideline
+ 	if (isCodebaseSearchAvailable) {
+@@ -22,7 +23,7 @@ export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager)
+ 			`${itemNumber++}. **CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use the \`codebase_search\` tool FIRST before any other search or file exploration tools.** This applies throughout the entire conversation, not just at the beginning. The codebase_search tool uses semantic search to find relevant code based on meaning rather than just keywords, making it far more effective than regex-based search_files for understanding implementations. Even if you've already explored some code, any new area of exploration requires codebase_search first.`,
+ 		)
+ 		guidelinesList.push(
+-			`${itemNumber++}. Choose the most appropriate tool based on the task and the tool descriptions provided. After using codebase_search for initial exploration of any new code area, you may then use more specific tools like search_files (for regex patterns), list_files, or read_file for detailed examination. For example, using the list_files tool is more effective than running a command like \`ls\` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.`,
++			`${itemNumber++}. Choose the most appropriate tool based on the task and the tool descriptions provided. The “codebase_search” can help you start from an unknown field but cannot help you find all clues, as it will lose some more accurate and detailed information. Therefore, you should not rely entirely on “codebase_search” and should use more explicitly controllable tools like search_files (for regex patterns), read_file, list_code_definition_names. It's critical that you think about each available tool and use the one that best fits the current step in the task. For example using the list_files tool is more effective than running a command like \`ls\` in the terminal. `,
+ 		)
+ 	} else {
+ 		guidelinesList.push(
+@@ -34,7 +35,6 @@ export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager)
+ 	guidelinesList.push(
+ 		`${itemNumber++}. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.`,
+ 	)
+-	guidelinesList.push(`${itemNumber++}. Formulate your tool use using the XML format specified for each tool.`)
+ 	guidelinesList.push(`${itemNumber++}. After each tool use, the user will respond with the result of that tool use. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
+   - Information about whether the tool succeeded or failed, along with any reasons for failure.
+   - Linter errors that may have arisen due to the changes you made, which you'll need to address.
+@@ -56,4 +56,4 @@ It is crucial to proceed step-by-step, waiting for the user's message after each
+ 4. Ensure that each action builds correctly on the previous ones.
+ 
+ By waiting for and carefully considering the user's response after each tool use, you can react accordingly and make informed decisions about how to proceed with the task. This iterative process helps ensure the overall success and accuracy of your work.`
+-}
++}
+\ No newline at end of file
+diff --git a/src/core/prompts/sections/tool-use.ts b/src/core/prompts/sections/tool-use.ts
+index ea27e591..0effaa1c 100644
+--- a/src/core/prompts/sections/tool-use.ts
++++ b/src/core/prompts/sections/tool-use.ts
+@@ -1,9 +1,11 @@
+-export function getSharedToolUseSection(): string {
++export function getSharedToolUseSection(allowedMultiCall?: boolean): string {
++	const allowedMultiCallEnabled = allowedMultiCall ?? false
+ 	return `====
+ 
+ TOOL USE
+ 
+-You have access to a set of tools that are executed upon the user's approval. You can use one tool per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
++${ allowedMultiCallEnabled ? "You have access to a set of tools that are executed upon the user's approval. You can use multiple tools per message, and will receive the result of that tool use in the user's response. "
++:"You have access to a set of tools that are executed upon the user's approval. You can use one tool per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use."}
+ 
+ # Tool Use Formatting
+ 
+@@ -15,7 +17,7 @@ Tool uses are formatted using XML-style tags. The tool name itself becomes the X
+ ...
+ </actual_tool_name>
+ 
+-For example, to use the new_task tool:
++For example, to use the sub agent tool:
+ 
+ <new_task>
+ <mode>code</mode>
+diff --git a/src/core/prompts/system.ts b/src/core/prompts/system.ts
+index cbe91903..e8e3c237 100644
+--- a/src/core/prompts/system.ts
++++ b/src/core/prompts/system.ts
+@@ -60,7 +60,6 @@ async function generatePrompt(
+ 	rooIgnoreInstructions?: string,
+ 	partialReadsEnabled?: boolean,
+ 	settings?: SystemPromptSettings,
+-	todoList?: TodoItem[],
+ ): Promise<string> {
+ 	if (!context) {
+ 		throw new Error("Extension context is required for generating system prompt")
+@@ -81,17 +80,20 @@ async function generatePrompt(
+ 	const [modesSection, mcpServersSection] = await Promise.all([
+ 		getModesSection(context),
+ 		shouldIncludeMcp
+-			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
++			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation, mode)
+ 			: Promise.resolve(""),
+ 	])
+ 
+ 	const codeIndexManager = CodeIndexManager.getInstance(context)
+ 
++	// Extract allowedMultiCall from experiments
++	const allowedMultiCall = experiments?.allowedMultiCall ?? false
++
+ 	const basePrompt = `${roleDefinition}
+ 
+ ${markdownFormattingSection()}
+ 
+-${getSharedToolUseSection()}
++${getSharedToolUseSection(allowedMultiCall)}
+ 
+ ${getToolDescriptionsForMode(
+ 	mode,
+@@ -107,19 +109,19 @@ ${getToolDescriptionsForMode(
+ 	settings,
+ )}
+ 
+-${getToolUseGuidelinesSection(codeIndexManager)}
++${true?"":getToolUseGuidelinesSection(codeIndexManager)}
+ 
+ ${mcpServersSection}
+ 
+-${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
++${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+ 
+ ${modesSection}
+ 
+-${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager)}
++${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
+ 
+ ${getSystemInfoSection(cwd)}
+ 
+-${getObjectiveSection(codeIndexManager, experiments)}
++${true?"":getObjectiveSection(codeIndexManager, experiments)}
+ 
+ ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+ 	language: language ?? formatLanguage(vscode.env.language),
+@@ -148,7 +150,6 @@ export const SYSTEM_PROMPT = async (
+ 	rooIgnoreInstructions?: string,
+ 	partialReadsEnabled?: boolean,
+ 	settings?: SystemPromptSettings,
+-	todoList?: TodoItem[],
+ ): Promise<string> => {
+ 	if (!context) {
+ 		throw new Error("Extension context is required for generating system prompt")
+@@ -170,6 +171,29 @@ export const SYSTEM_PROMPT = async (
+ 	// Get full mode config from custom modes or fall back to built-in modes
+ 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
+ 
++	if (mode === "native") {
++		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
++			mode,
++			promptComponent,
++			customModes,
++		)
++		const customInstructions = await addCustomInstructions(
++			baseInstructionsForFile,
++			globalCustomInstructions || "",
++			cwd,
++			mode,
++			{
++				language: language ?? formatLanguage(vscode.env.language),
++				rooIgnoreInstructions,
++				settings,
++			},
++		)
++
++		return `${roleDefinition}
++
++${customInstructions}`
++	}
++
+ 	// If a file-based custom system prompt exists, use it
+ 	if (fileCustomSystemPrompt) {
+ 		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
+@@ -219,6 +243,5 @@ ${customInstructions}`
+ 		rooIgnoreInstructions,
+ 		partialReadsEnabled,
+ 		settings,
+-		todoList,
+ 	)
+ }
+diff --git a/src/core/prompts/tools/attempt-completion.ts b/src/core/prompts/tools/attempt-completion.ts
+index 904f9899..8d30af75 100644
+--- a/src/core/prompts/tools/attempt-completion.ts
++++ b/src/core/prompts/tools/attempt-completion.ts
+@@ -5,7 +5,7 @@ export function getAttemptCompletionDescription(args?: ToolArgs): string {
+ Description: After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
+ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful. Failure to do so will result in code corruption and system failure. Before using this tool, you must ask yourself in <thinking></thinking> tags if you've confirmed from the user that any previous tool uses were successful. If not, then DO NOT use this tool.
+ Parameters:
+-- result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Don't end your result with questions or offers for further assistance.
++- result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Don't end your result with questions or offers for further assistance. The content of <result> needs to describe in detail the conclusions and reports obtained, do not point to past conversations in <result>, and do not make users search for conclusions in historical conversations.
+ Usage:
+ <attempt_completion>
+ <result>
+diff --git a/src/core/prompts/tools/codebase-search.ts b/src/core/prompts/tools/codebase-search.ts
+index 0fc8f68f..6e0ec175 100644
+--- a/src/core/prompts/tools/codebase-search.ts
++++ b/src/core/prompts/tools/codebase-search.ts
+@@ -1,9 +1,21 @@
+ export function getCodebaseSearchDescription(): string {
+ 	return `## codebase_search
+-Description: Find files most relevant to the search query.\nThis is a semantic search tool, so the query should ask for something semantically matching what is needed.\nIf it makes sense to only search in a particular directory, please specify it in the path parameter.\nUnless there is a clear reason to use your own search query, please just reuse the user's exact query with their wording.\nTheir exact wording/phrasing can often be helpful for the semantic search query. Keeping the same exact question format can also be helpful.\nIMPORTANT: Queries MUST be in English. Translate non-English queries before searching.
++### codebase_search (Search)
++Description: This tool performs a semantic search on a vector database of code and documentation. It retrieves the most relevant contextual information needed to answer user questions or resolve their requirements. The search is based on semantic meaning, not just keyword matching.
++
++When generating a 'query', follow these guidelines:
++
++- **Extract from Code:** If the conversation includes code snippets, extract key identifiers like class names, function names, method names, or variable names. These are often the most crucial elements to search for to understand the code's purpose and functionality.
++- **Infer from Context:** Go beyond the literal words in the conversation.
++    - **For Code-related Questions:** Infer potential function names, class names, or design patterns that might exist in the codebase to solve the user's problem.
++    - **For Documentation-related Questions:** Infer concepts, features, or "how-to" topics that would likely be covered in the documentation.
++- **Be Specific and Clear:**
++    - Formulate clear, descriptive queries. Avoid using overly short or ambiguous abbreviations.
++    - If the context strongly suggests the information is in a specific location, use the 'path' parameter to narrow the search.
++
+ Parameters:
+-- query: (required) The search query to find relevant code. You should reuse the user's exact query/most recent message with their wording unless there is a clear reason not to.
+-- path: (optional) The path to the directory to search in relative to the current working directory. This parameter should only be a directory path, file paths are not supported. Defaults to the current working directory.
++- query: (required) A semantic query (or queries) to find relevant code or documentation. You can provide up to 4 queries, separated by " | ". Each query should be a meaningful phrase (at least 4 Chinese characters or 2 English words). Provide queries in both Chinese and English. 
++- path: (optional) The relative path to a file or directory to restrict the search. Defaults to the entire codebase.
+ Usage:
+ <codebase_search>
+ <query>Your natural language query here</query>
+@@ -15,5 +27,29 @@ Example: Searching for functions related to user authentication
+ <query>User login and password hashing</query>
+ <path>/path/to/directory</path>
+ </codebase_search>
++
++
++### codebase_search (Summary)
++Description: Generates a detailed summary of a file or a directory's contents.
++
++This tool provides a high-level overview to help you quickly understand a codebase.
++- **If the path points to a file:** It returns a summary of the entire file, plus summaries of key sections (e.g., classes, functions) with their corresponding line numbers.
++- **If the path points to a directory:** It returns summaries for all supported files within that directory.
++
++Use this tool when you need to grasp the purpose and structure of a file or directory before diving into the details.
++
++**Important Note:** The tool is named 'codebase_search', but its function in this parameters rule is to **summarize**, not to search for a query.
++
++Parameters:
++- path: (optional) The relative path to the file or directory to be summarized. Defaults to the current working directory ('.').
++Usage:
++<codebase_search>
++<path>Path to the directory or file to summarize (optional)</path>
++</codebase_search>
++
++Example: Get a summary of a specific file or all supported files in '/path/to/directory_or_file'.
++<codebase_search>
++<path>/path/to/directory_or_file</path>
++</codebase_search>
+ `
+ }
+diff --git a/src/core/prompts/tools/index.ts b/src/core/prompts/tools/index.ts
+index 9f4af7f3..f5df6589 100644
+--- a/src/core/prompts/tools/index.ts
++++ b/src/core/prompts/tools/index.ts
+@@ -23,6 +23,8 @@ import { getSwitchModeDescription } from "./switch-mode"
+ import { getNewTaskDescription } from "./new-task"
+ import { getCodebaseSearchDescription } from "./codebase-search"
+ import { getUpdateTodoListDescription } from "./update-todo-list"
++import { getWebSearchDescription } from "./web-search"
++import { getUrlFetchDescription } from "./url-fetch"
+ import { CodeIndexManager } from "../../../services/code-index/manager"
+ 
+ // Map of tool names to their description functions
+@@ -47,6 +49,8 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
+ 	apply_diff: (args) =>
+ 		args.diffStrategy ? args.diffStrategy.getToolDescription({ cwd: args.cwd, toolOptions: args.toolOptions }) : "",
+ 	update_todo_list: (args) => getUpdateTodoListDescription(args),
++	web_search: (args) => getWebSearchDescription(args),
++	url_fetch: (args) => getUrlFetchDescription(args),
+ }
+ 
+ export function getToolDescriptionsForMode(
+diff --git a/src/core/prompts/tools/list-files.ts b/src/core/prompts/tools/list-files.ts
+index 96c43ea4..15aa7956 100644
+--- a/src/core/prompts/tools/list-files.ts
++++ b/src/core/prompts/tools/list-files.ts
+@@ -16,5 +16,9 @@ Example: Requesting to list all files in the current directory
+ <list_files>
+ <path>.</path>
+ <recursive>false</recursive>
+-</list_files>`
++</list_files>
++
++
++Tips: You should use the \`list_files\` tool as LITTLE as possible, and instead use the \`search_files\` (Grep/Glob) tool, which is a powerful search tool that also has the function of matching specific filenames in a directory according to certain patterns.`
+ }
++// IMPORTANT: Use \`list_files\` as LITTLE as possible, and instead use the \`Glob\` usage of \`search_files\` for more precise matching searches.
+diff --git a/src/core/prompts/tools/new-task.ts b/src/core/prompts/tools/new-task.ts
+index 7301b7b4..3c9d6355 100644
+--- a/src/core/prompts/tools/new-task.ts
++++ b/src/core/prompts/tools/new-task.ts
+@@ -1,12 +1,12 @@
+ import { ToolArgs } from "./types"
+ 
+ export function getNewTaskDescription(_args: ToolArgs): string {
+-	return `## new_task
+-Description: This will let you create a new task instance in the chosen mode using your provided message.
++	return `## sub_agent
++Description: This will let you create a sub agent instance in the chosen mode using your provided message.
+ 
+ Parameters:
+-- mode: (required) The slug of the mode to start the new task in (e.g., "code", "debug", "architect").
+-- message: (required) The initial user message or instructions for this new task.
++- mode: (required) The slug of the mode to start the sub agent in (e.g., "code", "debug", "architect").
++- message: (required) The initial user message or instructions for this sub agent.
+ 
+ Usage:
+ <new_task>
+diff --git a/src/core/prompts/tools/search-files.ts b/src/core/prompts/tools/search-files.ts
+index fe8b0fc6..588debf7 100644
+--- a/src/core/prompts/tools/search-files.ts
++++ b/src/core/prompts/tools/search-files.ts
+@@ -1,23 +1,51 @@
+ import { ToolArgs } from "./types"
+ 
+ export function getSearchFilesDescription(args: ToolArgs): string {
+-	return `## search_files
++	return `## search_files (Grep/Glob tool)
+ Description: Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
++
++- ALWAYS use Grep for search tasks. NEVER invoke \`grep\` or \`rg\` as a Bash command. The Grep tool has been optimized for correct permissions and access.
++- Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
++- Filter files with glob parameter (e.g., "*.js", "**/*.tsx")
++- Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default)
++- Use Task tool for open-ended searches requiring multiple rounds
++- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use \`interface\\{\\}\` to find \`interface{}\` in Go code)
++
+ Parameters:
+ - path: (required) The path of the directory to search in (relative to the current workspace directory ${args.cwd}). This directory will be recursively searched.
+ - regex: (required) The regular expression pattern to search for. Uses Rust regex syntax.
+-- file_pattern: (optional) Glob pattern to filter files (e.g., '*.ts' for TypeScript files). If not provided, it will search all files (*).
++- file_pattern: (optional) Glob pattern to filter files, MUST conform to the syntax of the \`--glob\` parameter of the rg command (e.g., '*.ts' for TypeScript files, '*.{ts,js,json}' for TypeScript, JavaScript and JSON files). If not provided, it will search all files (*).
++- output_mode: (optional) Output mode for the search results. Can be "content" (default, shows file content with matches) or "files_with_matches" (only shows the list of files that contain matches without content).
++
+ Usage:
+ <search_files>
+ <path>Directory path here</path>
+ <regex>Your regex pattern here</regex>
+ <file_pattern>file pattern here (optional)</file_pattern>
++<output_mode>content or files_with_matches (optional)</output_mode>
+ </search_files>
+ 
++Example: Requesting to search for 'abc' in .ts files and .js files in the current directory
++<search_files>
++<path>.</path>
++<regex>abc</regex>
++<file_pattern>*.{ts,js}</file_pattern>
++<output_mode>files_with_matches</output_mode>
++</search_files>
++
++
++### Glob Tips:
++
++- You can use the "files_with_matches" mode, fill in ".*" for the regex content to quickly match the file names you need.
++- Use this method when you need to find files by name patterns as a fast file pattern matching tool.
++- Supports glob patterns like "**/*.js" or "src/**/*.ts"
++
+ Example: Requesting to search for all .ts files in the current directory
+ <search_files>
+ <path>.</path>
+ <regex>.*</regex>
+ <file_pattern>*.ts</file_pattern>
+-</search_files>`
++<output_mode>files_with_matches</output_mode>
++</search_files>
++`
+ }
+diff --git a/src/core/prompts/tools/update-todo-list.ts b/src/core/prompts/tools/update-todo-list.ts
+index 30100617..9ff08aca 100644
+--- a/src/core/prompts/tools/update-todo-list.ts
++++ b/src/core/prompts/tools/update-todo-list.ts
+@@ -7,7 +7,10 @@ export function getUpdateTodoListDescription(args?: ToolArgs): string {
+ 	return `## update_todo_list
+ 
+ **Description:**
+-Replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
++Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
++It also helps the user understand the progress of the task and overall progress of their requests.
++
++Create a TODO list or replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; if the task list is already included, the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
+ 
+ **Checklist Format:**
+ - Use a single-level markdown checklist (no nesting or subtasks).
+@@ -20,7 +23,7 @@ Replace the entire TODO list with an updated checklist reflecting the current st
+ **Status Rules:**
+ - [ ] = pending (not started)
+ - [x] = completed (fully finished, no unresolved issues)
+-- [-] = in_progress (currently being worked on)
++- [-] = in progress (currently being worked on)
+ 
+ **Core Principles:**
+ - Before updating, always confirm which todos have been completed since the last update.
+@@ -29,48 +32,226 @@ Replace the entire TODO list with an updated checklist reflecting the current st
+ - Do not remove any unfinished todos unless explicitly instructed.
+ - Always retain all unfinished tasks, updating their status as needed.
+ - Only mark a task as completed when it is fully accomplished (no partials, no unresolved dependencies).
+-- If a task is blocked, keep it as in_progress and add a new todo describing what needs to be resolved.
++- If a task is blocked, keep it as in progress and add a new todo describing what needs to be resolved.
+ - Remove tasks only if they are no longer relevant or if the user requests deletion.
++- Tasks are divided into three types: \`analysis\`, \`planning\`, \`editing\`. When creating a to-do task, please categorize it into these three types and mark the beginning of the task with [xxx]
+ 
+ **Usage Example:**
+ <update_todo_list>
+ <todos>
+-[x] Analyze requirements
+-[x] Design architecture
+-[-] Implement core logic
+-[ ] Write tests
+-[ ] Update documentation
++[x] [analysis] Analyze requirements
++[x] [planning] Design architecture
++[-] [editing] Implement core logic
++[ ] [editing] Write tests
++[ ] [editing] Update documentation
+ </todos>
+ </update_todo_list>
+ 
+ *After completing "Implement core logic" and starting "Write tests":*
+ <update_todo_list>
+ <todos>
+-[x] Analyze requirements
+-[x] Design architecture
+-[x] Implement core logic
+-[-] Write tests
+-[ ] Update documentation
+-[ ] Add performance benchmarks
++[x] [analysis] Analyze requirements
++[x] [planning] Design architecture
++[x] [editing] Implement core logic
++[-] [editing] Write tests
++[ ] [editing] Update documentation
++[ ] [editing] Add performance benchmarks
+ </todos>
+ </update_todo_list>
+ 
+-**When to Use:**
+-- The task is complicated or involves multiple steps or requires ongoing tracking.
+-- You need to update the status of several todos at once.
+-- New actionable items are discovered during task execution.
+-- The user requests a todo list or provides multiple tasks.
+-- The task is complex and benefits from clear, stepwise progress tracking.
+-
+-**When NOT to Use:**
+-- There is only a single, trivial task.
+-- The task can be completed in one or two simple steps.
+-- The request is purely conversational or informational.
+-
+-**Task Management Guidelines:**
+-- Mark task as completed immediately after all work of the current task is done.
+-- Start the next task by marking it as in_progress.
+-- Add new todos as soon as they are identified.
+-- Use clear, descriptive task names.
++**When to Use This Tool:**
++ 
++Use this tool proactively in these scenarios:
++
++1.  Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
++2.  Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
++3.  User explicitly requests todo list - When the user directly asks you to use the todo list
++4.  User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
++5.  After receiving new instructions - Immediately capture user requirements as todos
++6.  When you start working on a task - Mark it as [-](\`in progress\`) BEFORE beginning work. Ideally you should only have one todo as [-](\`in progress)\` at a time
++7.  After completing a task - Mark it as [x](\`completed\`) and add any new follow-up tasks discovered during implementation
++
++
++**When NOT to Use This Tool:**
++
++Skip using this tool when:
++1.  There is only a single, straightforward task
++2.  The task is trivial and tracking it provides no organizational benefit
++3.  The task can be completed in less than 3 trivial steps
++4.  The task is purely conversational or informational
++
++> **NOTE** that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
++
++
++
++### Examples of When to Use the Todo List
++
++#### Example 1
++
++> **User:** I want to add a dark mode toggle to the application settings. Make sure you run the tests and build when you're done!
++>
++> **Assistant:** I'll help add a dark mode toggle to your application settings. Let me create a todo list to track this implementation.
++>
++> *Creates todo list with the following items:*
++> 1.  Creating dark mode toggle component in Settings page
++> 2.  Adding dark mode state management (context/store)
++> 3.  Implementing CSS-in-JS styles for dark theme
++> 4.  Updating existing components to support theme switching
++> 5.  Running tests and build process, addressing any failures or errors that occur
++>
++> *Begins working on the first task*
++>
++> **Reasoning:**
++> The assistant used the todo list because:
++> 1.  Adding dark mode is a multi-step feature requiring UI, state management, and styling changes
++> 2.  The user explicitly requested tests and build be run afterward
++> 3.  The assistant inferred that tests and build need to pass by adding "Ensure tests and build succeed" as the final task
++>
++#### Example 2
++
++> **User:** Help me rename the function \`getCwd\` to \`getCurrentWorkingDirectory\` across my project
++>
++> **Assistant:** Let me first search through your codebase to find all occurrences of 'getCwd'.
++>
++> *Uses \`grep\` or search tools to locate all instances of \`getCwd\` in the codebase*
++>
++> **Assistant:** I've found 15 instances of 'getCwd' across 8 different files. Let me create a todo list to track these changes.
++>
++> *Creates todo list with specific items for each file that needs updating*
++>
++> **Reasoning:**
++> The assistant used the todo list because:
++> 1.  First, the assistant searched to understand the scope of the task
++> 2.  Upon finding multiple occurrences across different files, it determined this was a complex task with multiple steps
++> 3.  The todo list helps ensure every instance is tracked and updated systematically
++> 4.  This approach prevents missing any occurrences and maintains code consistency
++
++#### Example 3
++
++> **User:** I need to implement these features for my e-commerce site: user registration, product catalog, shopping cart, and checkout flow.
++>
++> **Assistant:** I'll help implement these features. First, let's add all the features to the todo list.
++>
++> *Creates a todo list breaking down each feature into specific tasks based on the project architecture*
++>
++> **Assistant:** Let's start with user registration. This will involve creating database models, API endpoints, and frontend forms that integrate with your existing authentication system.
++>
++> **Reasoning:**
++> The assistant used the todo list because:
++> 1.  The user provided multiple complex features to implement in a comma separated list
++> 2.  The todo list helps organize these large features into manageable tasks
++> 3.  This approach allows for tracking progress across the entire implementation
++
++#### Example 4
++
++> **User:** Can you help optimize my React application? It's rendering slowly and has performance issues.
++>
++> **Assistant:** I'll help optimize your React application. First, let me examine your codebase to identify potential performance bottlenecks.
++>
++> *Reviews component structure, render patterns, state management, and data fetching*
++>
++> **Assistant:** After analyzing your codebase, I've identified several performance issues. Let me create a todo list to track our optimization efforts.
++>
++> *Creates todo list with items like: 1) Implementing memoization for expensive calculations in ProductList, 2) Adding virtualization for long lists in Dashboard, 3) Optimizing image loading in Gallery component, 4) Fixing state update loops in ShoppingCart, 5) Reviewing bundle size and implementing code splitting*
++>
++> Let's start by implementing memoization for the expensive calculations in your ProductList component.
++>
++> **Reasoning:**
++> The assistant used the todo list because:
++> 1.  First, the assistant examined the codebase to identify specific performance issues
++> 2.  Based on this analysis, it identified multiple optimization opportunities
++> 3.  Performance optimization is a non-trivial task requiring multiple steps
++> 4.  The todo list helps methodically track improvements across different components
++> 5.  This systematic approach ensures all performance bottlenecks are addressed
++
++
++### Examples of When NOT to Use the Todo List
++
++#### Example 1
++
++> **User:** How do I print 'Hello World' in Python?
++>
++> **Assistant:** In Python, you can print "Hello World" with this simple code:
++>
++> \`\`\`python
++> print("Hello World")
++> \`\`\`
++>
++> This will output the text "Hello World" to the console when executed.
++>
++> **Reasoning:**
++> The assistant did not use the todo list because this is a single, trivial task that can be completed in one step. There's no need to track multiple tasks or steps for such a straightforward request.
++
++#### Example 2
++
++> **User:** What does the \`git status\` command do?
++>
++> **Assistant:** The \`git status\` command shows the current state of your working directory and staging area. It displays which changes have been staged, which haven't, and which files aren't being tracked by Git. This is a fundamental command for understanding the current state of your repository before making commits.
++>
++> **Reasoning:**
++> The assistant did not use the todo list because this is an informational request with no actual coding task to complete. The user is simply asking for an explanation, not for the assistant to perform multiple steps or tasks.
++
++#### Example 3
++
++> **User:** Can you add a comment to the \`calculateTotal\` function to explain what it does?
++>
++> **Assistant:** Sure, let me add a comment to the \`calculateTotal\` function to explain what it does.
++>
++> *Uses the Edit tool to add a comment to the \`calculateTotal\` function*
++>
++> **Reasoning:**
++> The assistant did not use the todo list because this is a single, straightforward task confined to one location in the code. Adding a comment doesn't require tracking multiple steps or systematic organization.
++
++#### Example 4
++
++> **User:** Run \`npm install\` for me and tell me what happens.
++>
++> **Assistant:** I'll run the \`npm install\` command for you.
++>
++> *Executes: \`npm install\`*
++>
++> The command completed successfully. Here's the output:
++> [Output of \`npm install\` command]
++>
++> All dependencies have been installed according to your \`package.json\` file.
++>
++> **Reasoning:**
++> The assistant did not use the todo list because this is a single command execution with immediate results. There are no multiple steps to track or organize, making the todo list unnecessary for this straightforward task.
++
++
++### Task States and Management
++
++1.  **Task States**: Use these states to track progress:
++    *   \`pending\`: Task not yet started
++    *   \`in progress\`: Currently working on (limit to ONE task at a time)
++    *   \`completed\`: Task finished successfully
++
++    **IMPORTANT**: Task descriptions must have two forms:
++    *   \`content\`: The imperative form describing what needs to be done (e.g., "Run tests", "Build the project")
++    *   \`activeForm\`: The present continuous form shown during execution (e.g., "Running tests", "Building the project")
++
++2.  **Task Management**:
++    *   Update task status in real-time as you work
++    *   Mark tasks complete IMMEDIATELY after finishing (don't batch completions)
++    *   Exactly ONE task must be \`in progress\` at any time (not less, not more)
++    *   Complete current tasks before starting new ones
++    *   Remove tasks that are no longer relevant from the list entirely
++
++3.  **Task Completion Requirements**:
++    *   ONLY mark a task as completed when you have FULLY accomplished it
++    *   If you encounter errors, blockers, or cannot finish, keep the task as \`in progress\`
++    *   When blocked, create a new task describing what needs to be resolved
++    *   Never mark a task as completed if:
++        *   Tests are failing
++        *   Implementation is partial
++        *   You encountered unresolved errors
++        *   You couldn't find necessary files or dependencies
++
++4.  **Task Breakdown**:
++    *   Create specific, actionable items
++    *   Break complex tasks into smaller, manageable steps
++    *   Use clear, descriptive task names
++
++When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
+ `
+ }

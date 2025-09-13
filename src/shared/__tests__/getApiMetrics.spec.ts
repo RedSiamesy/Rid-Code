@@ -34,6 +34,24 @@ describe("getApiMetrics", () => {
 		ts,
 	})
 
+	// Helper function to create a cost_tracking message
+	const createCostTrackingMessage = (
+		cost: number = 0.005,
+		newContextTokens: number = 100,
+		prevContextTokens: number = 200,
+		ts: number = 3000,
+	): ClineMessage => ({
+		type: "say",
+		say: "cost_tracking",
+		contextCondense: {
+			cost,
+			newContextTokens,
+			prevContextTokens,
+			summary: "Operation cost tracked",
+		},
+		ts,
+	})
+
 	// Helper function to create a non-API message
 	const createOtherMessage = (
 		say: "text" | "error" | "reasoning" | "completion_result" = "text",
@@ -324,6 +342,70 @@ describe("getApiMetrics", () => {
 
 			// Restore console.error
 			console.error = originalConsoleError
+		})
+	})
+
+	describe("cost_tracking message type", () => {
+		it("should include cost from cost_tracking messages", () => {
+			const messages: ClineMessage[] = [
+				createCostTrackingMessage(0.015, 100, 200, 1000),
+			]
+
+			const result = getApiMetrics(messages)
+
+			expect(result.totalCost).toBe(0.015)
+		})
+
+		it("should calculate contextTokens from cost_tracking messages", () => {
+			const messages: ClineMessage[] = [
+				createCostTrackingMessage(0.015, 300, 600, 1000),
+			]
+
+			const result = getApiMetrics(messages)
+
+			expect(result.contextTokens).toBe(300)
+		})
+
+		it("should accumulate costs from multiple cost_tracking messages", () => {
+			const messages: ClineMessage[] = [
+				createCostTrackingMessage(0.010, 100, 200, 1000),
+				createCostTrackingMessage(0.005, 150, 300, 2000),
+			]
+
+			const result = getApiMetrics(messages)
+
+			expect(result.totalCost).toBe(0.015)
+			// Should use the last message for context tokens
+			expect(result.contextTokens).toBe(150)
+		})
+
+		it("should combine cost_tracking with other message types", () => {
+			const messages: ClineMessage[] = [
+				createApiReqStartedMessage('{"tokensIn":100,"tokensOut":200,"cost":0.020}', 1000),
+				createCondenseContextMessage(0.005, 400, 800, 2000),
+				createCostTrackingMessage(0.010, 300, 600, 3000),
+			]
+
+			const result = getApiMetrics(messages)
+
+			expect(result.totalCost).toBe(0.035) // 0.020 + 0.005 + 0.010
+			expect(result.contextTokens).toBe(300) // From the last cost_tracking message
+		})
+
+		it("should handle cost_tracking messages with missing contextCondense", () => {
+			const messages: ClineMessage[] = [
+				{
+					type: "say",
+					say: "cost_tracking",
+					ts: 1000,
+					// Missing contextCondense
+				} as ClineMessage,
+			]
+
+			const result = getApiMetrics(messages)
+
+			expect(result.totalCost).toBe(0)
+			expect(result.contextTokens).toBe(0)
 		})
 	})
 })
