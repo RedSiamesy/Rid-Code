@@ -139,11 +139,11 @@ export async function* chatCompletions_Stream(
 				} else {
 					const anyChunk = chunk as any;
 					yield chunk;
-					await delay(anyChunk.chunk_size > 0 ? 2000/anyChunk.chunk_size : 100)
+					await delay(anyChunk.chunk_size > 0 ? 1000/anyChunk.chunk_size : 100)
 				}
 				loading = true
 			}
-			await delay(loading === false?2000:1)
+			await delay(loading === false?1000:1)
 		}
 
 		

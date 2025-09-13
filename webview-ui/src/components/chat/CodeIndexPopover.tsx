@@ -69,17 +69,6 @@ interface LocalCodeIndexSettings {
 	codebaseIndexOpenAiCompatibleBaseUrl?: string
 	codebaseIndexOpenAiCompatibleApiKey?: string
 	codebaseIndexGeminiApiKey?: string
-
-	embeddingBaseUrl?: string
-	embeddingModelID?: string
-	embeddingApiKey?: string
-	enhancementBaseUrl?: string
-	enhancementModelID?: string
-	enhancementApiKey?: string
-	ragPath?: string
-	llmFilter?: boolean
-	codeBaseLogging?: boolean
-
 	codebaseIndexMistralApiKey?: string
 }
 
@@ -109,26 +98,26 @@ const createValidationSchema = (provider: EmbedderProvider, t: any) => {
 					.string()
 					.min(1, t("settings:codeIndex.validation.ollamaBaseUrlRequired"))
 					.url(t("settings:codeIndex.validation.invalidOllamaUrl")),
-				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
-				codebaseIndexEmbedderModelDimension: z
-					.number()
-					.min(1, t("settings:codeIndex.validation.modelDimensionRequired"))
-					.optional(),
+				// codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+				// codebaseIndexEmbedderModelDimension: z
+				// 	.number()
+				// 	.min(1, t("settings:codeIndex.validation.modelDimensionRequired"))
+				// 	.optional(),
 			})
 
 		case "openai-compatible":
 			return baseSchema.extend({
-				embeddingBaseUrl: z
+				codebaseIndexOpenAiCompatibleBaseUrl: z
 					.string()
 					.min(1, t("settings:codeIndex.validation.baseUrlRequired"))
 					.url(t("settings:codeIndex.validation.invalidBaseUrl")),
-				embeddingApiKey: z
+				codebaseIndexOpenAiCompatibleApiKey: z
 					.string()
 					.min(1, t("settings:codeIndex.validation.apiKeyRequired")),
-				embeddingModelID: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
-				// codebaseIndexEmbedderModelDimension: z
-				// 	.number()
-				// 	.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
+				codebaseIndexEmbedderModelId: z.string().min(1, t("settings:codeIndex.validation.modelIdRequired")),
+				codebaseIndexEmbedderModelDimension: z
+					.number()
+					.min(1, t("settings:codeIndex.validation.modelDimensionRequired")),
 			})
 
 		case "gemini":
@@ -156,9 +145,9 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	children,
 	indexingStatus: externalIndexingStatus,
 }) => {
-	const SECRET_PLACEHOLDER = "••••••••••••••••••••••••••••••••••••••••••••••••"
+	const SECRET_PLACEHOLDER = "••••••••••••••••"
 	const { t } = useAppTranslation()
-	const { codebaseIndexConfig, codebaseIndexModels } = useExtensionState()
+	const { codebaseIndexConfig, codebaseIndexModels, cwd } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false)
 	const [isSetupSettingsOpen, setIsSetupSettingsOpen] = useState(false)
@@ -190,17 +179,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 		codebaseIndexOpenAiCompatibleBaseUrl: "",
 		codebaseIndexOpenAiCompatibleApiKey: "",
 		codebaseIndexGeminiApiKey: "",
-
-		embeddingBaseUrl: "",
-		embeddingModelID: "",
-		embeddingApiKey: "",
-		enhancementBaseUrl: "",
-		enhancementModelID: "",
-		enhancementApiKey: "",
-		ragPath: "",
-		llmFilter: false,
-		codeBaseLogging: false,
-
 		codebaseIndexMistralApiKey: "",
 	})
 
@@ -235,19 +213,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 				codebaseIndexOpenAiCompatibleBaseUrl: codebaseIndexConfig.codebaseIndexOpenAiCompatibleBaseUrl || "",
 				codebaseIndexOpenAiCompatibleApiKey: "",
 				codebaseIndexGeminiApiKey: "",
-
-				embeddingBaseUrl: codebaseIndexConfig.embeddingBaseUrl || "",
-				embeddingModelID: codebaseIndexConfig.embeddingModelID || "",
-				enhancementBaseUrl: codebaseIndexConfig.enhancementBaseUrl || "",
-				enhancementModelID: codebaseIndexConfig.enhancementModelID || "",
-
-				embeddingApiKey: "",
-				enhancementApiKey: "",
-				
-				ragPath: codebaseIndexConfig.ragPath || "",
-				llmFilter: codebaseIndexConfig.llmFilter || false,
-				codeBaseLogging: codebaseIndexConfig.codeBaseLogging || false,
-
 				codebaseIndexMistralApiKey: "",
 			}
 			setInitialSettings(settings)
@@ -264,6 +229,18 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 			vscode.postMessage({ type: "requestIndexingStatus" })
 			vscode.postMessage({ type: "requestCodeIndexSecretStatus" })
 		}
+		const handleMessage = (event: MessageEvent) => {
+			if (event.data.type === "workspaceUpdated") {
+				// When workspace changes, request updated indexing status
+				if (open) {
+					vscode.postMessage({ type: "requestIndexingStatus" })
+					vscode.postMessage({ type: "requestCodeIndexSecretStatus" })
+				}
+			}
+		}
+
+		window.addEventListener("message", handleMessage)
+		return () => window.removeEventListener("message", handleMessage)
 	}, [open])
 
 	// Use a ref to capture current settings for the save handler
@@ -274,13 +251,15 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent<any>) => {
 			if (event.data.type === "indexingStatusUpdate") {
-				setIndexingStatus({
-					systemStatus: event.data.values.systemStatus,
-					message: event.data.values.message || "",
-					processedItems: event.data.values.processedItems,
-					totalItems: event.data.values.totalItems,
-					currentItemUnit: event.data.values.currentItemUnit || "items",
-				})
+				if (!event.data.values.workspacePath || event.data.values.workspacePath === cwd) {
+					setIndexingStatus({
+						systemStatus: event.data.values.systemStatus,
+						message: event.data.values.message || "",
+						processedItems: event.data.values.processedItems,
+						totalItems: event.data.values.totalItems,
+						currentItemUnit: event.data.values.currentItemUnit || "items",
+					})
+				}
 			} else if (event.data.type === "codeIndexSettingsSaved") {
 				if (event.data.success) {
 					setSaveStatus("saved")
@@ -308,7 +287,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [t])
+	}, [t, cwd])
 
 	// Listen for secret status
 	useEffect(() => {
@@ -334,22 +313,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 						prev.codebaseIndexOpenAiCompatibleApiKey === SECRET_PLACEHOLDER
 					) {
 						updated.codebaseIndexOpenAiCompatibleApiKey = secretStatus.hasOpenAiCompatibleApiKey
-							? SECRET_PLACEHOLDER
-							: ""
-					}
-					if (
-						!prev.embeddingApiKey ||
-						prev.embeddingApiKey === SECRET_PLACEHOLDER
-					) {
-						updated.embeddingApiKey = secretStatus.hasEmbeddingApiKey
-							? SECRET_PLACEHOLDER
-							: ""
-					}
-					if (
-						!prev.enhancementApiKey ||
-						prev.enhancementApiKey === SECRET_PLACEHOLDER
-					) {
-						updated.enhancementApiKey = secretStatus.hasEnhancementApiKey
 							? SECRET_PLACEHOLDER
 							: ""
 					}
@@ -431,8 +394,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 					key === "codeIndexOpenAiKey" ||
 					key === "codebaseIndexOpenAiCompatibleApiKey" ||
 					key === "codebaseIndexGeminiApiKey" ||
-					key === "embeddingApiKey" ||
-					key === "enhancementApiKey" ||
 					key === "codebaseIndexMistralApiKey"
 				) {
 					dataToValidate[key] = "placeholder-valid"
@@ -651,10 +612,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 							{isSetupSettingsOpen && (
 								<div className="mt-4 space-y-4">
 									{/* Embedder Provider Section */}
-									<div className="flex flex-col gap-3">
-										<div className="flex items-center gap-4 font-bold">
-											<div>{t("settings:codeIndex.embedderProviderLabel")}</div>
-										</div>
+									<div className="space-y-2">
+										<label className="text-sm font-medium">
+											{t("settings:codeIndex.embedderProviderLabel")}
+										</label>
 										<Select
 											value={currentSettings.codebaseIndexEmbedderProvider}
 											onValueChange={(value: EmbedderProvider) => {
@@ -666,17 +627,20 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
-												{/* <SelectItem value="openai">
-													{t("settings:codeIndex.openaiProvider")}
-												</SelectItem>
-												<SelectItem value="ollama">
-													{t("settings:codeIndex.ollamaProvider")}
-												</SelectItem> */}
 												<SelectItem value="openai-compatible">
 													{t("settings:codeIndex.openaiCompatibleProvider")}
 												</SelectItem>
-												{/* <SelectItem value="gemini">
+												<SelectItem value="ollama">
+													{"Codebase-Service"}
+												</SelectItem>
+												{/* <SelectItem value="openai">
+													{t("settings:codeIndex.openaiProvider")}
+												</SelectItem>
+												<SelectItem value="gemini">
 													{t("settings:codeIndex.geminiProvider")}
+												</SelectItem>
+												<SelectItem value="mistral">
+													{t("settings:codeIndex.mistralProvider")}
 												</SelectItem> */}
 											</SelectContent>
 										</Select>
@@ -708,7 +672,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 											</div>
 
 											<div className="space-y-2">
-												<label className="font-medium">
+												<label className="text-sm font-medium">
 													{t("settings:codeIndex.modelLabel")}
 												</label>
 												<VSCodeDropdown
@@ -752,7 +716,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 										<>
 											<div className="space-y-2">
 												<label className="text-sm font-medium">
-													{t("settings:codeIndex.ollamaBaseUrlLabel")}
+													{"Codebase-Service URL"}
 												</label>
 												<VSCodeTextField
 													value={currentSettings.codebaseIndexEmbedderBaseUrl || ""}
@@ -781,7 +745,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												)}
 											</div>
 
-											<div className="space-y-2">
+											{/* <div className="space-y-2">
 												<label className="text-sm font-medium">
 													{t("settings:codeIndex.modelLabel")}
 												</label>
@@ -828,13 +792,13 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 														{formErrors.codebaseIndexEmbedderModelDimension}
 													</p>
 												)}
-											</div>
+											</div> */}
 										</>
 									)}
 
 									{currentSettings.codebaseIndexEmbedderProvider === "openai-compatible" && (
 										<>
-											{/* <div className="space-y-2">
+											<div className="space-y-2">
 												<label className="text-sm font-medium">
 													{t("settings:codeIndex.openAiCompatibleBaseUrlLabel")}
 												</label>
@@ -936,95 +900,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 														{formErrors.codebaseIndexEmbedderModelDimension}
 													</p>
 												)}
-											</div> */}
-
-											<div className="flex flex-col gap-3">
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"基础 URL"}</div>
-													<StandardTooltip
-														content={"使用嵌入模型对源文件片段进行向量化"}>
-														<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-													</StandardTooltip>
-												</div>
-												<div>
-													<VSCodeTextField
-														value={currentSettings.embeddingBaseUrl || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingBaseUrl", e.target.value)
-														}
-														style={{ width: "100%" }}>
-													</VSCodeTextField>
-												</div>
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"API 密钥"}</div>
-												</div>
-												<div>
-													<VSCodeTextField
-														type="password"
-														value={currentSettings.embeddingApiKey || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingApiKey", e.target.value)
-														}
-														style={{ width: "100%" }}></VSCodeTextField>
-												</div>
-												<div className="flex items-center gap-2 font-bold">
-													<div>{"模型 ID"}</div>
-												</div>
-												<div>
-													<VSCodeTextField
-														value={currentSettings.embeddingModelID || ""}
-														onInput={(e: any) =>
-															updateSetting("embeddingModelID", e.target.value)
-														}
-														style={{ width: "100%" }}></VSCodeTextField>
-												</div>
-											</div>
-
-											<div className="mt-8">
-												<div className="flex flex-col gap-3">
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解基础 URL"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-														<StandardTooltip
-															content={"使用对话模型对源文件片段进行注解，帮助 Codebase Search 搜索代码上下文，也使用于 LLM 重排序"}>
-															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-														</StandardTooltip>
-													</div>
-													<div>
-														<VSCodeTextField
-															value={currentSettings.enhancementBaseUrl || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementBaseUrl", e.target.value)
-															}
-															style={{ width: "100%" }}>
-														</VSCodeTextField>
-													</div>
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解 API 密钥"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-													</div>
-													<div>
-														<VSCodeTextField
-															type="password"
-															value={currentSettings.enhancementApiKey || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementApiKey", e.target.value)
-															}
-															style={{ width: "100%" }}></VSCodeTextField>
-													</div>
-													<div className="flex items-center gap-0 font-bold">
-														<div>{"注解模型 ID"}</div>
-														<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-													</div>
-													<div>
-														<VSCodeTextField
-															value={currentSettings.enhancementModelID || ""}
-															onInput={(e: any) =>
-																updateSetting("enhancementModelID", e.target.value)
-															}
-															style={{ width: "100%" }}></VSCodeTextField>
-													</div>
-												</div>
 											</div>
 										</>
 									)}
@@ -1160,7 +1035,9 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									)}
 
 									{/* Qdrant Settings */}
-									{/*<div className="space-y-2">
+									{currentSettings.codebaseIndexEmbedderProvider !== "ollama" && (
+										<>
+									<div className="space-y-2">
 										<label className="text-sm font-medium">
 											{t("settings:codeIndex.qdrantUrlLabel")}
 										</label>
@@ -1206,7 +1083,9 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												{formErrors.codeIndexQdrantApiKey}
 											</p>
 										)}
-									</div>*/}
+									</div>
+									</>
+									)}
 								</div>
 							)}
 						</div>
@@ -1229,7 +1108,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									{/* Search Score Threshold Slider */}
 									<div className="space-y-2">
 										<div className="flex items-center gap-2">
-											<label className="font-medium">
+											<label className="text-sm font-medium">
 												{t("settings:codeIndex.searchMinScoreLabel")}
 											</label>
 											<StandardTooltip
@@ -1275,7 +1154,7 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									{/* Maximum Search Results Slider */}
 									<div className="space-y-2">
 										<div className="flex items-center gap-2">
-											<label className="font-medium">
+											<label className="text-sm font-medium">
 												{t("settings:codeIndex.searchMaxResultsLabel")}
 											</label>
 											<StandardTooltip
@@ -1313,54 +1192,6 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												}>
 												<span className="codicon codicon-discard" />
 											</VSCodeButton>
-										</div>
-									
-										<div className="flex flex-col gap-2 mt-6">
-											<div className="flex items-center gap-0 font-bold">
-												<div>{"存放位置"}</div>
-												<p className="text-vscode-descriptionForeground m-0">{"（选填）"}</p>
-												<StandardTooltip
-													content={"向量数据库仅支持存放在本地硬盘，不支持存放在网络硬盘"}>
-													<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" />
-												</StandardTooltip>
-											</div>
-											<div>
-												<VSCodeTextField
-													value={currentSettings.ragPath || ""}
-													onInput={(e: any) =>
-														updateSetting("ragPath", e.target.value)
-													}
-													style={{ width: "100%" }}>
-												</VSCodeTextField>
-											</div>
-										</div>
-										<div className="flex flex-col gap-2">
-											<div className="flex items-center gap-2">
-												<VSCodeCheckbox
-													checked={currentSettings.llmFilter || false}
-													onChange={(e: any) =>
-														updateSetting("llmFilter", e.target.checked)
-													}>
-													<span style={{ display: 'flex', alignItems: 'center' }}>
-														<span className="font-medium">{"启用 LLM 重排序"}</span>
-														<StandardTooltip
-															content={"使用对话模型对搜索结果进行筛选，提高检索准确性"}>
-															<span className="codicon codicon-info text-xs text-vscode-descriptionForeground cursor-help" style={{ display: 'inline-flex', alignItems: 'center', height: '1em', marginLeft: '8px' }} />
-														</StandardTooltip>
-													</span>
-												</VSCodeCheckbox>
-											</div>
-										</div>
-										<div className="flex flex-col gap-2">
-											<div className="flex items-center gap-2">
-												<VSCodeCheckbox
-													checked={currentSettings.codeBaseLogging || false}
-													onChange={(e: any) =>
-														updateSetting("codeBaseLogging", e.target.checked)
-													}>
-													<span className="font-medium">{"启用代码库日志记录"}</span>
-												</VSCodeCheckbox>
-											</div>
 										</div>
 									</div>
 								</div>

@@ -8,18 +8,18 @@ import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../sh
 
 import { getCommitInfo, getWorkingState } from "../../utils/git"
 import { getWorkspacePath } from "../../utils/path"
-import { fileExistsAtPath } from "../../utils/fs"
 
 import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFile } from "../../integrations/misc/extract-text"
 import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
 
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { getCommand } from "../../services/command/commands"
+import { Task } from "../task/Task"
 
 import { t } from "../../i18n"
 
@@ -47,98 +47,6 @@ function getUrlErrorMessage(error: unknown): string {
 	return t("common:errors.url_fetch_failed", { error: errorMessage })
 }
 
-interface MemoryFiles {
-	globalMemoryPath: string
-	projectMemoryPath: string
-}
-
-interface MemoryData {
-	globalMemories: string[]
-	projectMemories: string[]
-}
-
-/**
- * 获取记忆文件路径
- */
-export async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
-	const globalMemoryPath = path.join(globalStoragePath, "global-memory.md")
-
-	const workspacePath = getWorkspacePath()
-	if (!workspacePath) {
-		throw new Error("无法获取工作区路径")
-	}
-
-	const projectMemoryDir = path.join(workspacePath, ".roo")
-	const projectMemoryPath = path.join(projectMemoryDir, "project-memory.md")
-
-	return {
-		globalMemoryPath,
-		projectMemoryPath,
-	}
-}
-
-/**
- * 读取记忆文件内容
- */
-export async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
-	const globalMemories: string[] = []
-	const projectMemories: string[] = []
-
-	// 读取全局记忆
-	if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
-		try {
-			const content = await fs.readFile(memoryFiles.globalMemoryPath, "utf-8")
-			const lines = content.split("\n").filter((line) => line.trim())
-			globalMemories.push(...lines)
-		} catch (error) {
-			console.log("无法读取全局记忆文件:", error)
-		}
-	}
-
-	// 读取项目记忆
-	if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
-		try {
-			const content = await fs.readFile(memoryFiles.projectMemoryPath, "utf-8")
-			const lines = content.split("\n").filter((line) => line.trim())
-			projectMemories.push(...lines)
-		} catch (error) {
-			console.log("无法读取项目记忆文件:", error)
-		}
-	}
-
-	return {
-		globalMemories,
-		projectMemories,
-	}
-}
-
-/**
- * 格式化记忆内容为显示格式
- */
-export function formatMemoryContent(memoryData: MemoryData): string {
-	if (memoryData.globalMemories.length === 0 && memoryData.projectMemories.length === 0) {
-		return "No memory data available"
-	}
-
-	let formatted = "The content of Agent memory includes records of Roo's understanding of user needs from past work, as well as insights into user habits and projects.\n\n"
-
-	if (memoryData.globalMemories.length > 0) {
-		formatted += "# Global Memory:\n"
-		memoryData.globalMemories.forEach((memory, index) => {
-			formatted += `${memory}\n`
-		})
-		formatted += "\n"
-	}
-
-	if (memoryData.projectMemories.length > 0) {
-		formatted += "# Project Memory:\n"
-		memoryData.projectMemories.forEach((memory, index) => {
-			formatted += `${memory}\n`
-		})
-	}
-
-	return formatted.trim()
-}
 
 export async function openMention(mention?: string): Promise<void> {
 	if (!mention) {
@@ -207,24 +115,6 @@ export async function parseMentions(
 			return `Git commit '${mention}' (see below for commit info)`
 		} else if (mention === "terminal") {
 			return `Terminal Output (see below for output)`
-		} else if (mention.startsWith("codebase")) {
-			if (mention.includes(":")) {
-				const path = mention.slice(9)
-				return `As the first step, use the 'codebase_search' tool to search for relevant information needed for the task, using "${path}" as the search path.`
-			}
-			return "As the first step, use the 'codebase_search' tool to search for relevant information needed for the task."
-		} else if (mention.startsWith("summary")) {
-			if (mention.includes(":")) {
-				const path = mention.slice(8)
-				return `As the first step, use the 'codebase_search' tool to get a summary for '${path}'.`
-			}
-			return "As the first step, use the 'codebase_search' tool to get a summary of the relevant information needed for the task."
-		} else if (mention.startsWith("memory")) {
-			if (globalStoragePath) {
-				return "Memory (see below for stored memory)"
-			} else {
-				return "Memory (global storage path not available)"
-			}
 		}
 		return match
 	})
@@ -323,23 +213,6 @@ export async function parseMentions(
 			} catch (error) {
 				parsedText += `\n\n<terminal_output>\nError fetching terminal output: ${error.message}\n</terminal_output>`
 			}
-		} else if (mention.startsWith("codebase")) {
-			
-		} else if (mention.startsWith("summary")) {
-			
-		} else if (mention.startsWith("memory")) {
-			if (globalStoragePath) {
-				try {
-					const memoryFiles = await getMemoryFilePaths(globalStoragePath)
-					const memoryData = await readMemoryFiles(memoryFiles)
-					const formattedMemory = formatMemoryContent(memoryData)
-					parsedText += `\n\n<agent_memory_content>\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n</agent_memory_content>`
-				} catch (error) {
-					parsedText += `\n\n<agent_memory_content>\nError reading memory: ${error.message}\n</agent_memory_content>`
-				}
-			} else {
-				parsedText += `\n\n<agent_memory_content>\nError: Memory path not available\n</agent_memory_content>`
-			}
 		}
 	}
 
@@ -357,7 +230,7 @@ export async function parseMentions(
 			} else {
 				parsedText += `\n\n<command name="${commandName}">\nCommand '${commandName}' not found. Available commands can be found in .roo/commands/ or ~/.roo/commands/\n</command>`
 			}
-} catch (error) {
+		} catch (error) {
 			parsedText += `\n\n<command name="${commandName}">\nError loading command '${commandName}': ${error.message}\n</command>`
 		}
 	}

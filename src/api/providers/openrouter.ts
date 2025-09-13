@@ -62,7 +62,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		super()
 		this.options = options
 
-		const baseURL = this.options.openRouterBaseUrl || "https://riddler.mynatapp.cc/api/openrouter/v1"
+		const baseURL = this.options.openRouterBaseUrl || "https://riddler.mynatapp.cc/llm/openrouter/v1"
 		const apiKey = this.options.openRouterApiKey ?? "not-provided"
 
 		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS })

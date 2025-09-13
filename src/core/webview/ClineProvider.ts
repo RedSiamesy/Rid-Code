@@ -1629,16 +1629,6 @@ export class ClineProvider
 				codebaseIndexOpenAiCompatibleBaseUrl: codebaseIndexConfig?.codebaseIndexOpenAiCompatibleBaseUrl,
 				codebaseIndexSearchMaxResults: codebaseIndexConfig?.codebaseIndexSearchMaxResults,
 				codebaseIndexSearchMinScore: codebaseIndexConfig?.codebaseIndexSearchMinScore,
-
-				embeddingBaseUrl: codebaseIndexConfig?.embeddingBaseUrl ?? "",
-				embeddingModelID: codebaseIndexConfig?.embeddingModelID ?? "",
-				enhancementBaseUrl: codebaseIndexConfig?.enhancementBaseUrl ?? "",
-				enhancementModelID: codebaseIndexConfig?.enhancementModelID ?? "",
-
-				ragPath: codebaseIndexConfig?.ragPath ?? "",
-				llmFilter: codebaseIndexConfig?.llmFilter ?? false,
-				codeBaseLogging: codebaseIndexConfig?.codeBaseLogging ?? false,
-
 			},
 			mdmCompliant: this.checkMdmCompliance(),
 			profileThresholds: profileThresholds ?? {},
@@ -1828,15 +1818,6 @@ export class ClineProvider
 					stateValues.codebaseIndexConfig?.codebaseIndexOpenAiCompatibleBaseUrl,
 				codebaseIndexSearchMaxResults: stateValues.codebaseIndexConfig?.codebaseIndexSearchMaxResults,
 				codebaseIndexSearchMinScore: stateValues.codebaseIndexConfig?.codebaseIndexSearchMinScore,
-
-				embeddingBaseUrl: stateValues.codebaseIndexConfig?.embeddingBaseUrl ?? "",
-				embeddingModelID: stateValues.codebaseIndexConfig?.embeddingModelID ?? "",
-				enhancementBaseUrl: stateValues.codebaseIndexConfig?.enhancementBaseUrl ?? "",
-				enhancementModelID: stateValues.codebaseIndexConfig?.enhancementModelID ?? "",
-
-				ragPath: stateValues.codebaseIndexConfig?.ragPath ?? "",
-				llmFilter: stateValues.codebaseIndexConfig?.llmFilter ?? false,
-				codeBaseLogging: stateValues.codebaseIndexConfig?.codeBaseLogging ?? false,
 			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 			// Add diagnostic message settings

@@ -226,6 +226,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 				const previousValue = prevState.apiConfiguration?.[field]
 
+				if (Object.keys(previousValue || {}).length === 0 && Object.keys(value || {}).length === 0) {
+					return prevState
+				}
+
+				if (value === "__undefined__") {
+					return prevState
+				}
+
 				// Don't treat initial sync from undefined to a defined value as a user change
 				// This prevents the dirty state when the component initializes and auto-syncs the model ID
 				const isInitialSync = previousValue === undefined && value !== undefined

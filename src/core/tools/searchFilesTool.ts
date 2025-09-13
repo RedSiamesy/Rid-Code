@@ -5,7 +5,7 @@ import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } f
 import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import { regexSearchFiles } from "../../services/ripgrep"
+import { regexSearchFiles, OutputMode } from "../../services/ripgrep"
 
 export async function searchFilesTool(
 	cline: Task,
@@ -18,6 +18,7 @@ export async function searchFilesTool(
 	const relDirPath: string | undefined = block.params.path
 	const regex: string | undefined = block.params.regex
 	const filePattern: string | undefined = block.params.file_pattern
+	const outputMode: string | undefined = block.params.output_mode
 
 	const absolutePath = relDirPath ? path.resolve(cline.cwd, relDirPath) : cline.cwd
 	const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
@@ -52,12 +53,22 @@ export async function searchFilesTool(
 
 			cline.consecutiveMistakeCount = 0
 
+			// Validate and set output mode
+			let validatedOutputMode: OutputMode = "content" // default
+			if (outputMode) {
+				const cleanedMode = removeClosingTag("output_mode", outputMode)
+				if (cleanedMode === "content" || cleanedMode === "files_with_matches") {
+					validatedOutputMode = cleanedMode as OutputMode
+				}
+			}
+
 			const results = await regexSearchFiles(
 				cline.cwd,
 				absolutePath,
 				regex,
 				filePattern,
 				cline.rooIgnoreController,
+				validatedOutputMode,
 			)
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ClineSayTool)

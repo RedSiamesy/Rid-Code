@@ -17,7 +17,7 @@ export async function codebaseSearchTool(
 	removeClosingTag: RemoveClosingTag,
 ) {
 	const toolName = "codebase_search"
-	const workspacePath = getWorkspacePath()
+	const workspacePath = (cline.cwd && cline.cwd.trim() !== '') ? cline.cwd : getWorkspacePath()
 
 	if (!workspacePath) {
 		// This case should ideally not happen if Cline is initialized correctly
@@ -29,10 +29,12 @@ export async function codebaseSearchTool(
 	let query: string | undefined = block.params.query
 	let directoryPrefix: string | undefined = block.params.path
 
+
 	if (query === undefined) {
 		await getSummary(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
 		return
 	}
+
 
 	query = removeClosingTag("query", query)
 
@@ -87,7 +89,7 @@ export async function codebaseSearchTool(
 			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
 		}
 
-		const searchResults: string[] = await manager.searchIndex(query, directoryPrefix)
+		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, directoryPrefix)
 
 		// 3. Format and push results
 		if (!searchResults || searchResults.length === 0) {
@@ -110,18 +112,18 @@ export async function codebaseSearchTool(
 		}
 
 		searchResults.forEach((result) => {
-			if (result) {
-				const res = JSON.parse(result) // Ensure the result is valid JSON
-				for (const key in res) {
-					jsonResult.results.push({
-						filePath: res[key]["file_path"],
-						score: res[key].score ?? 1,
-						startLine: Math.min(...res[key]["lines"]),
-						endLine: Math.max(...res[key]["lines"]),
-						codeChunk: res[key]["code"],
-					})
-				}
-			}
+			if (!result.payload) return
+			if (!("filePath" in result.payload)) return
+
+			const relativePath = vscode.workspace.asRelativePath(result.payload.filePath, false)
+
+			jsonResult.results.push({
+				filePath: relativePath,
+				score: result.score,
+				startLine: result.payload.startLine,
+				endLine: result.payload.endLine,
+				codeChunk: result.payload.codeChunk.trim(),
+			})
 		})
 
 		// Send results to UI
@@ -129,7 +131,18 @@ export async function codebaseSearchTool(
 		await cline.say("codebase_search_result", JSON.stringify(payload))
 
 		// Push results to AI
-		const output = `${jsonResult.results.map(result => `# File: ${result.filePath}\n${result.codeChunk}`).join("\n\n")}`
+		const output = `Query: ${query}
+Results:
+
+${jsonResult.results
+	.map(
+		(result) => `File path: ${result.filePath}
+Score: ${result.score}
+Lines: ${result.startLine}-${result.endLine}
+Code Chunk: \n${result.codeChunk}
+`,
+	)
+	.join("\n")}`
 
 		pushToolResult(output)
 	} catch (error: any) {
@@ -212,7 +225,7 @@ async function getSummary(
 			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
 		}
 
-		const summaryResults: string[] = await manager.searchSummary(directoryPrefix ?? "")
+		const summaryResults: VectorStoreSearchResult[] = await manager.searchSummary(directoryPrefix ?? "")
 
 		// 3. Format and push results
 		if (!summaryResults || summaryResults.length === 0) {
@@ -230,31 +243,32 @@ async function getSummary(
 				score: number
 				startLine: number
 				endLine: number
-				codeChunk: string[]
+				codeChunk: string
 			}>
 		}
 
 		summaryResults.forEach((result) => {
-			if (result) {
-				const res = JSON.parse(result) // Ensure the result is valid JSON
-				for (const key in res) {
-					jsonResult.results.push({
-						filePath: res[key]["file_path"],
-						score: 1,
-						startLine: 0,
-						endLine: 0,
-						codeChunk: res[key]["code"],
-					})
-				}
-			}
+			if (!result.payload) return
+			if (!("filePath" in result.payload)) return
+
+			const relativePath = vscode.workspace.asRelativePath(result.payload.filePath, false)
+
+			jsonResult.results.push({
+				filePath: relativePath,
+				score: result.score,
+				startLine: result.payload.startLine,
+				endLine: result.payload.endLine,
+				codeChunk: result.payload.codeChunk.trim(),
+			})
 		})
+
 
 		// Send results to UI
 		const payload = { tool: "codebaseSearch", content: jsonResult }
 		await cline.say("codebase_search_result", JSON.stringify(payload))
 
 		// Push results to AI
-		const output = `# Codebase summary in ${directoryPrefix}:\n\n${jsonResult.results.map(result => `## File: ${result.filePath}\n${result.codeChunk.join("\n")}`).join("\n\n")}`
+		const output = `# Codebase summary in ${directoryPrefix}:\n\n${jsonResult.results.map(result => `## File: ${result.filePath}\n${result.codeChunk}`).join("\n\n")}`
 
 		pushToolResult(output)
 	} catch (error: any) {

@@ -301,7 +301,8 @@ Each file requires its own path, start_line, and diff elements.
 				"[exact content to find including whitespace]\n" +
 				"=======\n" +
 				"[new content to replace with]\n" +
-				">>>>>>> REPLACE\n",
+				">>>>>>> REPLACE\n" + 
+				"Do not quote large sections of content that does not need modification, and minimize quoting to the lines that need modification\n",
 		})
 
 		const reportLineMarkerInReplaceError = (marker: string) => ({

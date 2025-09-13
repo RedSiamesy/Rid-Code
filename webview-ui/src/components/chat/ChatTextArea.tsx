@@ -217,6 +217,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const contextMenuContainerRef = useRef<HTMLDivElement>(null)
 		const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false)
 		const [isFocused, setIsFocused] = useState(false)
+		const [isCommandMode, setIsCommandMode] = useState(false)
+		const [isMemoryMode, setIsMemoryMode] = useState(false)
+
 
 		// Use custom hook for prompt history navigation
 		const { handleHistoryNavigation, resetHistoryNavigation, resetOnInputChange } = usePromptHistory({
@@ -237,23 +240,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				vscode.postMessage(message)
 			}
 		}, [selectedType, searchQuery])
-
-		const handleSavingMemory = useCallback(() => {
-			if (sendingDisabled) {
-				return
-			}
-
-			const trimmedInput = inputValue.trim()
-
-			if (trimmedInput) {
-				setIsSavingMemory(true)
-				vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
-			} else {
-				setIsSavingMemory(true)
-				vscode.postMessage({ type: "saveMemory" as const, text: "" })
-			}
-			setInputValue("")
-		}, [inputValue, sendingDisabled, setInputValue, setIsSavingMemory])
 
 		const handleEnhancePrompt = useCallback(() => {
 			if (sendingDisabled) {
@@ -276,9 +262,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			return [
 				{ type: ContextMenuOptionType.Problems, value: "problems" },
 				{ type: ContextMenuOptionType.Terminal, value: "terminal" },
-				{ type: ContextMenuOptionType.Codebase, value: "codebase" },
-				{ type: ContextMenuOptionType.Summary, value: "summary" },
-				{ type: ContextMenuOptionType.Memory, value: "memory" },
 				...gitCommits,
 				...openedTabs
 					.filter((tab) => tab.path)
@@ -380,12 +363,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						insertValue = "terminal"
 					} else if (type === ContextMenuOptionType.Git) {
 						insertValue = value || ""
-					} else if (type === ContextMenuOptionType.Codebase) {
-						insertValue = "codebase"
-					} else if (type === ContextMenuOptionType.Summary) {
-						insertValue = "summary"
-					} else if (type === ContextMenuOptionType.Memory) {
-						insertValue = "memory"
 					} else if (type === ContextMenuOptionType.Command) {
 						insertValue = value ? `/${value}` : ""
 					}
@@ -417,6 +394,36 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			// eslint-disable-next-line react-hooks/exhaustive-deps
 			[setInputValue, cursorPosition],
 		)
+
+		const handleSend = useCallback(() => {
+			if (isCommandMode) {
+				onSend()
+				vscode.postMessage({ type: "useTerminalCommand" as const, text: inputValue })
+			} else if (isMemoryMode) {
+				const trimmedInput = inputValue.trim()
+				if (trimmedInput) {
+					setIsSavingMemory(true)
+					vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
+				} else {
+					setIsSavingMemory(true)
+					vscode.postMessage({ type: "saveMemory" as const, text: "" })
+				}
+				setInputValue("")
+			} else {
+				resetHistoryNavigation()
+				onSend()
+			}
+			setIsCommandMode(false)
+			setIsMemoryMode(false)
+		}, [
+			onSend,
+			isCommandMode,
+			setIsCommandMode,
+			isMemoryMode,
+			setIsMemoryMode,
+			inputValue,
+			setInputValue,
+		])
 
 		const handleKeyDown = useCallback(
 			(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -489,6 +496,32 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					}
 				}
 
+				// Handle command mode with "!" key
+				if (event.key === "~"  && !isCommandMode && !isMemoryMode && inputValue === "") {
+					event.preventDefault()
+					setIsCommandMode(true)
+					return
+				}
+				
+				// Handle command mode with "!" key
+				if (event.key === "#"  && !isMemoryMode && !isCommandMode && inputValue === "") {
+					event.preventDefault()
+					setIsMemoryMode(true)
+					return
+				}
+
+				// Handle ESC key in command mode
+				if (event.key === "Escape" && (isCommandMode || isMemoryMode)) {
+					event.preventDefault()
+					if (inputValue === "") {
+						setIsCommandMode(false)
+						setIsMemoryMode(false)
+					} else {
+						setInputValue("")
+					}
+					return
+				}
+
 				const isComposing = event.nativeEvent?.isComposing ?? false
 
 				// Handle prompt history navigation using custom hook
@@ -500,8 +533,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					event.preventDefault()
 
 					// Always call onSend - let ChatView handle queueing when disabled
-					resetHistoryNavigation()
-					onSend()
+					handleSend()
 				}
 
 				if (event.key === "Backspace" && !isComposing) {
@@ -549,7 +581,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				}
 			},
 			[
-				onSend,
+				handleSend,
 				showContextMenu,
 				searchQuery,
 				selectedMenuIndex,
@@ -565,6 +597,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				handleHistoryNavigation,
 				resetHistoryNavigation,
 				commands,
+				isCommandMode,
+				setIsCommandMode,
+				isMemoryMode,
+				setIsMemoryMode
 			],
 		)
 
@@ -993,36 +1029,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}
 					<SlashCommandsPopover />
 					<IndexingStatusBadge />
-						<StandardTooltip content={t("保留永久记忆")}>
-							<button
-								aria-label={t("保留永久记忆")}
-								disabled={sendingDisabled}
-								onClick={handleSavingMemory}
-								className={cn(
-									"relative inline-flex items-center justify-center",
-									"bg-transparent border-none p-1.5",
-									"rounded-md min-w-[28px] min-h-[28px]",
-									"text-vscode-foreground opacity-85",
-									"transition-all duration-150",
-									"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
-									"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-									"active:bg-[rgba(255,255,255,0.1)]",
-									!sendingDisabled && "cursor-pointer",
-									sendingDisabled &&
-										"opacity-40 cursor-not-allowed grayscale-[30%] hover:bg-transparent hover:border-[rgba(255,255,255,0.08)] active:bg-transparent",
-									"ml-1",
-								)}>
-								{isSavingMemory ? (
-									<div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-								) : (
-									<div className="w-4 h-4 flex items-center justify-center">
-										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7M4 7c0-2.21 1.79-4 4-4h8c2.21 0 4 1.79 4 4M4 7h16m-4 4h.01M7 11h.01" />
-										</svg>
-									</div>
-								)}
-							</button>
-						</StandardTooltip>
 					<StandardTooltip content={t("chat:addImages")}>
 						<button
 							aria-label={t("chat:addImages")}
@@ -1125,10 +1131,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						"cursor-text",
 						isEditMode ? "pt-1.5 pb-10 px-2" : "py-1.5 px-2",
 						isFocused
-							? "border border-vscode-focusBorder outline outline-vscode-focusBorder"
-							: isDraggingOver
-								? "border-2 border-dashed border-vscode-focusBorder"
-								: "border border-transparent",
+								? "border outline"
+								: isDraggingOver
+									? "border border-dashed border-vscode-focusBorder"
+									: "border border-transparent",
 						isDraggingOver
 							? "bg-[color-mix(in_srgb,var(--vscode-input-background)_95%,var(--vscode-focusBorder))]"
 							: "bg-vscode-input-background",
@@ -1146,6 +1152,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						"scrollbar-none",
 						"scrollbar-hide",
 					)}
+					style={{
+						...(isFocused && {
+							borderColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff':'var(--vscode-focusBorder)',
+							outlineColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff':'var(--vscode-focusBorder)',
+						}),
+					}}
 					onScroll={() => updateHighlights()}
 				/>
 
@@ -1177,7 +1189,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<button
 								aria-label={t("chat:sendMessage")}
 								disabled={false}
-								onClick={onSend}
+								onClick={handleSend}
 								className={cn(
 									"relative inline-flex items-center justify-center",
 									"bg-transparent border-none p-1.5",
@@ -1297,7 +1309,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							customModes={customModes}
 							customModePrompts={customModePrompts}
 							onCancel={onCancel}
-							onSend={onSend}
+							onSend={handleSend}
 							onSelectImages={onSelectImages}
 							sendingDisabled={sendingDisabled}
 							shouldDisableImages={shouldDisableImages}

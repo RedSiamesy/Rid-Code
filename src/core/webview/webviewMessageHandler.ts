@@ -1338,6 +1338,19 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
+		case "useTerminalCommand":
+			const tryExecuteCommand = async (retryCount = 0) => {
+				const currentCline = provider.getCurrentCline()
+				if (currentCline) {
+					currentCline.postprocess._execute_command = message.text
+				} else if (retryCount < 5) { // 最多重试5次
+					setTimeout(() => tryExecuteCommand(retryCount + 1), 100)
+				} else {
+					console.error("Failed to get current Cline instance for terminal command")
+				}
+			}
+			tryExecuteCommand()
+			break
 		case "saveMemory":
 			// 调用保存记忆函数，函数内部会发送相应的消息
 			await saveMemory(provider, message.text??"")
@@ -2018,17 +2031,6 @@ export const webviewMessageHandler = async (
 					codebaseIndexOpenAiCompatibleBaseUrl: settings.codebaseIndexOpenAiCompatibleBaseUrl,
 					codebaseIndexSearchMaxResults: settings.codebaseIndexSearchMaxResults,
 					codebaseIndexSearchMinScore: settings.codebaseIndexSearchMinScore,
-
-					embeddingBaseUrl: settings.embeddingBaseUrl,
-					embeddingModelID: settings.embeddingModelID,
-					enhancementBaseUrl: settings.enhancementBaseUrl,
-					enhancementModelID: settings.enhancementModelID,
-					// embeddingApiKey: settings.embeddingApiKey,
-					// enhancementApiKey: settings.enhancementApiKey,
-
-					ragPath: settings.ragPath,
-					llmFilter: settings.llmFilter,
-					codeBaseLogging: settings.codeBaseLogging,
 				}
 
 				// Save global state first
@@ -2062,15 +2064,6 @@ export const webviewMessageHandler = async (
 				if (settings.codeIndexOpenAiKey !== undefined) {
 					await provider.contextProxy.storeSecret("codeIndexOpenAiKey", settings.codeIndexOpenAiKey)
 				}
-
-				
-				if (settings.embeddingApiKey !== undefined) {
-					await provider.contextProxy.storeSecret("embeddingApiKey", settings.embeddingApiKey)
-				}
-				if (settings.enhancementApiKey !== undefined) {
-					await provider.contextProxy.storeSecret("enhancementApiKey", settings.enhancementApiKey)
-				}
-				
 
 				// Send success response first - settings are saved regardless of validation
 				await provider.postMessageToWebview({
@@ -2191,8 +2184,6 @@ export const webviewMessageHandler = async (
 				"codebaseIndexOpenAiCompatibleApiKey",
 			))
 			const hasGeminiApiKey = !!(await provider.context.secrets.get("codebaseIndexGeminiApiKey"))
-			const hasEmbeddingApiKey = !!(await provider.context.secrets.get("embeddingApiKey"))
-			const hasEnhancementApiKey = !!(await provider.context.secrets.get("enhancementApiKey"))
 			const hasMistralApiKey = !!(await provider.context.secrets.get("codebaseIndexMistralApiKey"))
 
 			provider.postMessageToWebview({
@@ -2202,8 +2193,6 @@ export const webviewMessageHandler = async (
 					hasQdrantApiKey,
 					hasOpenAiCompatibleApiKey,
 					hasGeminiApiKey,
-					hasEmbeddingApiKey,
-					hasEnhancementApiKey,
 					hasMistralApiKey,
 				},
 			})
@@ -2227,11 +2216,10 @@ export const webviewMessageHandler = async (
 					provider.log("Cannot start indexing: No workspace folder open")
 					return
 				}
+				if (!manager.isInitialized) {
+					await manager.initialize(provider.contextProxy)
+				}
 				if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
-					if (!manager.isInitialized) {
-						await manager.initialize(provider.contextProxy)
-					}
-
 					manager.startIndexing()
 				}
 			} catch (error) {

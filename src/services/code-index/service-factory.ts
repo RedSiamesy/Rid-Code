@@ -1,15 +1,18 @@
 import * as vscode from "vscode"
 import { OpenAiEmbedder } from "./embedders/openai"
+import { RiddlerEmbedder } from "./embedders/embedding-riddler"
 import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
 import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
 import { GeminiEmbedder } from "./embedders/gemini"
 import { MistralEmbedder } from "./embedders/mistral"
 import { EmbedderProvider, getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
-import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
+import { RiddlerVectorStore } from "./vector-store/client-riddler"
+import { codeParser, DirectoryScanner, FileWatcher, riddlerCodeParser } from "./processors"
 import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
+import { RooIgnoreController } from "../../core/ignore/RooIgnoreController"
 import { Ignore } from "ignore"
 import { t } from "../../i18n"
 import { TelemetryService } from "@roo-code/telemetry"
@@ -45,12 +48,13 @@ export class CodeIndexServiceFactory {
 			})
 		} else if (provider === "ollama") {
 			if (!config.ollamaOptions?.ollamaBaseUrl) {
-				throw new Error(t("embeddings:serviceFactory.ollamaConfigMissing"))
+				throw new Error(`创建 Codebase-Service 缺少URL配置`)
 			}
-			return new CodeIndexOllamaEmbedder({
-				...config.ollamaOptions,
-				ollamaModelId: config.modelId,
-			})
+			return new RiddlerEmbedder()
+			// return new CodeIndexOllamaEmbedder({
+			// 	...config.ollamaOptions,
+			// 	ollamaModelId: config.modelId,
+			// })
 		} else if (provider === "openai-compatible") {
 			if (!config.openAiCompatibleOptions?.baseUrl || !config.openAiCompatibleOptions?.apiKey) {
 				throw new Error(t("embeddings:serviceFactory.openAiCompatibleConfigMissing"))
@@ -112,6 +116,13 @@ export class CodeIndexServiceFactory {
 		// Use the embedding model ID from config, not the chat model IDs
 		const modelId = config.modelId ?? defaultModel
 
+		if (provider === "ollama") {
+			if (!config.ollamaOptions?.ollamaBaseUrl) {
+				throw new Error(`创建 Codebase-Service 缺少URL配置`)
+			}
+			return new RiddlerVectorStore(this.workspacePath, config.ollamaOptions?.ollamaBaseUrl, 1024, config.qdrantApiKey)
+		}
+
 		let vectorSize: number | undefined
 
 		// First try to get the model-specific dimension from profiles
@@ -160,9 +171,20 @@ export class CodeIndexServiceFactory {
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
+		codeParser: ICodeParser,
 		ignoreInstance: Ignore,
+		rooIgnoreController?: RooIgnoreController,
 	): IFileWatcher {
-		return new FileWatcher(this.workspacePath, context, cacheManager, embedder, vectorStore, ignoreInstance)
+		return new FileWatcher(
+			this.workspacePath,
+			context,
+			cacheManager,
+			codeParser,
+			embedder,
+			vectorStore,
+			ignoreInstance,
+			rooIgnoreController,
+		)
 	}
 
 	/**
@@ -173,6 +195,7 @@ export class CodeIndexServiceFactory {
 		context: vscode.ExtensionContext,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
+		rooIgnoreController?: RooIgnoreController,
 	): {
 		embedder: IEmbedder
 		vectorStore: IVectorStore
@@ -183,12 +206,22 @@ export class CodeIndexServiceFactory {
 		if (!this.configManager.isFeatureConfigured) {
 			throw new Error(t("embeddings:serviceFactory.codeIndexingNotConfigured"))
 		}
+		const config = this.configManager.getConfig()
+		const provider = config.embedderProvider as EmbedderProvider
 
 		const embedder = this.createEmbedder()
 		const vectorStore = this.createVectorStore()
-		const parser = codeParser
+		const parser = provider !== "ollama" ? codeParser : riddlerCodeParser
 		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance)
-		const fileWatcher = this.createFileWatcher(context, embedder, vectorStore, cacheManager, ignoreInstance)
+		const fileWatcher = this.createFileWatcher(
+			context,
+			embedder,
+			vectorStore,
+			cacheManager,
+			parser,
+			ignoreInstance,
+			rooIgnoreController,
+		)
 
 		return {
 			embedder,

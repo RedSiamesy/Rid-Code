@@ -295,7 +295,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 请遵循上述内容对记忆进行新增。
 
 除对话信息外，用户还会将当前已有的历史记忆，作为上下文信息传递给你，每条历史记忆前包含一个序号，
-1. 你需要判定历史记忆中是否有与当前对话中的信息相互矛盾的地方。如果有，根据你的分析是否需要接受新的记忆，放弃历史记忆。如果选择新的对话中产生的记忆，请将历史记忆删除
+1. 你需要判定历史记忆中是否有与当前对话中的信息相互矛盾的地方（可以并列同时共存的特性不应视为矛盾）。如果有显著矛盾，根据你的分析是否需要接受新的记忆，放弃历史记忆。如果选择新的对话中产生的记忆，请将历史记忆删除
 2. 如果发现历史记忆中的信息与当前项目明显不符，显然属于过期信息，请将对应历史信息删除，例如今天已经6月10日，记忆针对的是6月10日之前的工作
 3. 如果需要对历史记忆进行修改，请先删除对应历史记忆，并增加新的记忆
 
@@ -329,7 +329,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 "
 
 注意：
-- LLM上下文长度有限，请保持记忆的精简且有效，不要加入过多无用细节，必要时可以删除历史记忆中无效的废话
+- LLM上下文长度有限，请保持记忆的全面、详细、精确、有效，不要加入过多无用细节，必要时可以删除历史记忆中无效的废话
 - 记忆间避免重复，必要时可以删除重复记忆
 - 对于描述中的例子，可以作为参考，但不仅限于上述场景，宗旨是只要能够帮助用户进行记录完成工作即可。
 
@@ -448,7 +448,31 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 
 			// 创建摘要信息
 			const operationSummary = generateOperationSummary(memoryOperations)
-			const summary = `记忆已更新:\n(全局记忆: ${memoryFiles.globalMemoryPath})\n(项目记忆: ${memoryFiles.projectMemoryPath})\n\n操作详情: ${operationSummary}`
+			let g_str = ""
+			let p_str = ""
+			
+			const workspacePath = getWorkspacePath()
+			// 检查全局记忆路径是否存在
+			if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
+				if (workspacePath) {
+					const globalMemoryPath = path.relative(workspacePath, memoryFiles.globalMemoryPath)
+					g_str = `(全局记忆: [${memoryFiles.globalMemoryPath}](${globalMemoryPath}))\n`
+				} else {
+					g_str = `(全局记忆: ${memoryFiles.globalMemoryPath})\n`
+				}
+			}
+			
+			// 检查项目记忆路径是否存在
+			if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
+				if (workspacePath) {
+					const projectMemoryPath = path.relative(workspacePath, memoryFiles.projectMemoryPath)
+					p_str = `(项目记忆: [${memoryFiles.projectMemoryPath}](${projectMemoryPath}))\n`
+				} else {
+					p_str = `(项目记忆: ${memoryFiles.projectMemoryPath})\n`
+				}
+			}
+
+			const summary = `记忆已更新:\n${g_str}${p_str}\n\n操作详情: ${operationSummary}`
 			const contextCondense: ContextCondense = { 
 				summary, 
 				cost, 
@@ -467,11 +491,22 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 				contextCondense,
 			)
 
+			// 创建通知文本，只包含存在的文件路径
+			let notificationText = `记忆已更新 (成本: $${cost.toFixed(4)})`
+			
+			if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
+				notificationText += `\n全局: ${memoryFiles.globalMemoryPath}`
+			}
+			
+			if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
+				notificationText += `\n项目: ${memoryFiles.projectMemoryPath}`
+			}
+
 			// 通知webview保存成功
 			await provider.postMessageToWebview({ 
 				type: "savedMemory", 
 				success: true,
-				text: `记忆已更新 (成本: $${cost.toFixed(4)})\n全局: ${memoryFiles.globalMemoryPath}\n项目: ${memoryFiles.projectMemoryPath}`
+				text: notificationText
 			})
 
 		} catch (error) {
@@ -480,6 +515,11 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 			await currentCline.say(
 				"save_memory_error",
 				"保存记忆错误" /* text */,
+				undefined /* images */,
+				false /* partial */,
+				undefined /* checkpoint */,
+				undefined /* progressStatus */,
+				{ isNonInteractive: true } /* options */,
 			)
 			
 			// 通知webview保存失败
@@ -563,12 +603,26 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 			// 创建摘要信息
 			const operationSummary = generateOperationSummary(memoryOperations)
 
+			// 创建通知文本，只包含存在的文件路径
+			let notificationText = `记忆已更新 (成本: $${cost.toFixed(4)})`
+			
+			if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
+				notificationText += `\n全局: ${memoryFiles.globalMemoryPath}`
+			}
+			
+			if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
+				notificationText += `\n项目: ${memoryFiles.projectMemoryPath}`
+			}
+
 			// 通知webview保存成功
 			await provider.postMessageToWebview({ 
 				type: "savedMemory", 
 				success: true,
-				text: `记忆已更新 (成本: $${cost.toFixed(4)})\n全局: ${memoryFiles.globalMemoryPath}\n项目: ${memoryFiles.projectMemoryPath}`
+				text: notificationText
 			})
+
+			// 显示VS Code右下角通知
+			vscode.window.showInformationMessage(`Roo 记忆已保存`)
 
 		} catch (error) {
 			console.error("保存记忆时出错:", error)

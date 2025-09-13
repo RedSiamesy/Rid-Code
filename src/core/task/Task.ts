@@ -47,7 +47,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { getModelMaxOutputTokens } from "../../shared/api"
 
 // services
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
 import { BrowserSession } from "../../services/browser/BrowserSession"
 import { McpHub } from "../../services/mcp/McpHub"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
@@ -78,7 +78,7 @@ import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
 import { readApiMessages, saveApiMessages, readTaskMessages, saveTaskMessages, taskMetadata } from "../task-persistence"
-import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
+import { getEnvironmentDetails, getUserSuggestions } from "../environment/getEnvironmentDetails"
 import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
@@ -93,6 +93,10 @@ import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
 import { summarizeSubTask } from "../summarize-subtask"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { restoreTodoListForTask } from "../tools/updateTodoListTool"
+
+
+import { userExecuteCommand } from "../tools/executeCommandTool"
+
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 
@@ -242,6 +246,7 @@ export class Task extends EventEmitter<TaskEvents> {
 	consecutiveMistakeLimit: number
 	consecutiveMistakeCountForApplyDiff: Map<string, number> = new Map()
 	toolUsage: ToolUsage = {}
+	public toolSequence: string[] = [];
 
 	// Checkpoints
 	enableCheckpoints: boolean
@@ -260,6 +265,11 @@ export class Task extends EventEmitter<TaskEvents> {
 	didRejectTool = false
 	didAlreadyUseTool = false
 	didCompleteReadingStream = false
+
+	// Riddler
+	postprocess = {
+		_execute_command: undefined as string | undefined,
+	}
 
 	constructor({
 		provider,
@@ -1503,8 +1513,20 @@ export class Task extends EventEmitter<TaskEvents> {
 
 		// Add environment details as its own text block, separate from tool
 		// results.
-		const finalUserContent = [...parsedUserContent, { type: "text" as const, text: environmentDetails }]
+		let userExecuteCommandResult: string | undefined = undefined
+		if (this.postprocess._execute_command) {
+			const cmd = this.postprocess._execute_command
+			this.postprocess._execute_command = undefined
+			userExecuteCommandResult = await userExecuteCommand(this, cmd)
+		}
 
+		const finalUserContent = [
+			...parsedUserContent, 
+			...(userExecuteCommandResult !== undefined ? [{ type: "text" as const, text: `User called the command in the task above in the local terminal, and the terminal displayed the following results (the results are in the <user_execute_command_result></user_execute_command_result> tag):\n<user_execute_command_result>\n${userExecuteCommandResult}\n</user_execute_command_result>` }] : []),
+			...(this.parentTask && includeFileDetails ? [{ type: "text" as const, text: "- IMPORTANT: **SUBTASK RULES** - When you complete your tasks and finally call the \`attempt_completion\` tool for summarization, you MUST describe in more detail all the tasks you completed and the conclusions you reached." }] : []), 
+			{ type: "text" as const, text: environmentDetails },
+		]
+		
 		await this.addToApiConversationHistory({ role: "user", content: finalUserContent })
 		TelemetryService.instance.captureConversationMessage(this.taskId, "user")
 
@@ -2053,6 +2075,22 @@ export class Task extends EventEmitter<TaskEvents> {
 			({ role, content }) => ({ role, content }),
 		)
 
+		const userSuggestions = await getUserSuggestions(this)
+		
+		// 如果cleanConversationHistory最后一个对话角色是user，且是一个数组，且userSuggestions不是undefined，
+		// 则把userSuggestions加入数组的最后一个，属性是text
+		if (cleanConversationHistory.length > 0) {
+			const lastMessage = cleanConversationHistory[cleanConversationHistory.length - 1]
+			if (lastMessage.role === "user" && Array.isArray(lastMessage.content)) {
+				if (userSuggestions !== undefined) {
+					lastMessage.content.push({
+						type: "text",
+						text: `<user_suggestions>\n${userSuggestions}\nThis is just a gentle reminder - ignore if not applicable.\n</user_suggestions>`
+					})
+				}
+			}
+		}
+
 		// Check if we've reached the maximum number of auto-approved requests
 		const maxRequests = state?.allowedMaxRequests || Infinity
 
@@ -2199,7 +2237,7 @@ export class Task extends EventEmitter<TaskEvents> {
 		if (!this.toolUsage[toolName]) {
 			this.toolUsage[toolName] = { attempts: 0, failures: 0 }
 		}
-
+		this.toolSequence.push(toolName);
 		this.toolUsage[toolName].attempts++
 	}
 
@@ -2207,7 +2245,6 @@ export class Task extends EventEmitter<TaskEvents> {
 		if (!this.toolUsage[toolName]) {
 			this.toolUsage[toolName] = { attempts: 0, failures: 0 }
 		}
-
 		this.toolUsage[toolName].failures++
 
 		if (error) {

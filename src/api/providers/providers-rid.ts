@@ -32,6 +32,7 @@ import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-rid"
 export class RiddlerHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
 	private client: OpenAI
+	extra_body: any = {}
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -158,6 +159,7 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				...(reasoning && reasoning),
+				...this.extra_body
 			}
 
 			// @TODO: Move this to the `getModelParams` function.

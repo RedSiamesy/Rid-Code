@@ -677,6 +677,10 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Edición en segundo plano",
 			"description": "Previene la interrupción del foco del editor cuando está habilitado. Las ediciones de archivos ocurren en segundo plano sin abrir vistas de diferencias o robar el foco. Puedes continuar trabajando sin interrupciones mientras Roo realiza cambios. Los archivos pueden abrirse sin foco para capturar diagnósticos o mantenerse completamente cerrados."
+		},
+		"ALLOWED_MULTI_CALL": {
+			"name": "Permitir múltiples llamadas a herramientas por mensaje",
+			"description": "Cuando está habilitado, Roo puede usar múltiples herramientas en un solo mensaje. Cuando está deshabilitado, Roo debe usar una herramienta por mensaje. Habilitar esto puede hacer que las interacciones sean más rápidas pero puede causar comportamientos inesperados con algunos modelos."
 		}
 	},
 	"promptCaching": {

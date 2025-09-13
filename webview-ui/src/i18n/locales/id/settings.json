@@ -707,6 +707,10 @@
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Pengeditan Latar Belakang",
 			"description": "Ketika diaktifkan, mencegah gangguan fokus editor. Pengeditan file terjadi di latar belakang tanpa membuka tampilan diff atau mencuri fokus. Anda dapat terus bekerja tanpa gangguan saat Roo melakukan perubahan. File mungkin dibuka tanpa fokus untuk menangkap diagnostik atau tetap tertutup sepenuhnya."
+		},
+		"ALLOWED_MULTI_CALL": {
+			"name": "Izinkan beberapa panggilan alat per pesan",
+			"description": "Ketika diaktifkan, Roo dapat menggunakan beberapa alat dalam satu pesan. Ketika dinonaktifkan, Roo harus menggunakan satu alat per pesan. Mengaktifkan ini dapat mempercepat interaksi tetapi dapat menyebabkan perilaku yang tidak terduga dengan beberapa model."
 		}
 	},
 	"promptCaching": {

@@ -26,12 +26,12 @@ export const SaveMemoryRow = ({ cost, prevContextTokens, newContextTokens, summa
 					}}>
 					<span
 						className={`codicon codicon-check`}
-						style={{ color: "var(--vscode-charts-green)", fontSize: 16, marginBottom: "-1.5px" }}
+						style={{ color: "#00a3af44", fontSize: 16, marginBottom: "-1.5px" }}
 					/>
 				</div>
 				<div className="flex items-center gap-2 flex-grow">
 					<span className="codicon codicon-compress text-blue-400" />
-					<span className="font-bold text-vscode-foreground">{"已保存记忆"}</span>
+					<span className="font-bold text-vscode-foreground" style={{  color: "#00a3af77", fontWeight: "bold" }}>{"已保存记忆"}</span>
 					{/* <span className="text-vscode-descriptionForeground text-sm">
 						{prevContextTokens.toLocaleString()} → {newContextTokens.toLocaleString()} {t("tokens")}
 					</span> */}
@@ -54,7 +54,7 @@ export const SavingMemoryRow = () => {
 		<div className="flex items-center gap-2">
 			<ProgressIndicator />
 			<span className="codicon codicon-compress text-blue-400" />
-			<span className="font-bold text-vscode-foreground">{"正在分析记忆数据..."}</span>
+			<span className="font-bold text-vscode-foreground"  style={{  color: "#00a3af77", fontWeight: "bold" }}>{"正在分析记忆数据..."}</span>
 		</div>
 	)
 }

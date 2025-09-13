@@ -13,7 +13,7 @@ export class ModelScopeHandler extends RiddlerHandler {
 			...options,
 			openAiApiKey: options.modelscopeApiKey ?? "not-provided",
 			openAiModelId: options.apiModelId ?? modelScopeDefaultModelId,
-			openAiBaseUrl: options.modelscopeBaseUrl ?? "https://riddler.mynatapp.cc/api/modelscope/v1",
+			openAiBaseUrl: options.modelscopeBaseUrl ?? "https://riddler.mynatapp.cc/llm/modelscope/v1",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})

@@ -60,7 +60,6 @@ async function generatePrompt(
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
-	todoList?: TodoItem[],
 ): Promise<string> {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -87,11 +86,14 @@ async function generatePrompt(
 
 	const codeIndexManager = CodeIndexManager.getInstance(context)
 
+	// Extract allowedMultiCall from experiments
+	const allowedMultiCall = experiments?.allowedMultiCall ?? false
+
 	const basePrompt = `${roleDefinition}
 
 ${markdownFormattingSection()}
 
-${getSharedToolUseSection()}
+${getSharedToolUseSection(allowedMultiCall)}
 
 ${getToolDescriptionsForMode(
 	mode,
@@ -107,19 +109,19 @@ ${getToolDescriptionsForMode(
 	settings,
 )}
 
-${getToolUseGuidelinesSection(codeIndexManager)}
+${true?"":getToolUseGuidelinesSection(codeIndexManager)}
 
 ${mcpServersSection}
 
-${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
 
 ${modesSection}
 
-${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager)}
+${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
 
 ${getSystemInfoSection(cwd)}
 
-${getObjectiveSection(codeIndexManager, experiments)}
+${true?"":getObjectiveSection(codeIndexManager, experiments)}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(vscode.env.language),
@@ -148,7 +150,6 @@ export const SYSTEM_PROMPT = async (
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
-	todoList?: TodoItem[],
 ): Promise<string> => {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -242,6 +243,5 @@ ${customInstructions}`
 		rooIgnoreInstructions,
 		partialReadsEnabled,
 		settings,
-		todoList,
 	)
 }

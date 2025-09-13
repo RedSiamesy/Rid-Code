@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 import delay from "delay"
 
-import type { ExperimentId } from "@roo-code/types"
+import type { ExperimentId, TodoItem, ToolName } from "@roo-code/types"
 import { DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT } from "@roo-code/types"
 
 import { EXPERIMENT_IDS, experiments as Experiments } from "../../shared/experiments"
@@ -25,7 +25,154 @@ import { addLineNumbers } from "../../integrations/misc/extract-text"
 import { Task } from "../task/Task"
 import { formatReminderSection } from "./reminder"
 
-import { getMemoryFilePaths, readMemoryFiles, formatMemoryContent } from "../mentions/index"
+import { getWorkspacePath } from "../../utils/path"
+import { fileExistsAtPath } from "../../utils/fs"
+import fs from "fs/promises"
+import { ApiMessage } from "../task-persistence/apiMessages"
+
+
+interface MemoryFiles {
+	globalMemoryPath: string
+	projectMemoryPath: string
+}
+
+interface MemoryData {
+	globalMemories: string[]
+	projectMemories: string[]
+}
+
+/**
+ * 获取记忆文件路径
+ */
+export async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
+	const globalMemoryPath = path.join(globalStoragePath, "global-memory.md")
+
+	const workspacePath = getWorkspacePath()
+	if (!workspacePath) {
+		throw new Error("无法获取工作区路径")
+	}
+
+	const projectMemoryDir = path.join(workspacePath, ".roo")
+	const projectMemoryPath = path.join(projectMemoryDir, "project-memory.md")
+
+	return {
+		globalMemoryPath,
+		projectMemoryPath,
+	}
+}
+
+/**
+ * 读取记忆文件内容
+ */
+export async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
+	const globalMemories: string[] = []
+	const projectMemories: string[] = []
+
+	// 读取全局记忆
+	if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
+		try {
+			const content = await fs.readFile(memoryFiles.globalMemoryPath, "utf-8")
+			const lines = content.split("\n").filter((line) => line.trim())
+			globalMemories.push(...lines)
+		} catch (error) {
+			console.log("无法读取全局记忆文件:", error)
+		}
+	}
+
+	// 读取项目记忆
+	if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
+		try {
+			const content = await fs.readFile(memoryFiles.projectMemoryPath, "utf-8")
+			const lines = content.split("\n").filter((line) => line.trim())
+			projectMemories.push(...lines)
+		} catch (error) {
+			console.log("无法读取项目记忆文件:", error)
+		}
+	}
+
+	return {
+		globalMemories,
+		projectMemories,
+	}
+}
+
+/**
+ * 格式化记忆内容为显示格式
+ */
+export function formatMemoryContent(memoryData: MemoryData): string {
+	if (memoryData.globalMemories.length === 0 && memoryData.projectMemories.length === 0) {
+		return "No memory data available"
+	}
+
+	let formatted = "The content of Agent memory includes records of Roo's understanding of user needs from past work, as well as insights into user habits and projects.\n\n"
+
+	if (memoryData.globalMemories.length > 0) {
+		formatted += "# Global Memory:\n"
+		memoryData.globalMemories.forEach((memory, index) => {
+			formatted += `${memory}\n`
+		})
+		formatted += "\n"
+	}
+
+	if (memoryData.projectMemories.length > 0) {
+		formatted += "# Project Memory:\n"
+		memoryData.projectMemories.forEach((memory, index) => {
+			formatted += `${memory}\n`
+		})
+	}
+
+	return formatted.trim()
+}
+
+/**
+ * 获取代办中所有正在进行的项，如果没有正在进行的项目则获取第一个未进行的项目，
+ * 判断这些项目的类型（analysis/planning/editing），组成一个任务类型set
+ */
+function getTodoTaskTypes(cline: Task): Set<string> | undefined {
+	if (!cline.todoList || cline.todoList.length === 0) {
+		return undefined
+	}
+
+	// 先查找所有正在进行的项目
+	const inProgressTodos = cline.todoList.filter(todo => todo.status === "in_progress")
+	
+	let todosToAnalyze: TodoItem[]
+	if (inProgressTodos.length > 0) {
+		// 如果有正在进行的项目，使用这些项目
+		todosToAnalyze = inProgressTodos
+	} else {
+		// 如果没有正在进行的项目，获取第一个待处理的项目
+		const pendingTodos = cline.todoList.filter(todo => todo.status === "pending")
+		todosToAnalyze = pendingTodos.length > 0 ? [pendingTodos[0]] : []
+	}
+
+	// 分析任务类型
+	const taskTypes = new Set<string>()
+	
+	for (const todo of todosToAnalyze) {
+		// 从任务内容中提取类型标记，例如 [analysis], [planning], [editing]
+		const typeMatch = todo.content.match(/\[(\w+)\]/)
+		if (typeMatch) {
+			const taskType = typeMatch[1].toLowerCase()
+			if (["analysis", "planning", "editing"].includes(taskType)) {
+				taskTypes.add(taskType)
+			}
+		} else {
+			// 如果没有明确的类型标记，根据关键词判断类型
+			const content = todo.content.toLowerCase()
+			if (content.includes("analyz") || content.includes("research") || content.includes("understand") || content.includes("investigate")) {
+				taskTypes.add("analysis")
+			} else if (content.includes("plan") || content.includes("design") || content.includes("architect") || content.includes("structure")) {
+				taskTypes.add("planning")
+			} else if (content.includes("implement") || content.includes("write") || content.includes("create") || content.includes("edit") || content.includes("fix") || content.includes("update")) {
+				taskTypes.add("editing")
+			}
+		}
+	}
+
+	return taskTypes
+}
+
 
 const generateDiagnosticText = (diagnostics?: any[]) => {
 	if (!diagnostics?.length) return ""
@@ -33,6 +180,8 @@ const generateDiagnosticText = (diagnostics?: any[]) => {
 		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
 		.join("\n")}`
 }
+
+
 
 
 export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
@@ -252,33 +401,33 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 	}
 
 	if (includeFileDetails) {
-		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
-		const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
+		// details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
+		// const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
 
-		if (isDesktop) {
-			// Don't want to immediately access desktop since it would show
-			// permission popup.
-			details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
-		} else {
-			const maxFiles = maxWorkspaceFiles ?? 200
+		// if (isDesktop) {
+		// 	// Don't want to immediately access desktop since it would show
+		// 	// permission popup.
+		// 	details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
+		// } else {
+		// 	const maxFiles = maxWorkspaceFiles ?? 200
 
-			// Early return for limit of 0
-			if (maxFiles === 0) {
-				details += "(Workspace files context disabled. Use list_files to explore if needed.)"
-			} else {
-				const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
-				const { showRooIgnoredFiles = true } = state ?? {}
+		// 	// Early return for limit of 0
+		// 	if (maxFiles === 0) {
+		// 		details += "(Workspace files context disabled. Use list_files to explore if needed.)"
+		// 	} else {
+		// 		const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
+		// 		const { showRooIgnoredFiles = true } = state ?? {}
 
-				const result = formatResponse.formatFilesList(
-					cline.cwd,
-					files,
-					didHitLimit,
-					cline.rooIgnoreController,
-					showRooIgnoredFiles,
-				)
+		// 		const result = formatResponse.formatFilesList(
+		// 			cline.cwd,
+		// 			files,
+		// 			didHitLimit,
+		// 			cline.rooIgnoreController,
+		// 			showRooIgnoredFiles,
+		// 		)
 
-				details += result
-			}
+		// 		details += result
+		// 	}
 		
 			const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
 			if (globalStoragePath) {
@@ -291,7 +440,7 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 					details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
 				}
 			}
-		}
+		// }
 	}
 
 	let filePath: string
@@ -323,4 +472,172 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 
 	const reminderSection = formatReminderSection(cline.todoList)
 	return `<environment_details>\n${details.trim()}\n${reminderSection}\n</environment_details>`
+}
+
+
+// /**
+// 	* 删除用户推荐提示词
+// 	* 遍历cline的历史聊天记录后3个用户角色的记录，每个用户消息记录应该都是数组，
+// 	* 不是数组的忽略，删除数组中所有内容类型为"text"，内容由<user_suggestions>开头的对话块，
+// 	* 然后将修改后的聊天记录设回给cline
+// 	*/
+// export async function removeUserSuggestions(cline: Task): Promise<void> {
+// 	// 获取历史聊天记录
+// 	const conversationHistory = [...cline.apiConversationHistory]
+	
+// 	// 找到所有用户角色的消息记录
+// 	const userMessages: ApiMessage[] = conversationHistory.filter(msg => msg.role === "user")
+	
+// 	// 只处理最后3个用户消息
+// 	const lastThreeUserMessages = userMessages.slice(-3)
+	
+// 	// 遍历这3个用户消息
+// 	for (const message of lastThreeUserMessages) {
+// 		// 检查消息内容是否为数组
+// 		if (Array.isArray(message.content)) {
+// 			// 过滤掉内容类型为"text"且内容由<user_suggestions>开头的对话块
+// 			const filteredContent = message.content.filter((block: any) => {
+// 				if (block.type === "text" && typeof block.text === "string") {
+// 					return !block.text.startsWith("<user_suggestions>")
+// 				}
+// 				return true
+// 			})
+			
+// 			// 更新消息内容
+// 			message.content = filteredContent
+// 		}
+// 	}
+	
+// 	// 将修改后的聊天记录设回给cline
+// 	await cline.overwriteApiConversationHistory(conversationHistory)
+// }
+
+import { CodeIndexManager } from "../../services/code-index/manager"
+
+export async function getUserSuggestions(cline: Task): Promise<string|undefined> {
+	if (cline.toolSequence.length >= 10) {
+		cline.toolSequence = cline.toolSequence.slice(-9)
+	}
+
+	const lastTool = cline.toolSequence.length ? cline.toolSequence[cline.toolSequence.length - 1] : undefined
+	let toolRepeat = 1
+	
+	// Count backwards from the second last element
+	for (let i = cline.toolSequence.length - 2; i >= 0; i--) {
+		if (cline.toolSequence[i] === lastTool) {
+			toolRepeat++
+		} else {
+			break
+		}
+	}
+
+	const toolTimes = cline.toolSequence.filter(t => t === lastTool).length
+
+	const provider = cline.providerRef.deref()
+	let isCodebaseSearchAvailable = false
+	if (provider) {
+		const codeIndexManager = CodeIndexManager.getInstance(provider.context)
+		isCodebaseSearchAvailable = provider &&
+		codeIndexManager !== undefined &&
+		codeIndexManager.isFeatureEnabled &&
+		codeIndexManager.isFeatureConfigured &&
+		codeIndexManager.isInitialized
+	}
+
+	const startNewTask = isCodebaseSearchAvailable ? `- The \`codebase_search\` tool is a powerful tool that can help you quickly find clues to start a task using semantic search at the beginning of the task. But its results can be inaccurate and incomplete, often missing a lot of relevant information. After an initial search, you should analyze the results, extract useful information, rewrite your query, and design a new, broader search.
+- Because \`codebase_search\` can miss information, you should, at the appropriate time and based on the information you already have, deeply understand the known code and begin using \`search_files\` (Glob/Grep), \`list_code_definition_names\` or \`list_files\` for more precise and comprehensive searches. Use these tools to gain a more complete understanding of the code structure.
+- Then, start widely using \`search_files\` (Glob/Grep), \`list_files\` and \`list_code_definition_names\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
+- After this, you can use other tools like \`read_file\` to obtain the most complete and detailed contextual information.
+`:
+`- At the beginning of a task, you should widely use \`search_files\` (Glob/Grep) to understand the directory structure, scope of functionality, or keywords involved in the project.
+- You can use the \`read_file\` tool to read files you are interested in. Based on the information obtained from \`search_files\` (Glob/Grep), you can select and read only specific sections (a range of line numbers) to confirm if the file's content is relevant to the task.
+- After finding relevant code clues, combine them with the information you already have to deeply understand the known code. Then, start using \`search_files\` (Glob/Grep), \`list_code_definition_names\` or \`list_files\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
+- Following this, you can use \`read_file\` and other context-gathering tools to obtain the most complete and detailed information.
+` 
+//- When using the \`read_file\` tool, you should precisely locate the specific part you want to read (line number range) instead of reading the entire file wholesale.
+
+	const UserSuggestions : Array<string> = []
+
+	switch (lastTool) {
+		case undefined:
+			UserSuggestions.push("- When you first receive the task, You should to analyze the key points of the task and plan a general direction for solving the problem.")
+			UserSuggestions.push("- Analyze the meaning of each key point in the task within the project.")
+			UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
+			UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
+			UserSuggestions.push("- For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.")
+			UserSuggestions.push(startNewTask)
+			break
+		case "execute_command":
+			break
+		case "read_file":
+			UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
+			if (toolTimes > 3) {
+				UserSuggestions.push("- You cannot understand the scope of the functionality simply by reading the files, as this is very inefficient. You should use search tools to extensively query the files involved in the functionality.")
+			}
+			break
+		case "write_to_file":
+			break
+		case "apply_diff":
+			break
+		case "insert_content":
+			break
+		case "search_and_replace":
+			break
+		case "search_files":
+			UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
+			UserSuggestions.push("- You can try selecting more patterns or keywords from tasks or known information to conduct a broader search.")
+			UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
+			break
+		case "list_files":
+			break
+		case "list_code_definition_names":
+			break
+		case "browser_action":
+			break
+		case "use_mcp_tool":
+			break
+		case "access_mcp_resource":
+			break
+		case "ask_followup_question":
+			break
+		case "attempt_completion":
+			UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
+			UserSuggestions.push(startNewTask)
+			break
+		case "switch_mode":
+			break
+		case "new_task":
+			UserSuggestions.push("- Review whether the subtasks you created return the results you expected. If the subtasks do not return the results you are satisfied with, you can restart the subtasks and describe the requirements more detailedly.")
+			break
+		case "fetch_instructions":
+			break
+		case "codebase_search":
+			UserSuggestions.push("If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
+			if (toolTimes > 3) {
+				UserSuggestions.push(startNewTask)
+			}
+			break
+		case "update_todo_list": {
+			const currentTodos = getTodoTaskTypes(cline)
+			if (!currentTodos) {
+				break
+			}
+			if (currentTodos.size > 0) {
+				if (currentTodos.has("analysis")) {
+					UserSuggestions.push(startNewTask)
+					UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
+					UserSuggestions.push("- For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.")
+				}
+			}
+			break
+		}
+		case "web_search":
+			break
+		case "url_fetch":
+			break
+		default:
+			break
+	}
+
+	return UserSuggestions.join("\n") || undefined
 }

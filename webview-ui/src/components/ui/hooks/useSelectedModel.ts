@@ -64,7 +64,7 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 					routerModels: routerModels.data,
 					openRouterModelProviders: openRouterModelProviders.data,
 				})
-			: { id: anthropicDefaultModelId, info: undefined }
+			: { id: "__undefined__", info: undefined }
 
 	return {
 		provider,

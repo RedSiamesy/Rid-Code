@@ -108,6 +108,7 @@ export interface WebviewMessage {
 		| "updateMcpTimeout"
 		| "fuzzyMatchThreshold"
 		| "writeDelayMs"
+		| "useTerminalCommand"
 		| "saveMemory"
 		| "savedMemory"
 		| "diagnosticsEnabled"
@@ -272,18 +273,6 @@ export interface WebviewMessage {
 		codebaseIndexOpenAiCompatibleApiKey?: string
 		codebaseIndexGeminiApiKey?: string
 		codebaseIndexMistralApiKey?: string
-
-		// RAG settings
-		embeddingBaseUrl?: string
-		embeddingModelID?: string
-		enhancementBaseUrl?: string
-		enhancementModelID?: string
-		embeddingApiKey?: string
-		enhancementApiKey?: string
-
-		ragPath?: string
-		llmFilter?: boolean
-		codeBaseLogging?: boolean
 	}
 }
 

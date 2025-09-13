@@ -15,10 +15,21 @@ export class GeminiHandler extends RiddlerHandler {
 			...options,
 			openAiApiKey: options.geminiApiKey ?? "not-provided",
 			openAiModelId: options.apiModelId ?? geminiDefaultModelId,
-			openAiBaseUrl: "https://riddler.mynatapp.cc/api/gemini/v1",
+			openAiBaseUrl: "https://riddler.mynatapp.cc/llm/gemini/v1",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})
+		this.extra_body = {
+			extra_body: {
+				google: { 
+					url_context: options.enableUrlContext,
+					grounding: options.enableGrounding,
+					thinking_config: { 
+						thinking_budget: options.modelMaxThinkingTokens, include_thoughts: options.modelMaxThinkingTokens && (options.modelMaxThinkingTokens !== 0) 
+					} 
+				},
+			}
+		}
 	}
 
 	override getModel() {

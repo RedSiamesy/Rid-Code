@@ -107,9 +107,6 @@ export enum ContextMenuOptionType {
 	Git = "git",
 	NoResults = "noResults",
 	Mode = "mode", // Add mode type
-	Codebase = "codebase", // Add codebase type
-	Summary = "summary", // Add summary type
-	Memory = "memory", // Add memory type
 	Command = "command", // Add command type
 	SectionHeader = "sectionHeader", // Add section header type
 }
@@ -262,15 +259,12 @@ export function getContextMenuOptions(
 		// 	{ type: ContextMenuOptionType.Git },
 		// ]
 		return [
+			// { type: ContextMenuOptionType.URL },
 			{ type: ContextMenuOptionType.Git },
 			{ type: ContextMenuOptionType.Problems },
-			// { type: ContextMenuOptionType.Terminal },
-			// { type: ContextMenuOptionType.URL },
+			{ type: ContextMenuOptionType.Terminal },
 			// { type: ContextMenuOptionType.Folder },
 			{ type: ContextMenuOptionType.File },
-			{ type: ContextMenuOptionType.Codebase },
-			{ type: ContextMenuOptionType.Summary },
-			{ type: ContextMenuOptionType.Memory },
 		]
 	}
 
@@ -290,15 +284,6 @@ export function getContextMenuOptions(
 	}
 	if ("problems".startsWith(lowerQuery)) {
 		suggestions.push({ type: ContextMenuOptionType.Problems })
-	}
-	if ("codebase".startsWith(lowerQuery)) {
-		suggestions.push({ type: ContextMenuOptionType.Codebase })
-	}
-	if ("summary".startsWith(lowerQuery)) {
-		suggestions.push({ type: ContextMenuOptionType.Summary })
-	}
-	if ("memory".startsWith(lowerQuery)) {
-		suggestions.push({ type: ContextMenuOptionType.Memory })
 	}
 	if ("terminal".startsWith(lowerQuery)) {
 		suggestions.push({ type: ContextMenuOptionType.Terminal })

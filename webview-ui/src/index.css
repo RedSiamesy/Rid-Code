@@ -386,6 +386,14 @@ vscode-dropdown::part(listbox) {
 	box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--vscode-badge-foreground) 30%, transparent);
 }
 
+/* Execute command highlight - distinct style for ! commands */
+.execute-command-textarea-highlight {
+	background-color: color-mix(in srgb, var(--vscode-charts-red, #ff6b6b) 25%, transparent);
+	border-radius: 2px;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-charts-red, #ff6b6b) 40%, transparent);
+	color: transparent;
+}
+
 /**
  * vscrui Overrides / Hacks
  */

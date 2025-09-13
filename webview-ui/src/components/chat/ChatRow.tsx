@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { appendImages } from "@src/utils/imageUtils"
 import { McpExecution } from "./McpExecution"
+import { ToolExecution } from "./ToolExecution"
 import { useSize } from "react-use"
 import { useTranslation, Trans } from "react-i18next"
 import deepEqual from "fast-deep-equal"
@@ -279,8 +280,8 @@ export const ChatRowContent = ({
 				return [
 					<span
 						className="codicon codicon-save"
-						style={{ color: "var(--vscode-charts-yellow)", marginBottom: "-1.5px" }}></span>,
-					<span style={{ color: "var(--vscode-charts-yellow)", fontWeight: "bold" }}>{"记忆说明"}</span>,
+						style={{ color: "#00a3af44", marginBottom: "-1.5px" }}></span>,
+					<span style={{  color: "#00a3af77", fontWeight: "bold" }}>{"记忆说明"}</span>,
 				]
 			case "api_req_retry_delayed":
 				return []
@@ -339,6 +340,32 @@ export const ChatRowContent = ({
 						style={{ color: normalColor, marginBottom: "-1.5px" }}
 					/>,
 					<span style={{ color: normalColor, fontWeight: "bold" }}>{t("chat:questions.hasQuestion")}</span>,
+				]
+			case "web_search":
+				return [
+					isMcpServerResponding ? (
+						<ProgressIndicator />
+					) : (
+						<span
+							className="codicon codicon-search"
+							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
+					),
+					<span style={{ color: normalColor, fontWeight: "bold" }}>
+						{isMcpServerResponding ? "网络搜索" : "网络搜索完成"}
+					</span>,
+				]
+			case "url_fetch":
+				return [
+					isMcpServerResponding ? (
+						<ProgressIndicator />
+					) : (
+						<span
+							className="codicon codicon-globe"
+							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
+					),
+					<span style={{ color: normalColor, fontWeight: "bold" }}>
+						{isMcpServerResponding ? "URL内容分析" : "URL内容分析完成"}
+					</span>,
 				]
 			default:
 				return [null, null]
@@ -995,6 +1022,8 @@ export const ChatRowContent = ({
 									style={{
 										padding: "12px 16px",
 										backgroundColor: "var(--vscode-editor-background)",
+										maxHeight: "360px",
+										overflowY: "auto",
 									}}>
 									<MarkdownBlock markdown={message.text} />
 								</div>
@@ -1181,7 +1210,7 @@ export const ChatRowContent = ({
 							{title}
 						</div>
 						<div className="flex justify-between">
-							<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "var(--vscode-charts-yellow)" , paddingTop: 10 }}>
+							<div className="flex-grow px-2 py-1 wrap-anywhere" style={{ color: "#00a3af77" , paddingTop: 10 }}>
 								<Markdown markdown={message.text} partial={message.partial} />
 							</div>
 						</div>
@@ -1362,6 +1391,84 @@ export const ChatRowContent = ({
 				case "auto_approval_max_req_reached": {
 					return <AutoApprovedRequestLimitWarning message={message} />
 				}
+				case "web_search":
+					// Parse the message text to get the web search request
+					const webSearchJson = safeJsonParse<any>(message.text, {})
+
+					// Extract the response field if it exists
+					const { response: webSearchResponse, ...webSearchRequest } = webSearchJson
+
+					// Create the webSearch object with the response field
+					const webSearch = {
+						...webSearchRequest,
+						response: webSearchResponse,
+					}
+
+					const webSearchParameters = [
+						{
+							name: "query",
+							value: webSearch.query || "",
+							label: "搜索查询",
+						},
+					]
+
+					return (
+						<>
+							<div style={headerStyle}>
+								{icon}
+								{title}
+							</div>
+							<ToolExecution
+								executionId={message.ts.toString()}
+								toolName="web_search"
+								toolDisplayName="搜索列表"
+								parameters={webSearchParameters}
+								response={webSearch.response}
+								isPartial={message.partial}
+								status={webSearch.status}
+								error={webSearch.error}
+							/>
+						</>
+					)
+				case "url_fetch":
+					// Parse the message text to get the url fetch request
+					const urlFetchJson = safeJsonParse<any>(message.text, {})
+
+					// Extract the response field if it exists
+					const { response: urlFetchResponse, ...urlFetchRequest } = urlFetchJson
+
+					// Create the urlFetch object with the response field
+					const urlFetch = {
+						...urlFetchRequest,
+						response: urlFetchResponse,
+					}
+
+					const urlFetchParameters = [
+						{
+							name: "url",
+							value: urlFetch.url || "",
+							label: "URL地址",
+						},
+					]
+
+					return (
+						<>
+							<div style={headerStyle}>
+								{icon}
+								{title}
+							</div>
+							<ToolExecution
+								executionId={message.ts.toString()}
+								toolName="url_fetch"
+								toolDisplayName="内容列表"
+								parameters={urlFetchParameters}
+								response={urlFetch.response}
+								isPartial={message.partial}
+								status={urlFetch.status}
+								error={urlFetch.error}
+							/>
+						</>
+					)
 				default:
 					return null
 			}

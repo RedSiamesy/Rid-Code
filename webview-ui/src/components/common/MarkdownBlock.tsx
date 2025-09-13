@@ -210,12 +210,12 @@ const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
 					if (!isLocalPath) {
 						return
 					}
-
+					console.log("Requesting to open file:", href, children)
 					e.preventDefault()
 
 					// Handle absolute vs project-relative paths
 					let filePath = href.replace("file://", "")
-
+					
 					// Extract line number if present
 					const match = filePath.match(/(.*):(\d+)(-\d+)?$/)
 					let values = undefined
@@ -223,12 +223,12 @@ const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
 						filePath = match[1]
 						values = { line: parseInt(match[2]) }
 					}
-
+					console.log("Requesting to open file:", filePath, values)
 					// Add ./ prefix if needed
 					if (!filePath.startsWith("/") && !filePath.startsWith("./")) {
 						filePath = "./" + filePath
 					}
-
+					console.log("Requesting to open file:", filePath, values)
 					vscode.postMessage({
 						type: "openFile",
 						text: filePath,

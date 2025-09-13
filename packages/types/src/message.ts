@@ -38,6 +38,8 @@ export const clineAsks = [
 	"browser_action_launch",
 	"use_mcp_server",
 	"auto_approval_max_req_reached",
+	"web_search",
+	"url_fetch",
 ] as const
 
 export const clineAskSchema = z.enum(clineAsks)

@@ -32,7 +32,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		super()
 		this.options = options
 		const apiKey = this.options.openAiNativeApiKey ?? "not-provided"
-		const baseURL = this.options.openAiNativeBaseUrl ?? "https://riddler.mynatapp.cc/api/openai/v1"
+		const baseURL = this.options.openAiNativeBaseUrl ?? "https://riddler.mynatapp.cc/llm/openai/v1"
 		this.client = new OpenAI({ baseURL, apiKey })
 	}
 

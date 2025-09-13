@@ -20,7 +20,7 @@ export class VsCodeLmHandler extends RiddlerHandler {
 			...options,
 			openAiApiKey: options.deepSeekApiKey ?? "not-provided",
 			openAiModelId: options.apiModelId,
-			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/api/copilot/v1",
+			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/llm/copilot/v1",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})

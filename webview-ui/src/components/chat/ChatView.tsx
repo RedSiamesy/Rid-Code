@@ -364,6 +364,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setPrimaryButtonText(t("chat:approve.title"))
 							setSecondaryButtonText(t("chat:reject.title"))
 							break
+						case "web_search":
+							if (!isAutoApproved(lastMessage) && !isPartial) {
+								playSound("notification")
+							}
+							setSendingDisabled(isPartial)
+							setClineAsk("web_search")
+							setEnableButtons(!isPartial)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
+						case "url_fetch":
+							if (!isAutoApproved(lastMessage) && !isPartial) {
+								playSound("notification")
+							}
+							setSendingDisabled(isPartial)
+							setClineAsk("url_fetch")
+							setEnableButtons(!isPartial)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
 						case "completion_result":
 							// extension waiting for feedback. but we can just present a new task button
 							if (!isPartial) {
@@ -722,6 +742,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "browser_action_launch":
 				case "use_mcp_server":
+				case "web_search":
+				case "url_fetch":
 				case "resume_task":
 				case "mistake_limit_reached":
 					// Only send text/images if they exist
@@ -779,6 +801,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "browser_action_launch":
 				case "use_mcp_server":
+				case "web_search":
+				case "url_fetch":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
 						vscode.postMessage({
@@ -1109,8 +1133,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				return alwaysAllowMcp && isMcpToolAlwaysAllowed(message)
 			}
 
+			if (message.ask === "web_search") {
+				return alwaysAllowReadOnly
+			}
+
+			if (message.ask === "url_fetch") {
+				return alwaysAllowReadOnly
+			}
+
+			// 将 message.isProtected 字段作为 forceApproval 字段
 			if (message.ask === "command") {
-				return alwaysAllowExecute && isAllowedCommand(message)
+				return alwaysAllowExecute && isAllowedCommand(message) || message.isProtected
 			}
 
 			// For read/write operations, check if it's outside workspace and if
@@ -1321,7 +1354,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				partial: true,
 			})
 		}
-
 
 		return result
 	}, [isCondensing, isSavingMemory, visibleMessages])

@@ -13,7 +13,7 @@ export class DeepSeekHandler extends RiddlerHandler {
 			...options,
 			openAiApiKey: options.deepSeekApiKey ?? "not-provided",
 			openAiModelId: options.apiModelId ?? deepSeekDefaultModelId,
-			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/api/deepseek/v1",
+			openAiBaseUrl: options.deepSeekBaseUrl ?? "https://riddler.mynatapp.cc/llm/deepseek/v1",
 			openAiStreamingEnabled: true,
 			includeMaxTokens: true,
 		})

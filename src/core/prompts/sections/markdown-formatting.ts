@@ -5,13 +5,7 @@ export function markdownFormattingSection(): string {
 
 MARKDOWN RULES
 
-ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>
-Format: [declaration](relative_path:line)
-Note:
-- 'declaration' is a clickable language structure or filename
-- 'relative_path' is a relative path relative to the current working path
-- 'line' is a number of line in the file.
-Example:
-[fibonacci()](src/test.py:12)
+ALL responses MUST show ANY \`language construct\` OR filename reference as clickable, exactly as [\`filename OR language.declaration()\`](./relative/file/path.ext:line); line is required for \`syntax\` and optional for filename links. This applies to ALL markdown responses and ALSO those in <attempt_completion>
+line can be a single line (e.g. [func](./path.ext:12)) or a range (e.g. [func](./path.ext:12-25)).
 `
 }
