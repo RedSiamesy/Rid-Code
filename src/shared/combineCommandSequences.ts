@@ -1,4 +1,5 @@
-import { ClineMessage } from "@roo-code/types"
+import type { ClineMessage } from "@roo-code/types"
+
 import { safeJsonParse } from "./safeJsonParse"
 
 export const COMMAND_OUTPUT_STRING = "Output:"
@@ -6,12 +7,10 @@ export const COMMAND_OUTPUT_STRING = "Output:"
 /**
  * Combines sequences of command and command_output messages in an array of ClineMessages.
  * Also combines sequences of use_mcp_server and mcp_server_response messages.
- * Also handles web_search, url_fetch and other tool execution status messages.
  *
  * This function processes an array of ClineMessages objects, looking for sequences
  * where a 'command' message is followed by one or more 'command_output' messages,
- * or where a 'use_mcp_server' message is followed by one or more 'mcp_server_response' messages,
- * or where tool execution messages (web_search, url_fetch) need to preserve their response data.
+ * or where a 'use_mcp_server' message is followed by one or more 'mcp_server_response' messages.
  * When such a sequence is found, it combines them into a single message, merging
  * their text contents.
  *
@@ -35,9 +34,9 @@ export function combineCommandSequences(messages: ClineMessage[]): ClineMessage[
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i]
 
-		// Handle MCP server requests and other tool requests (web_search, url_fetch)
-		if (msg.type === "ask" && (msg.ask === "use_mcp_server" || msg.ask === "web_search" || msg.ask === "url_fetch")) {
-			// Look ahead for tool responses
+		// Handle MCP server requests
+		if (msg.type === "ask" && msg.ask === "use_mcp_server") {
+			// Look ahead for MCP responses
 			let responses: string[] = []
 			let j = i + 1
 
@@ -46,8 +45,8 @@ export function combineCommandSequences(messages: ClineMessage[]): ClineMessage[
 					responses.push(messages[j].text || "")
 					processedIndices.add(j)
 					j++
-				} else if (messages[j].type === "ask" && (messages[j].ask === "use_mcp_server" || messages[j].ask === "web_search" || messages[j].ask === "url_fetch")) {
-					// Stop if we encounter another tool request
+				} else if (messages[j].type === "ask" && messages[j].ask === "use_mcp_server") {
+					// Stop if we encounter another MCP request
 					break
 				} else {
 					j++

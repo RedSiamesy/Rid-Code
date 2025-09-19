@@ -1,4 +1,4 @@
-import { ToolArgs } from "./types"
+import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 export function getBrowserActionDescription(args: ToolArgs): string | undefined {
 	if (!args.supportsComputerUse) {
@@ -56,4 +56,44 @@ Example: Requesting to click on the element at coordinates 450,300
 <action>click</action>
 <coordinate>450,300</coordinate>
 </browser_action>`
+}
+
+export function getBrowserActionOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition | undefined {
+	if (!args.supportsComputerUse) {
+		return undefined
+	}
+	return {
+		type: "function",
+		function: {
+			name: "browser_action",
+			description: "Request to interact with a Puppeteer-controlled browser. Every action, except 'close', will be responded to with a screenshot of the browser's current state, along with any new console logs.",
+			parameters: {
+				type: "object",
+				properties: {
+					action: {
+						type: "string",
+						description: "The action to perform. Available actions: launch, hover, click, type, resize, scroll_down, scroll_up, close",
+						enum: ["launch", "hover", "click", "type", "resize", "scroll_down", "scroll_up", "close"]
+					},
+					url: {
+						type: "string",
+						description: "The URL to launch the browser at (required for launch action)"
+					},
+					coordinate: {
+						type: "string",
+						description: `The X and Y coordinates for click and hover actions (format: 'x,y'). Coordinates should be within the ${args.browserViewportSize} resolution.`
+					},
+					size: {
+						type: "string",
+						description: "The width and height for resize action (format: 'w,h')"
+					},
+					text: {
+						type: "string",
+						description: "The text to type for type action"
+					}
+				},
+				required: ["action"]
+			}
+		}
+	}
 }

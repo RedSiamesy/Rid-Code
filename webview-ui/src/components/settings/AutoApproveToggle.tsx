@@ -130,4 +130,3 @@ export const AutoApproveToggle = ({ onToggle, ...props }: AutoApproveToggleProps
 		</div>
 	)
 }
-

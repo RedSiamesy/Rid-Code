@@ -5,6 +5,7 @@ import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
 import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
 import { GeminiEmbedder } from "./embedders/gemini"
 import { MistralEmbedder } from "./embedders/mistral"
+import { VercelAiGatewayEmbedder } from "./embedders/vercel-ai-gateway"
 import { EmbedderProvider, getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
 import { RiddlerVectorStore } from "./vector-store/client-riddler"
@@ -17,6 +18,8 @@ import { Ignore } from "ignore"
 import { t } from "../../i18n"
 import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
+import { Package } from "../../shared/package"
+import { BATCH_SEGMENT_THRESHOLD } from "./constants"
 
 /**
  * Factory class responsible for creating and configuring code indexing service dependencies.
@@ -74,6 +77,11 @@ export class CodeIndexServiceFactory {
 				throw new Error(t("embeddings:serviceFactory.mistralConfigMissing"))
 			}
 			return new MistralEmbedder(config.mistralOptions.apiKey, config.modelId)
+		} else if (provider === "vercel-ai-gateway") {
+			if (!config.vercelAiGatewayOptions?.apiKey) {
+				throw new Error(t("embeddings:serviceFactory.vercelAiGatewayConfigMissing"))
+			}
+			return new VercelAiGatewayEmbedder(config.vercelAiGatewayOptions.apiKey, config.modelId)
 		}
 
 		throw new Error(
@@ -159,8 +167,22 @@ export class CodeIndexServiceFactory {
 		vectorStore: IVectorStore,
 		parser: ICodeParser,
 		ignoreInstance: Ignore,
+		rooIgnoreController?: RooIgnoreController,
 	): DirectoryScanner {
-		return new DirectoryScanner(embedder, vectorStore, parser, this.cacheManager, ignoreInstance)
+		// Get the configurable batch size from VSCode settings
+		let batchSize: number
+		try {
+			batchSize = vscode.workspace
+				.getConfiguration(Package.name)
+				.get<number>("codeIndex.embeddingBatchSize", BATCH_SEGMENT_THRESHOLD)
+		} catch {
+			// In test environment, vscode.workspace might not be available
+			batchSize = BATCH_SEGMENT_THRESHOLD
+		}
+		if (embedder instanceof RiddlerEmbedder) {
+			batchSize = 1
+		}
+		return new DirectoryScanner(embedder, vectorStore, parser, this.cacheManager, ignoreInstance, rooIgnoreController, batchSize)
 	}
 
 	/**
@@ -175,6 +197,19 @@ export class CodeIndexServiceFactory {
 		ignoreInstance: Ignore,
 		rooIgnoreController?: RooIgnoreController,
 	): IFileWatcher {
+		// Get the configurable batch size from VSCode settings
+		let batchSize: number
+		try {
+			batchSize = vscode.workspace
+				.getConfiguration(Package.name)
+				.get<number>("codeIndex.embeddingBatchSize", BATCH_SEGMENT_THRESHOLD)
+		} catch {
+			// In test environment, vscode.workspace might not be available
+			batchSize = BATCH_SEGMENT_THRESHOLD
+		}
+		if (embedder instanceof RiddlerEmbedder) {
+			batchSize = 1
+		}
 		return new FileWatcher(
 			this.workspacePath,
 			context,
@@ -184,6 +219,7 @@ export class CodeIndexServiceFactory {
 			vectorStore,
 			ignoreInstance,
 			rooIgnoreController,
+			batchSize,
 		)
 	}
 
@@ -212,7 +248,7 @@ export class CodeIndexServiceFactory {
 		const embedder = this.createEmbedder()
 		const vectorStore = this.createVectorStore()
 		const parser = provider !== "ollama" ? codeParser : riddlerCodeParser
-		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance)
+		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance, rooIgnoreController)
 		const fileWatcher = this.createFileWatcher(
 			context,
 			embedder,

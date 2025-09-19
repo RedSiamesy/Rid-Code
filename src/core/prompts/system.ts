@@ -15,9 +15,10 @@ import { CodeIndexManager } from "../../services/code-index/manager"
 
 import { PromptVariables, loadSystemPromptFile } from "./sections/custom-system-prompt"
 
-import { getToolDescriptionsForMode } from "./tools"
+import { getToolDescriptionsForMode, getOpenAIToolDefinitionsForMode } from "./tools"
 import {
 	getRulesSection,
+	getPersonaSection,
 	getSystemInfoSection,
 	getObjectiveSection,
 	getSharedToolUseSection,
@@ -26,6 +27,7 @@ import {
 	getCapabilitiesSection,
 	getModesSection,
 	addCustomInstructions,
+	addLanguagePreferences,
 	markdownFormattingSection,
 } from "./sections"
 
@@ -60,6 +62,8 @@ async function generatePrompt(
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
+	modelId?: string,
 ): Promise<string> {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -84,18 +88,67 @@ async function generatePrompt(
 			: Promise.resolve(""),
 	])
 
-	const codeIndexManager = CodeIndexManager.getInstance(context)
+	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
 
 	// Extract allowedMultiCall from experiments
 	const allowedMultiCall = experiments?.allowedMultiCall ?? false
 
+// 	const basePrompt = `${roleDefinition}
+
+// ${markdownFormattingSection()}
+
+// ${true?"":getSharedToolUseSection(allowedMultiCall)}
+
+// ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
+// 	mode,
+// 	cwd,
+// 	supportsComputerUse,
+// 	codeIndexManager,
+// 	effectiveDiffStrategy,
+// 	browserViewportSize,
+// 	shouldIncludeMcp ? mcpHub : undefined,
+// 	customModeConfigs,
+// 	experiments,
+// 	partialReadsEnabled,
+// 	settings,
+// 	enableMcpServerCreation,
+// 	modelId,
+// )}
+
+// ${true?"":getToolUseGuidelinesSection(codeIndexManager)}
+
+// ${mcpServersSection}
+
+// ${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+
+// ${modesSection}
+
+// ${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
+
+// ${getSystemInfoSection(cwd)}
+
+// ${true?"":getObjectiveSection(codeIndexManager, experiments)}
+
+// ${true?"":await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+// 	language: language ?? formatLanguage(vscode.env.language),
+// 	rooIgnoreInstructions,
+// 	settings,
+// })}`
+
 	const basePrompt = `${roleDefinition}
+
+${getPersonaSection()}	
+
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+	rooIgnoreInstructions,
+	settings,
+})}
 
 ${markdownFormattingSection()}
 
-${getSharedToolUseSection(allowedMultiCall)}
+${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
 
-${getToolDescriptionsForMode(
+${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
 	mode,
 	cwd,
 	supportsComputerUse,
@@ -107,27 +160,19 @@ ${getToolDescriptionsForMode(
 	experiments,
 	partialReadsEnabled,
 	settings,
+	enableMcpServerCreation,
+	modelId,
 )}
-
-${true?"":getToolUseGuidelinesSection(codeIndexManager)}
 
 ${mcpServersSection}
 
-${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
-
 ${modesSection}
 
-${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
 
 ${getSystemInfoSection(cwd)}
+`
 
-${true?"":getObjectiveSection(codeIndexManager, experiments)}
-
-${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-	language: language ?? formatLanguage(vscode.env.language),
-	rooIgnoreInstructions,
-	settings,
-})}`
 
 	return basePrompt
 }
@@ -150,6 +195,8 @@ export const SYSTEM_PROMPT = async (
 	rooIgnoreInstructions?: string,
 	partialReadsEnabled?: boolean,
 	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
+	modelId?: string,
 ): Promise<string> => {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -177,21 +224,10 @@ export const SYSTEM_PROMPT = async (
 			promptComponent,
 			customModes,
 		)
-		const customInstructions = await addCustomInstructions(
-			baseInstructionsForFile,
-			globalCustomInstructions || "",
-			cwd,
-			mode,
-			{
-				language: language ?? formatLanguage(vscode.env.language),
-				rooIgnoreInstructions,
-				settings,
-			},
-		)
 
 		return `${roleDefinition}
 
-${customInstructions}`
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}`
 	}
 
 	// If a file-based custom system prompt exists, use it
@@ -208,7 +244,6 @@ ${customInstructions}`
 			cwd,
 			mode,
 			{
-				language: language ?? formatLanguage(vscode.env.language),
 				rooIgnoreInstructions,
 				settings,
 			},
@@ -219,7 +254,9 @@ ${customInstructions}`
 
 ${fileCustomSystemPrompt}
 
-${customInstructions}`
+${customInstructions}
+
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}`
 	}
 
 	// If diff is disabled, don't pass the diffStrategy
@@ -243,5 +280,62 @@ ${customInstructions}`
 		rooIgnoreInstructions,
 		partialReadsEnabled,
 		settings,
+		todoList,
+		modelId,
+	)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import OpenAI from "openai"
+/**
+ * Get OpenAI tool definitions for a given mode (similar to SYSTEM_PROMPT but for tools)
+ */
+export const OPENAI_TOOLS_LIST = async (
+	context: vscode.ExtensionContext,
+	cwd: string,
+	supportsComputerUse: boolean,
+	mcpHub?: McpHub,
+	diffStrategy?: DiffStrategy,
+	browserViewportSize?: string,
+	mode: Mode = defaultModeSlug,
+	customModes?: ModeConfig[],
+	diffEnabled?: boolean,
+	experiments?: Record<string, boolean>,
+	enableMcpServerCreation?: boolean,
+	partialReadsEnabled?: boolean,
+	settings?: SystemPromptSettings,
+	modelId?: string,
+): Promise<OpenAI.ChatCompletionTool[]> => {
+	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
+
+	// If diff is disabled, don't pass the diffStrategy (same logic as SYSTEM_PROMPT)
+	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
+
+	return getOpenAIToolDefinitionsForMode(
+		mode,
+		cwd,
+		supportsComputerUse,
+		codeIndexManager,
+		effectiveDiffStrategy,
+		browserViewportSize,
+		mcpHub,
+		customModes,
+		experiments,
+		partialReadsEnabled,
+		settings,
+		enableMcpServerCreation,
+		modelId,
 	)
 }

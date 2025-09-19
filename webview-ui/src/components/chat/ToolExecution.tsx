@@ -61,6 +61,7 @@ export const ToolExecution = ({
 	const onMessage = useCallback(
 		(event: MessageEvent) => {
 			const message: ExtensionMessage = event.data
+			console.log('event', event);
 
 			if (message.type === "toolExecutionStatus") {
 				try {
@@ -69,7 +70,8 @@ export const ToolExecution = ({
 						status: "started",
 						toolName: "",
 					})
-
+					console.log('data', data);
+					console.log('executionId', executionId);
 					// Only update if this message is for our execution and data is valid
 					if (data && data.executionId === executionId) {
 						setStatus(data)

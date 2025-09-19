@@ -34,6 +34,7 @@ export async function listFilesTool(
 	const relDirPath: string | undefined = block.params.path
 	const recursiveRaw: string | undefined = block.params.recursive
 	const recursive = recursiveRaw?.toLowerCase() === "true"
+	const mode: "file_only" | "dir_only" | undefined = block.params.mode as "file_only" | "dir_only" | undefined
 
 	// Calculate if the path is outside workspace
 	const absolutePath = relDirPath ? path.resolve(cline.cwd, relDirPath) : cline.cwd
@@ -60,10 +61,10 @@ export async function listFilesTool(
 
 			cline.consecutiveMistakeCount = 0
 
-			const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
-			const { showRooIgnoredFiles = true } = (await cline.providerRef.deref()?.getState()) ?? {}
+			const [files, didHitLimit] = await listFiles(absolutePath, recursive, 300, mode)
+			const { showRooIgnoredFiles = false } = (await cline.providerRef.deref()?.getState()) ?? {}
 
-			const result = formatResponse.formatFilesList(
+			let result = formatResponse.formatFilesList(
 				absolutePath,
 				files,
 				didHitLimit,
@@ -71,6 +72,12 @@ export async function listFilesTool(
 				showRooIgnoredFiles,
 				cline.rooProtectedController,
 			)
+
+			if (mode === "file_only") {
+				result += "\n('file_only' mode, show files only)"
+			} else if (mode === "dir_only") {
+				result += "\n('dir_only' mode, show directories only)"
+			}
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: result } satisfies ClineSayTool)
 			const didApprove = await askApproval("tool", completeMessage)

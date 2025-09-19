@@ -1,6 +1,6 @@
 import { listFiles } from "../../glob/list-files"
 import { Ignore } from "ignore"
-import { RooIgnoreController, CodebaseIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
@@ -29,18 +29,38 @@ import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
 import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
+import { Package } from "../../../shared/package"
 
 import { RiddlerEmbedder } from "../embedders/embedding-riddler"
 
 
 export class DirectoryScanner implements IDirectoryScanner {
+	private readonly batchSegmentThreshold: number
+
 	constructor(
 		private readonly embedder: IEmbedder,
 		private readonly qdrantClient: IVectorStore,
 		private readonly codeParser: ICodeParser,
 		private readonly cacheManager: CacheManager,
 		private readonly ignoreInstance: Ignore,
-	) {}
+		private readonly ignoreController?: RooIgnoreController,
+		batchSegmentThreshold?: number,
+	) {
+		// Get the configurable batch size from VSCode settings, fallback to default
+		// If not provided in constructor, try to get from VSCode settings
+		if (batchSegmentThreshold !== undefined) {
+			this.batchSegmentThreshold = batchSegmentThreshold
+		} else {
+			try {
+				this.batchSegmentThreshold = vscode.workspace
+					.getConfiguration(Package.name)
+					.get<number>("codeIndex.embeddingBatchSize", BATCH_SEGMENT_THRESHOLD)
+			} catch {
+				// In test environment, vscode.workspace might not be available
+				this.batchSegmentThreshold = BATCH_SEGMENT_THRESHOLD
+			}
+		}
+	}
 
 	/**
 	 * Recursively scans a directory for code blocks in supported files.
@@ -66,16 +86,10 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
 
-		// Initialize RooIgnoreController if not provided
-		const ignoreController = new RooIgnoreController(directoryPath)
-
-		await ignoreController.initialize()
-
-		// Filter paths using .rooignore
-		let allowedPaths = ignoreController.filterPaths(filePaths)
+		let allowedPaths = this.ignoreController ? this.ignoreController.filterPaths(filePaths) : filePaths
 
 		// Initialize RooIgnoreController if not provided
-		const cbignoreController = new CodebaseIgnoreController(directoryPath)
+		const cbignoreController = new RooIgnoreController(directoryPath, ".codebaseignore")
 
 		await cbignoreController.initialize()
 
@@ -172,7 +186,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 									addedBlocksFromFile = true
 
 									// Check if batch threshold is met
-									if (currentBatchBlocks.length >= (this.embedder instanceof RiddlerEmbedder?1:BATCH_SEGMENT_THRESHOLD)) {
+									if (currentBatchBlocks.length >= this.batchSegmentThreshold) {
 										// Wait if we've reached the maximum pending batches
 										while (pendingBatchCount >= MAX_PENDING_BATCHES) {
 											// Wait for at least one batch to complete

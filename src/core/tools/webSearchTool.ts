@@ -3,15 +3,14 @@ import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } f
 import { formatResponse } from "../prompts/responses"
 import { ClineAskWebSearch } from "../../shared/ExtensionMessage"
 import { ToolExecutionStatus } from "@roo-code/types"
-// import { geminiHandler } from "../../services/browser/UrlContentFetcher-riddler"
 import { GeminiHandler } from "../../api/providers/gemini"
-// Create GeminiHandler with fixed configuration for URL content fetching
+
 export const geminiHandler = new GeminiHandler({
-	geminiApiKey: "AIzaSyDfCKt-bk2TUj9ZnXfBqIBsFyDDXRTb6d4", // TODO: 需要配置实际的API key
+	geminiApiKey: "AIzaSyB2dBxjifXLHJ5-juyVHezMxBYzxHtRbvs", // TODO: 需要配置实际的API key
 	apiModelId: "gemini-2.5-flash-lite",
 	enableGrounding: true,
 	enableUrlContext: true, // 启用URL上下文功能来获取网页内容
-	modelTemperature: 0.0,
+	modelTemperature: 1.0,
 	modelMaxTokens: 32768,
 	modelMaxThinkingTokens: 0, // 不需要思考模式
 })
@@ -153,7 +152,7 @@ async function executeToolAndProcessResult(
 			executionId,
 			status: "error",
 			toolName: "web_search",
-			error: errorMessage,
+			error: errorMessage.slice(0, 20) + "...", // Limit error message length
 		})
 		
 		await cline.say("error", `网页搜索失败: ${errorMessage}`)
@@ -195,6 +194,13 @@ export async function webSearchTool(
 		const completeMessage = JSON.stringify({
 			query,
 		} satisfies ClineAskWebSearch)
+
+		if (!cline.clineMessages || cline.clineMessages.length === 0 
+			|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
+			|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "web_search"
+		){
+			await handlePartialRequest(cline, params, removeClosingTag)
+		}
 
 		const executionId = cline.lastMessageTs?.toString() ?? Date.now().toString()
 		const didApprove = await askApproval("web_search", completeMessage)

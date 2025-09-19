@@ -1,6 +1,5 @@
 import { DiffStrategy } from "../../../shared/tools"
 import { McpHub } from "../../../services/mcp/McpHub"
-import { config } from "@dotenvx/dotenvx"
 
 export async function getMcpServersSection(
 	mcpHub?: McpHub,

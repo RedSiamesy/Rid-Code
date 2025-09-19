@@ -21,7 +21,8 @@ export const toolNames = [
 	"apply_diff",
 	"insert_content",
 	"search_and_replace",
-	"search_files",
+	"grep",
+	"glob",
 	"list_files",
 	"list_code_definition_names",
 	"browser_action",
@@ -36,6 +37,8 @@ export const toolNames = [
 	"update_todo_list",
 	"web_search",
 	"url_fetch",
+	"run_slash_command",
+	"generate_image"
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

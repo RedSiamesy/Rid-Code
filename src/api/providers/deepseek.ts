@@ -25,4 +25,5 @@ export class DeepSeekHandler extends RiddlerHandler {
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
 		return { id, info, ...params }
 	}
+
 }

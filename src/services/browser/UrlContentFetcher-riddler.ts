@@ -4,11 +4,11 @@ import { GeminiHandler } from "../../api/providers/gemini"
 
 // Create GeminiHandler with fixed configuration for URL content fetching
 export const geminiHandler = new GeminiHandler({
-	geminiApiKey: "AIzaSyDfCKt-bk2TUj9ZnXfBqIBsFyDDXRTb6d4", // TODO: 需要配置实际的API key
+	geminiApiKey: "AIzaSyB2dBxjifXLHJ5-juyVHezMxBYzxHtRbvs", // TODO: 需要配置实际的API key
 	apiModelId: "gemini-2.5-flash-lite",
 	enableGrounding: false,
 	enableUrlContext: true, // 启用URL上下文功能来获取网页内容
-	modelTemperature: 0.0,
+	modelTemperature: 1.0,
 	modelMaxTokens: 32768,
 	modelMaxThinkingTokens: 0, // 不需要思考模式
 })

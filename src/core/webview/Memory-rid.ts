@@ -4,42 +4,9 @@ import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 import Anthropic from "@anthropic-ai/sdk"
 
-import { type Language, type ProviderSettings, type GlobalState, TelemetryEventName } from "@roo-code/types"
-import { CloudService } from "@roo-code/cloud"
-import { TelemetryService } from "@roo-code/telemetry"
-
 import { ClineProvider } from "./ClineProvider"
-import { changeLanguage, t } from "../../i18n"
-import { Package } from "../../shared/package"
-import { RouterName, toRouterName, ModelRecord } from "../../shared/api"
-import { supportPrompt } from "../../shared/support-prompt"
-
-import { checkoutDiffPayloadSchema, checkoutRestorePayloadSchema, WebviewMessage } from "../../shared/WebviewMessage"
-import { checkExistKey } from "../../shared/checkExistApiConfig"
-import { experimentDefault } from "../../shared/experiments"
-import { Terminal } from "../../integrations/terminal/Terminal"
-import { openFile } from "../../integrations/misc/open-file"
-import { openImage, saveImage } from "../../integrations/misc/image-handler"
-import { selectImages } from "../../integrations/misc/process-images"
-import { getTheme } from "../../integrations/theme/getTheme"
-import { discoverChromeHostUrl, tryChromeHostUrl } from "../../services/browser/browserDiscovery"
-import { searchWorkspaceFiles } from "../../services/search/file-search"
 import { fileExistsAtPath } from "../../utils/fs"
-import { playTts, setTtsEnabled, setTtsSpeed, stopTts } from "../../utils/tts"
-import { singleCompletionHandler } from "../../utils/single-completion-handler"
-import { searchCommits } from "../../utils/git"
-import { exportSettings, importSettings } from "../config/importExport"
-import { getOpenAiModels } from "../../api/providers/openai"
-import { getVsCodeLmModels } from "../../api/providers/vscode-lm"
-import { openMention } from "../mentions"
-import { TelemetrySetting } from "../../shared/TelemetrySetting"
 import { getWorkspacePath } from "../../utils/path"
-import { Mode, defaultModeSlug } from "../../shared/modes"
-import { getModels, flushModels } from "../../api/providers/fetchers/modelCache"
-import { GetModelsOptions } from "../../shared/api"
-import { generateSystemPrompt } from "./generateSystemPrompt"
-import { getCommand } from "../../utils/commands"
-import { memoryUsage } from "process"
 import { buildApiHandler } from "../../api"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { getMessagesSinceLastSummary } from "../condense"
@@ -354,11 +321,11 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 	const timeZoneOffsetMinutes = Math.abs(Math.round((Math.abs(timeZoneOffset) - timeZoneOffsetHours) * 60))
 	const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : "-"}${timeZoneOffsetHours}:${timeZoneOffsetMinutes.toString().padStart(2, "0")}`
 
-	const currentCline = provider.getCurrentCline()
-	if (currentCline) {
+	const currentTask = provider.getCurrentTask()
+	if (currentTask) {
 		try {
 			if (text.length !== 0) {
-				await currentCline.say(
+				await currentTask.say(
 					"save_memory_tag",
 					text,
 					undefined /* images */,
@@ -378,7 +345,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 			const historyMemoryText = formatHistoryMemories(currentMemoryData)
 
 			// 获取当前对话记录
-			const messagesSinceLastSummary = getMessagesSinceLastSummary(currentCline.apiConversationHistory)
+			const messagesSinceLastSummary = getMessagesSinceLastSummary(currentTask.apiConversationHistory)
 			
 			// 清理图像块并准备用于 API 的消息
 			const { apiConfiguration } = await provider.getState()
@@ -480,7 +447,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 				prevContextTokens: 0,
 			}
 
-			await currentCline.say(
+			await currentTask.say(
 				"save_memory",
 				undefined /* text */,
 				undefined /* images */,
@@ -512,7 +479,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 		} catch (error) {
 			console.error("保存记忆时出错:", error)
 
-			await currentCline.say(
+			await currentTask.say(
 				"save_memory_error",
 				"保存记忆错误" /* text */,
 				undefined /* images */,

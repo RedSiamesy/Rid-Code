@@ -41,6 +41,11 @@ export const globalSettingsSchema = z.object({
 	lastShownAnnouncementId: z.string().optional(),
 	customInstructions: z.string().optional(),
 	taskHistory: z.array(historyItemSchema).optional(),
+	dismissedUpsells: z.array(z.string()).optional(),
+
+	// Image generation settings (experimental) - flattened for simplicity
+	openRouterImageApiKey: z.string().optional(),
+	openRouterImageGenerationSelectedModel: z.string().optional(),
 
 	condensingApiConfigId: z.string().optional(),
 	customCondensingPrompt: z.string().optional(),
@@ -68,6 +73,7 @@ export const globalSettingsSchema = z.object({
 	commandTimeoutAllowlist: z.array(z.string()).optional(),
 	preventCompletionWithOpenTodos: z.boolean().optional(),
 	allowedMaxRequests: z.number().nullish(),
+	allowedMaxCost: z.number().nullish(),
 	autoCondenseContext: z.boolean().optional(),
 	autoCondenseContextPercent: z.number().optional(),
 	maxConcurrentFileReads: z.number().optional(),
@@ -171,9 +177,13 @@ export const SECRET_STATE_KEYS = [
 	"awsSecretKey",
 	"awsSessionToken",
 	"openAiApiKey",
+	"ollamaApiKey",
 	"geminiApiKey",
 	"openAiNativeApiKey",
+	"cerebrasApiKey",
 	"deepSeekApiKey",
+	"doubaoApiKey",
+	"modelscopeApiKey",
 	"moonshotApiKey",
 	"mistralApiKey",
 	"unboundApiKey",
@@ -182,19 +192,39 @@ export const SECRET_STATE_KEYS = [
 	"groqApiKey",
 	"chutesApiKey",
 	"litellmApiKey",
+	"deepInfraApiKey",
 	"codeIndexOpenAiKey",
 	"codeIndexQdrantApiKey",
 	"codebaseIndexOpenAiCompatibleApiKey",
 
 	"codebaseIndexGeminiApiKey",
 	"codebaseIndexMistralApiKey",
+	"codebaseIndexVercelAiGatewayApiKey",
 	"huggingFaceApiKey",
 	"sambaNovaApiKey",
-] as const satisfies readonly (keyof ProviderSettings)[]
-export type SecretState = Pick<ProviderSettings, (typeof SECRET_STATE_KEYS)[number]>
+	"zaiApiKey",
+	"fireworksApiKey",
+	"featherlessApiKey",
+	"ioIntelligenceApiKey",
+	"vercelAiGatewayApiKey",
+] as const
+
+// Global secrets that are part of GlobalSettings (not ProviderSettings)
+export const GLOBAL_SECRET_KEYS = [
+	"openRouterImageApiKey", // For image generation
+] as const
+
+// Type for the actual secret storage keys
+type ProviderSecretKey = (typeof SECRET_STATE_KEYS)[number]
+type GlobalSecretKey = (typeof GLOBAL_SECRET_KEYS)[number]
+
+// Type representing all secrets that can be stored
+export type SecretState = Pick<ProviderSettings, Extract<ProviderSecretKey, keyof ProviderSettings>> & {
+	[K in GlobalSecretKey]?: string
+}
 
 export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
-	SECRET_STATE_KEYS.includes(key as Keys<SecretState>)
+	SECRET_STATE_KEYS.includes(key as ProviderSecretKey) || GLOBAL_SECRET_KEYS.includes(key as GlobalSecretKey)
 
 /**
  * GlobalState
@@ -203,7 +233,7 @@ export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 export type GlobalState = Omit<RooCodeSettings, Keys<SecretState>>
 
 export const GLOBAL_STATE_KEYS = [...GLOBAL_SETTINGS_KEYS, ...PROVIDER_SETTINGS_KEYS].filter(
-	(key: Keys<RooCodeSettings>) => !SECRET_STATE_KEYS.includes(key as Keys<SecretState>),
+	(key: Keys<RooCodeSettings>) => !isSecretStateKey(key),
 ) as Keys<GlobalState>[]
 
 export const isGlobalStateKey = (key: string): key is Keys<GlobalState> =>

@@ -25,8 +25,37 @@ import { getModelEndpoints } from "./fetchers/modelEndpointCache"
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler } from "../index"
+import { handleOpenAIError } from "./utils/openai-error-handler"
 
 import { chatCompletions_Stream, chatCompletions_NonStream } from "./tools-rid"
+
+
+// Image generation types
+interface ImageGenerationResponse {
+	choices?: Array<{
+		message?: {
+			content?: string
+			images?: Array<{
+				type?: string
+				image_url?: {
+					url?: string
+				}
+			}>
+		}
+	}>
+	error?: {
+		message?: string
+		type?: string
+		code?: string
+	}
+}
+
+export interface ImageGenerationResult {
+	success: boolean
+	imageData?: string
+	imageFormat?: string
+	error?: string
+}
 
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
@@ -50,6 +79,9 @@ interface CompletionUsage {
 	}
 	total_tokens?: number
 	cost?: number
+	cost_details?: {
+		upstream_inference_cost?: number
+	}
 }
 
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {
@@ -57,6 +89,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 	private client: OpenAI
 	protected models: ModelRecord = {}
 	protected endpoints: ModelRecord = {}
+	private readonly providerName = "OpenRouter"
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -81,7 +114,10 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		// other providers (including Gemini), so we need to explicitly disable
 		// i We should generalize this using the logic in `getModelParams`, but
 		// this is easier for now.
-		if (modelId === "google/gemini-2.5-pro-preview" && typeof reasoning === "undefined") {
+		if (
+			(modelId === "google/gemini-2.5-pro-preview" || modelId === "google/gemini-2.5-pro") &&
+			typeof reasoning === "undefined"
+		) {
 			reasoning = { exclude: true }
 		}
 
@@ -130,12 +166,18 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		let lastUsage: CompletionUsage | undefined = undefined
 		let startTime = Date.now()
 		let firstTokenTime: number | null = null
 		let hasFirstToken = false
 
-		const stream = await chatCompletions_Stream(this.client, completionParams)
+		let stream
+		try {
+			stream = await chatCompletions_Stream(this.client, completionParams)
+		} catch (error) {
+			throw handleOpenAIError(error, this.providerName)
+		}
+
+		let lastUsage: CompletionUsage | undefined = undefined
 
 		for await (const chunk of stream) {
 			// OpenRouter returns an error object instead of the OpenAI SDK throwing an error.
@@ -175,48 +217,16 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			const totalLatency = endTime - startTime
 			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
 			
-			// Add timing information to usage
-			const enhancedUsage = {
-				...lastUsage,
-				startTime,
-				firstTokenTime,
-				endTime,
-				totalLatency,
-				firstTokenLatency
+			yield {
+				type: "usage",
+				inputTokens: lastUsage.prompt_tokens || 0,
+				outputTokens: lastUsage.completion_tokens || 0,
+				cacheReadTokens: lastUsage.prompt_tokens_details?.cached_tokens,
+				reasoningTokens: lastUsage.completion_tokens_details?.reasoning_tokens,
+				totalCost: (lastUsage.cost_details?.upstream_inference_cost || 0) + (lastUsage.cost || 0),
+				tps: (lastUsage.prompt_tokens || 0) / totalLatency,
+				latency: firstTokenLatency,
 			}
-
-			yield this.processUsageMetrics(enhancedUsage)
-		}
-	}
-
-	protected processUsageMetrics(usage: any): ApiStreamChunk {
-		const outputTokens = usage?.completion_tokens || 0
-		const totalLatency = usage?.totalLatency || 10
-		const firstTokenLatency = usage?.firstTokenLatency || 10
-		
-		// Calculate TPS excluding first token latency
-		// TPS = (total_tokens - 1) / (total_time - first_token_time) * 1000
-		let tps = 0 // default fallback
-		if (outputTokens > 1 && totalLatency > firstTokenLatency) {
-			const tokensAfterFirst = outputTokens - 1
-			const timeAfterFirstToken = totalLatency - firstTokenLatency
-			tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
-		} else if (outputTokens > 0 && totalLatency > 0) {
-			// Fallback: calculate TPS for all tokens including first
-			tps = (outputTokens * 1000) / totalLatency
-		}
-
-		return {
-			type: "usage",
-			inputTokens: usage?.prompt_tokens || 0,
-			outputTokens: outputTokens,
-			// Waiting on OpenRouter to figure out what this represents in the Gemini case
-			// and how to best support it.
-			// cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens,
-			reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
-			totalCost: usage?.cost || 0,
-			tps: tps, // Round to 2 decimal places
-			latency: firstTokenLatency, // Use first token latency as the latency metric
 		}
 	}
 
@@ -279,14 +289,138 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(reasoning && { reasoning }),
 		}
 
-		const content = await chatCompletions_NonStream(this.client, completionParams)
+		let response
+		try {
+			response = await chatCompletions_NonStream(this.client, completionParams)
+		} catch (error) {
+			throw handleOpenAIError(error, this.providerName)
+		}
 
 		// if ("error" in response) {
 		// 	const error = response.error as { message?: string; code?: number }
 		// 	throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
 		// }
 
-		// const completion = response as OpenAI.Chat.ChatCompletion
-		return content || ""
+		return response || ""
+	}
+
+	/**
+	 * Generate an image using OpenRouter's image generation API
+	 * @param prompt The text prompt for image generation
+	 * @param model The model to use for generation
+	 * @param apiKey The OpenRouter API key (must be explicitly provided)
+	 * @param inputImage Optional base64 encoded input image data URL
+	 * @returns The generated image data and format, or an error
+	 */
+	async generateImage(
+		prompt: string,
+		model: string,
+		apiKey: string,
+		inputImage?: string,
+	): Promise<ImageGenerationResult> {
+		if (!apiKey) {
+			return {
+				success: false,
+				error: "OpenRouter API key is required for image generation",
+			}
+		}
+
+		try {
+			const response = await fetch("https://riddler.mynatapp.cc/llm/openrouter/v1/chat/completions", {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+					"Content-Type": "application/json",
+					"HTTP-Referer": "https://github.com/RooVetGit/Roo-Code",
+					"X-Title": "Roo Code",
+				},
+				body: JSON.stringify({
+					model,
+					messages: [
+						{
+							role: "user",
+							content: inputImage
+								? [
+										{
+											type: "text",
+											text: prompt,
+										},
+										{
+											type: "image_url",
+											image_url: {
+												url: inputImage,
+											},
+										},
+									]
+								: prompt,
+						},
+					],
+					modalities: ["image", "text"],
+				}),
+			})
+
+			if (!response.ok) {
+				const errorText = await response.text()
+				let errorMessage = `Failed to generate image: ${response.status} ${response.statusText}`
+				try {
+					const errorJson = JSON.parse(errorText)
+					if (errorJson.error?.message) {
+						errorMessage = `Failed to generate image: ${errorJson.error.message}`
+					}
+				} catch {
+					// Use default error message
+				}
+				return {
+					success: false,
+					error: errorMessage,
+				}
+			}
+
+			const result: ImageGenerationResponse = await response.json()
+
+			if (result.error) {
+				return {
+					success: false,
+					error: `Failed to generate image: ${result.error.message}`,
+				}
+			}
+
+			// Extract the generated image from the response
+			const images = result.choices?.[0]?.message?.images
+			if (!images || images.length === 0) {
+				return {
+					success: false,
+					error: "No image was generated in the response",
+				}
+			}
+
+			const imageData = images[0]?.image_url?.url
+			if (!imageData) {
+				return {
+					success: false,
+					error: "Invalid image data in response",
+				}
+			}
+
+			// Extract base64 data from data URL
+			const base64Match = imageData.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/)
+			if (!base64Match) {
+				return {
+					success: false,
+					error: "Invalid image format received",
+				}
+			}
+
+			return {
+				success: true,
+				imageData: imageData,
+				imageFormat: base64Match[1],
+			}
+		} catch (error) {
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : "Unknown error occurred",
+			}
+		}
 	}
 }

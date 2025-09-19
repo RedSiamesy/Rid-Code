@@ -5,6 +5,7 @@ import type { ModelInfo } from "@roo-code/types"
 import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { ApiStream } from "../transform/stream"
 import { countTokens } from "../../utils/countTokens"
+import OpenAI from "openai"
 
 /**
  * Base class for API providers that implements common functionality.
@@ -14,6 +15,7 @@ export abstract class BaseProvider implements ApiHandler {
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
+		tools?: OpenAI.ChatCompletionTool[],
 	): ApiStream
 
 	abstract getModel(): { id: string; info: ModelInfo }

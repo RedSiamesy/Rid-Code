@@ -1,4 +1,4 @@
-import { ToolArgs } from "./types"
+import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 export function getListCodeDefinitionNamesDescription(args: ToolArgs): string {
 	return `## list_code_definition_names
@@ -21,4 +21,24 @@ Examples:
 <list_code_definition_names>
 <path>src/</path>
 </list_code_definition_names>`
+}
+
+export function getListCodeDefinitionNamesOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {
+	return {
+		type: "function",
+		function: {
+			name: "list_code_definition_names",
+			description: "Lists definition names (classes, functions, methods, etc.) from source code. This tool can analyze either a single file or all files at the top level of a specified directory. It provides insights into the codebase structure and important constructs.",
+			parameters: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: `The path of the file or directory (relative to the current working directory ${args.cwd}) to analyze. When given a directory, it lists definitions from all top-level source files.`
+					}
+				},
+				required: ["path"]
+			}
+		}
+	}
 }

@@ -7,7 +7,6 @@ import { isBinaryFile } from "isbinaryfile"
 import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
 
 import { getCommitInfo, getWorkingState } from "../../utils/git"
-import { getWorkspacePath } from "../../utils/path"
 
 import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFile } from "../../integrations/misc/extract-text"
@@ -18,8 +17,7 @@ import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-ridd
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
-import { getCommand } from "../../services/command/commands"
-import { Task } from "../task/Task"
+import { getCommand, type Command } from "../../services/command/commands"
 
 import { t } from "../../i18n"
 
@@ -36,6 +34,9 @@ function getUrlErrorMessage(error: unknown): string {
 	if (errorMessage.includes("net::ERR_INTERNET_DISCONNECTED")) {
 		return t("common:errors.no_internet")
 	}
+	if (errorMessage.includes("net::ERR_ABORTED")) {
+		return t("common:errors.url_request_aborted")
+	}
 	if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
 		return t("common:errors.url_forbidden")
 	}
@@ -47,14 +48,8 @@ function getUrlErrorMessage(error: unknown): string {
 	return t("common:errors.url_fetch_failed", { error: errorMessage })
 }
 
-
-export async function openMention(mention?: string): Promise<void> {
+export async function openMention(cwd: string, mention?: string): Promise<void> {
 	if (!mention) {
-		return
-	}
-
-	const cwd = getWorkspacePath()
-	if (!cwd) {
 		return
 	}
 
@@ -82,20 +77,44 @@ export async function parseMentions(
 	urlContentFetcher: UrlContentFetcher,
 	fileContextTracker?: FileContextTracker,
 	rooIgnoreController?: RooIgnoreController,
-	showRooIgnoredFiles: boolean = true,
+	showRooIgnoredFiles: boolean = false,
 	includeDiagnosticMessages: boolean = true,
 	maxDiagnosticMessages: number = 50,
 	maxReadFileLine?: number,
-	globalStoragePath?: string,
 ): Promise<string> {
 	const mentions: Set<string> = new Set()
-	const commandMentions: Set<string> = new Set()
+	const validCommands: Map<string, Command> = new Map()
 
-	// First pass: extract command mentions (starting with /)
-	let parsedText = text.replace(commandRegexGlobal, (match, commandName) => {
-		commandMentions.add(commandName)
-		return `Command '${commandName}' (see below for command content)`
-	})
+	// First pass: check which command mentions exist and cache the results
+	const commandMatches = Array.from(text.matchAll(commandRegexGlobal))
+	const uniqueCommandNames = new Set(commandMatches.map(([, commandName]) => commandName))
+
+	const commandExistenceChecks = await Promise.all(
+		Array.from(uniqueCommandNames).map(async (commandName) => {
+			try {
+				const command = await getCommand(cwd, commandName)
+				return { commandName, command }
+			} catch (error) {
+				// If there's an error checking command existence, treat it as non-existent
+				return { commandName, command: undefined }
+			}
+		}),
+	)
+
+	// Store valid commands for later use
+	for (const { commandName, command } of commandExistenceChecks) {
+		if (command) {
+			validCommands.set(commandName, command)
+		}
+	}
+
+	// Only replace text for commands that actually exist
+	let parsedText = text
+	for (const [match, commandName] of commandMatches) {
+		if (validCommands.has(commandName)) {
+			parsedText = parsedText.replace(match, `Command '${commandName}' (see below for command content)`)
+		}
+	}
 
 	// Second pass: handle regular mentions
 	parsedText = parsedText.replace(mentionRegexGlobal, (match, mention) => {
@@ -216,20 +235,15 @@ export async function parseMentions(
 		}
 	}
 
-	// Process command mentions
-	for (const commandName of commandMentions) {
-				try {
-					const command = await getCommand(cwd, commandName)
-			if (command) {
-				let commandOutput = ""
-				if (command.description) {
-					commandOutput += `Description: ${command.description}\n\n`
-				}
-				commandOutput += command.content
-				parsedText += `\n\n<command name="${commandName}">\n${commandOutput}\n</command>`
-			} else {
-				parsedText += `\n\n<command name="${commandName}">\nCommand '${commandName}' not found. Available commands can be found in .roo/commands/ or ~/.roo/commands/\n</command>`
+	// Process valid command mentions using cached results
+	for (const [commandName, command] of validCommands) {
+		try {
+			let commandOutput = ""
+			if (command.description) {
+				commandOutput += `Description: ${command.description}\n\n`
 			}
+			commandOutput += command.content
+			parsedText += `\n\n<command name="${commandName}">\n${commandOutput}\n</command>`
 		} catch (error) {
 			parsedText += `\n\n<command name="${commandName}">\nError loading command '${commandName}': ${error.message}\n</command>`
 		}
@@ -250,7 +264,7 @@ async function getFileOrFolderContent(
 	mentionPath: string,
 	cwd: string,
 	rooIgnoreController?: any,
-	showRooIgnoredFiles: boolean = true,
+	showRooIgnoredFiles: boolean = false,
 	maxReadFileLine?: number,
 ): Promise<string> {
 	const unescapedPath = unescapeSpaces(mentionPath)

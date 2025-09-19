@@ -17,7 +17,7 @@ import { XmlMatcher } from "../../utils/xml-matcher"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToSimpleMessages } from "../transform/simple-format"
-import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk, ApiStreamToolChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
 import { DEFAULT_HEADERS } from "./constants"
@@ -79,6 +79,7 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
+		tools?: OpenAI.ChatCompletionTool[]
 	): ApiStream {
 		const { info: modelInfo, reasoning } = this.getModel()
 		const modelUrl = this.options.openAiBaseUrl ?? ""
@@ -159,7 +160,8 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				...(reasoning && reasoning),
-				...this.extra_body
+				...this.extra_body,
+				...(tools && tools.length > 0 ? { tools } : {}),
 			}
 
 			// @TODO: Move this to the `getModelParams` function.
@@ -215,6 +217,26 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 						text: (delta.reasoning_content as string | undefined) || "",
 					}
 				}
+
+				// Handle tool calls
+				if (delta.tool_calls && delta.tool_calls.length > 0) {
+					for (const toolCall of delta.tool_calls) {
+						if ('function' in toolCall && toolCall.function && toolCall.function.name && toolCall.function.arguments) {
+							try {
+								const tool: ApiStreamToolChunk = {
+									type: "tool",
+									tool_call_id: toolCall.id,
+									name: toolCall.function.name,
+									params: JSON.parse(toolCall.function.arguments)
+								}
+								yield tool
+							} catch (error) {
+								throw new Error(`Tool call JSON parsing failed: ${error}`)
+							}
+						}
+					}
+				}
+
 				if (chunk.usage) {
 					lastUsage = chunk.usage
 				}

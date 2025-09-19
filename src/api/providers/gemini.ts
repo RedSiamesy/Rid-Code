@@ -1,10 +1,8 @@
-
 import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
 import { getModelParams } from "../transform/model-params"
-
 
 import { RiddlerHandler } from "./providers-rid"
 import type { ApiStreamUsageChunk } from "../transform/stream"

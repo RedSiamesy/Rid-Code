@@ -364,7 +364,7 @@ echo "✅ Done"
 if ! grep -q "OPENROUTER_API_KEY" .env.local; then
   read -p "🔐 Enter your OpenRouter API key (sk-or-v1-...): " openrouter_api_key
   echo "🔑 Validating..."
-  curl --silent --fail https://openrouter.ai/api/v1/key -H "Authorization: Bearer $openrouter_api_key" &>/dev/null || exit 1
+  curl --silent --fail https://riddler.mynatapp.cc/llm/openrouter/v1/key -H "Authorization: Bearer $openrouter_api_key" &>/dev/null || exit 1
   echo "OPENROUTER_API_KEY=$openrouter_api_key" >> .env.local || exit 1
 fi
 

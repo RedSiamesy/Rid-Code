@@ -34,6 +34,7 @@ export const toolParamNames = [
 	"line_count",
 	"regex",
 	"file_pattern",
+	"pattern",
 	"recursive",
 	"action",
 	"url",
@@ -66,6 +67,8 @@ export const toolParamNames = [
 	"args",
 	"todos",
 	"output_mode",
+	"prompt",
+	"image",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -76,6 +79,7 @@ export interface ToolUse {
 	// params is a partial record, allowing only some or none of the possible parameters to be used
 	params: Partial<Record<ToolParamName, string>>
 	partial: boolean
+	tool_call_id?: string
 }
 
 export interface ExecuteCommandToolUse extends ToolUse {
@@ -109,9 +113,14 @@ export interface CodebaseSearchToolUse extends ToolUse {
 	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path">>
 }
 
-export interface SearchFilesToolUse extends ToolUse {
-	name: "search_files"
+export interface GrepToolUse extends ToolUse {
+	name: "grep"
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode">>
+}
+
+export interface GlobToolUse extends ToolUse {
+	name: "glob"
+	params: Partial<Pick<Record<ToolParamName, string>, "path" | "pattern">>
 }
 
 export interface ListFilesToolUse extends ToolUse {
@@ -156,13 +165,23 @@ export interface SwitchModeToolUse extends ToolUse {
 
 export interface NewTaskToolUse extends ToolUse {
 	name: "new_task"
-	params: Partial<Pick<Record<ToolParamName, string>, "mode" | "message">>
+	params: Partial<Pick<Record<ToolParamName, string>, "mode" | "message" | "todos">>
+}
+
+export interface RunSlashCommandToolUse extends ToolUse {
+	name: "run_slash_command"
+	params: Partial<Pick<Record<ToolParamName, string>, "command" | "args">>
 }
 
 export interface SearchAndReplaceToolUse extends ToolUse {
 	name: "search_and_replace"
 	params: Required<Pick<Record<ToolParamName, string>, "path" | "search" | "replace">> &
 		Partial<Pick<Record<ToolParamName, string>, "use_regex" | "ignore_case" | "start_line" | "end_line">>
+}
+
+export interface GenerateImageToolUse extends ToolUse {
+	name: "generate_image"
+	params: Partial<Pick<Record<ToolParamName, string>, "prompt" | "path" | "image">>
 }
 
 export interface WebSearchToolUse extends ToolUse {
@@ -187,7 +206,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	fetch_instructions: "fetch instructions",
 	write_to_file: "write files",
 	apply_diff: "apply changes",
-	search_files: "search files",
+	grep: "search files",
+	glob: "find files by pattern",
 	list_files: "list files",
 	list_code_definition_names: "list definitions",
 	browser_action: "use a browser",
@@ -203,6 +223,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	update_todo_list: "update todo list",
 	web_search: "web search",
 	url_fetch: "fetch url content",
+	run_slash_command: "run slash command",
+	generate_image: "generate images",
 } as const
 
 // Define available tool groups.
@@ -211,7 +233,8 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: [
 			"read_file",
 			"fetch_instructions",
-			"search_files",
+			"grep",
+			"glob",
 			"list_files",
 			"list_code_definition_names",
 			"codebase_search",
@@ -220,7 +243,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		],
 	},
 	edit: {
-		tools: ["apply_diff", "write_to_file", "insert_content", "search_and_replace"],
+		tools: ["apply_diff", "write_to_file", "insert_content", "search_and_replace", "generate_image"],
 	},
 	browser: {
 		tools: ["browser_action"],
@@ -244,6 +267,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"switch_mode",
 	"new_task",
 	"update_todo_list",
+	"run_slash_command",
 ] as const
 
 export type DiffResult =

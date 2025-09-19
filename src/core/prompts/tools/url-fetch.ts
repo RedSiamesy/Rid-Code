@@ -1,4 +1,4 @@
-import { ToolArgs } from "./types"
+import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 export function getUrlFetchDescription(args: ToolArgs): string {
 	return `## url_fetch
@@ -17,4 +17,24 @@ Example: Fetch content from a documentation page
 </url_fetch>
 
 Note: The URL must be publicly accessible and should point to a web page with readable content.`
+}
+
+export function getUrlFetchOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {
+	return {
+		type: "function",
+		function: {
+			name: "url_fetch",
+			description: "Fetch and extract content from a specific URL. This tool can read web pages and convert them to readable markdown format.",
+			parameters: {
+				type: "object",
+				properties: {
+					url: {
+						type: "string",
+						description: "The URL of the web page to fetch and extract content from."
+					}
+				},
+				required: ["url"]
+			}
+		}
+	}
 }

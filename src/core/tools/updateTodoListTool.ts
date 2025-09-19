@@ -100,14 +100,17 @@ function normalizeStatus(status: string | undefined): TodoStatus {
 	return "pending"
 }
 
-function parseMarkdownChecklist(md: string): TodoItem[] {
+export function parseMarkdownChecklist(md: string): TodoItem[] {
 	if (typeof md !== "string") return []
 	const lines = md
 		.split(/\r?\n/)
 		.map((l) => l.trim())
 		.filter(Boolean)
 	const todos: TodoItem[] = []
-	for (const line of lines) {
+	for (let line of lines) {
+		if (line.startsWith("- ")) {
+			line = line.slice(2)
+		}
 		const match = line.match(/^\[\s*([ xX\-~])\s*\]\s+(.+)$/)
 		if (!match) continue
 		let status: TodoStatus = "pending"

@@ -7,7 +7,7 @@ import {
 	INITIAL_RETRY_DELAY_MS,
 } from "../constants"
 import { createHash } from "crypto"
-import { RooIgnoreController, CodebaseIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
 import { v5 as uuidv5 } from "uuid"
 import { Ignore } from "ignore"
 import { scannerExtensions } from "../shared/supported-extensions"
@@ -27,6 +27,7 @@ import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
 import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
+import { Package } from "../../../shared/package"
 
 /**
  * Implementation of the file watcher interface
@@ -35,11 +36,12 @@ export class FileWatcher implements IFileWatcher {
 	private ignoreInstance?: Ignore
 	private fileWatcher?: vscode.FileSystemWatcher
 	private ignoreController: RooIgnoreController
-	private cbIgnoreController: CodebaseIgnoreController
+	private cbIgnoreController: RooIgnoreController
 	private accumulatedEvents: Map<string, { uri: vscode.Uri; type: "create" | "change" | "delete" }> = new Map()
 	private batchProcessDebounceTimer?: NodeJS.Timeout
 	private readonly BATCH_DEBOUNCE_DELAY_MS = 500
 	private readonly FILE_PROCESSING_CONCURRENCY_LIMIT = 10
+	private readonly batchSegmentThreshold: number
 
 	private readonly _onDidStartBatchProcessing = new vscode.EventEmitter<string[]>()
 	private readonly _onBatchProgressUpdate = new vscode.EventEmitter<{
@@ -69,7 +71,7 @@ export class FileWatcher implements IFileWatcher {
 	 * @param workspacePath Path to the workspace
 	 * @param context VS Code extension context
 	 * @param embedder Optional embedder
-	 * @param qdrantClient Optional vector store
+	 * @param vectorStore Optional vector store
 	 * @param cacheManager Cache manager
 	 */
 	constructor(
@@ -78,15 +80,30 @@ export class FileWatcher implements IFileWatcher {
 		private readonly cacheManager: CacheManager,
 		private readonly codeParser: ICodeParser,
 		private embedder?: IEmbedder,
-		private qdrantClient?: IVectorStore,
+		private vectorStore?: IVectorStore,
 		ignoreInstance?: Ignore,
 		ignoreController?: RooIgnoreController,
+		batchSegmentThreshold?: number,
 	) {
 		this.ignoreController = ignoreController || new RooIgnoreController(workspacePath)
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
 		}
-		this.cbIgnoreController = new CodebaseIgnoreController(workspacePath)
+		this.cbIgnoreController = new RooIgnoreController(workspacePath, ".codebaseignore")
+		// Get the configurable batch size from VSCode settings, fallback to default
+		// If not provided in constructor, try to get from VSCode settings
+		if (batchSegmentThreshold !== undefined) {
+			this.batchSegmentThreshold = batchSegmentThreshold
+		} else {
+			try {
+				this.batchSegmentThreshold = vscode.workspace
+					.getConfiguration(Package.name)
+					.get<number>("codeIndex.embeddingBatchSize", BATCH_SEGMENT_THRESHOLD)
+			} catch {
+				// In test environment, vscode.workspace might not be available
+				this.batchSegmentThreshold = BATCH_SEGMENT_THRESHOLD
+			}
+		}
 	}
 
 	/**
@@ -194,9 +211,9 @@ export class FileWatcher implements IFileWatcher {
 			}
 		}
 
-		if (allPathsToClearFromDB.size > 0 && this.qdrantClient) {
+		if (allPathsToClearFromDB.size > 0 && this.vectorStore) {
 			try {
-				await this.qdrantClient.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
+				await this.vectorStore.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
 
 				for (const path of pathsToExplicitlyDelete) {
 					this.cacheManager.deleteHash(path)
@@ -343,16 +360,16 @@ export class FileWatcher implements IFileWatcher {
 		batchResults: FileProcessingResult[],
 		overallBatchError?: Error,
 	): Promise<Error | undefined> {
-		if (pointsForBatchUpsert.length > 0 && this.qdrantClient && !overallBatchError) {
+		if (pointsForBatchUpsert.length > 0 && this.vectorStore && !overallBatchError) {
 			try {
-				for (let i = 0; i < pointsForBatchUpsert.length; i += BATCH_SEGMENT_THRESHOLD) {
-					const batch = pointsForBatchUpsert.slice(i, i + BATCH_SEGMENT_THRESHOLD)
+				for (let i = 0; i < pointsForBatchUpsert.length; i += this.batchSegmentThreshold) {
+					const batch = pointsForBatchUpsert.slice(i, i + this.batchSegmentThreshold)
 					let retryCount = 0
 					let upsertError: Error | undefined
 
 					while (retryCount < MAX_BATCH_RETRIES) {
 						try {
-							await this.qdrantClient.upsertPoints(batch)
+							await this.vectorStore.upsertPoints(batch)
 							break
 						} catch (error) {
 							upsertError = error as Error

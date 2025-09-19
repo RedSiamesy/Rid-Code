@@ -142,7 +142,7 @@ async function executeToolAndProcessResult(
 			executionId,
 			status: "error",
 			toolName: "url_fetch",
-			error: errorMessage,
+			error: errorMessage.slice(0, 20) + "...", // Limit error message length
 		})
 		
 		await cline.say("error", `URL获取失败: ${errorMessage}`)
@@ -184,6 +184,13 @@ export async function urlFetchTool(
 		const completeMessage = JSON.stringify({
 			url,
 		} satisfies ClineAskUrlFetch)
+
+		if (!cline.clineMessages || cline.clineMessages.length === 0 
+			|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
+			|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "url_fetch"
+		){
+			await handlePartialRequest(cline, params, removeClosingTag)
+		}
 
 		const executionId = cline.lastMessageTs?.toString() ?? Date.now().toString()
 		const didApprove = await askApproval("url_fetch", completeMessage)

@@ -169,22 +169,6 @@ export async function regexSearchFiles(
 		return "No results found"
 	}
 
-	try {
-		if (((outputMode === "files_with_matches" && !output) || (outputMode === "content" && output.split("\n").length < 3)) && filePattern?.includes(",")) {
-			let outs:any[] = []
-			const _filePattern = filePattern?.split(",")
-			_filePattern.forEach((pattern) => {
-				const args = outputMode === "files_with_matches"
-					? ["-l", "-e", regex, "--glob", pattern.trim(), directoryPath]
-					: ["--json", "-e", regex, "--glob", pattern.trim(), "--context", "1", directoryPath]
-				outs.push(execRipgrep(rgPath, args, outputMode))
-			})
-			output = (await Promise.all(outs)).join("\n")
-		}
-	} catch (error) {
-		output = ""
-	}
-
 	const results: SearchFileResult[] = []
 	let currentFile: SearchFileResult | null = null
 

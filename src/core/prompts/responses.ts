@@ -72,6 +72,16 @@ Otherwise, if you have not completed the task and do not need additional informa
 	invalidMcpToolArgumentError: (serverName: string, toolName: string) =>
 		`Invalid JSON argument used with ${serverName} for ${toolName}. Please retry with a properly formatted JSON argument.`,
 
+	unknownMcpToolError: (serverName: string, toolName: string, availableTools: string[]) => {
+		const toolsList = availableTools.length > 0 ? availableTools.join(", ") : "No tools available"
+		return `Tool '${toolName}' does not exist on server '${serverName}'.\n\nAvailable tools on this server: ${toolsList}\n\nPlease use one of the available tools or check if the server is properly configured.`
+	},
+
+	unknownMcpServerError: (serverName: string, availableServers: string[]) => {
+		const serversList = availableServers.length > 0 ? availableServers.join(", ") : "No servers available"
+		return `Server '${serverName}' is not configured. Available servers: ${serversList}`
+	},
+
 	toolResult: (
 		text: string,
 		images?: string[],
@@ -158,7 +168,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 		if (didHitLimit) {
 			return `${rooIgnoreParsed.join(
 				"\n",
-			)}\n\n(File list truncated. Use list_files on specific subdirectories if you need to explore further.)`
+			)}\n...\n\n(File list truncated. Use list_files on specific subdirectories if you need to explore further.)`
 		} else if (rooIgnoreParsed.length === 0 || (rooIgnoreParsed.length === 1 && rooIgnoreParsed[0] === "")) {
 			return "No files found."
 		} else {

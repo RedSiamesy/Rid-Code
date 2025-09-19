@@ -1,4 +1,4 @@
-import { ToolArgs } from "./types"
+import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 export function getSearchAndReplaceDescription(args: ToolArgs): string {
 	return `## search_and_replace
@@ -36,4 +36,50 @@ Examples:
 <use_regex>true</use_regex>
 <ignore_case>true</ignore_case>
 </search_and_replace>`
+}
+
+export function getSearchAndReplaceOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {
+	return {
+		type: "function",
+		function: {
+			name: "search_and_replace",
+			description: "Finds and replaces specific text strings or patterns (using regex) within a file. Supports literal text and regex patterns, case sensitivity options, and optional line ranges. Shows a diff preview before applying changes.",
+			parameters: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: `The path of the file to modify (relative to the current workspace directory ${args.cwd})`
+					},
+					search: {
+						type: "string",
+						description: "The text or pattern to search for"
+					},
+					replace: {
+						type: "string",
+						description: "The text to replace matches with"
+					},
+					start_line: {
+						type: "string",
+						description: "String of an integer representing the starting line number for restricted replacement (1-based)"
+					},
+					end_line: {
+						type: "string",
+						description: "String of an integer representing the ending line number for restricted replacement (1-based)"
+					},
+					use_regex: {
+						type: "string",
+						enum: ["true", "false"],
+						description: "Set to true to treat search as a regex pattern (default: false)"
+					},
+					ignore_case: {
+						type: "string",
+						enum: ["true", "false"],
+						description: "Set to true to ignore case when matching (default: false)"
+					}
+				},
+				required: ["path", "search", "replace"]
+			}
+		}
+	}
 }
