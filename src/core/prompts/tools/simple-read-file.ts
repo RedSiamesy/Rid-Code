@@ -15,23 +15,7 @@ Usage:
 <read_file>
 <path>path/to/file</path>
 </read_file>
-
-Examples:
-
-1. Reading a TypeScript file:
-<read_file>
-<path>src/app.ts</path>
-</read_file>
-
-2. Reading a configuration file:
-<read_file>
-<path>config.json</path>
-</read_file>
-
-3. Reading a markdown file:
-<read_file>
-<path>README.md</path>
-</read_file>`
+`
 }
 
 export function getSimpleReadFileOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {

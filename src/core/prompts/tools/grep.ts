@@ -2,7 +2,7 @@ import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 export function getGrepDescription(args: ToolArgs): string {
 	return `## grep
-Description: Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
+Description: A powerful search tool built on ripgrep. Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
 
 - ALWAYS use Grep for search tasks. NEVER invoke \`grep\` or \`rg\` as a Bash command. The Grep tool has been optimized for correct permissions and access.
 - Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
@@ -15,7 +15,12 @@ Parameters:
 - path: (required) The path of the directory to search in (relative to the current workspace directory ${args.cwd}). This directory will be recursively searched.
 - regex: (required) The regular expression pattern to search for. Uses Rust regex syntax.
 - file_pattern: (optional) Glob pattern to filter files, MUST conform to the syntax of the \`--glob\` parameter of the rg command (e.g., '*.ts' for TypeScript files, '*.{ts,js,json}' for TypeScript, JavaScript and JSON files). If not provided, it will search all files (*).
-- output_mode: (optional) Output mode for the search results. Can be "content" (default, shows file content with matches) or "files_with_matches" (only shows the list of files that contain matches without content).
+- output_mode: (optional) Output mode for the search results. 
+	- "content" shows matching lines (supports -A/-B/-C context). Defaults to "content" with "-C 1".
+	- "files_with_matches" shows file paths. 
+- after_context: (optional) Number of lines to show after each match (rg -A). Requires output_mode: "content", ignored otherwise.
+- before_context: (optional) Number of lines to show before each match (rg -B). Requires output_mode: "content", ignored otherwise.
+- context: (optional) Number of lines to show before and after each match (rg -C). Requires output_mode: "content", ignored otherwise.
 
 Usage:
 <grep>
@@ -23,6 +28,9 @@ Usage:
 <regex>Your regex pattern here</regex>
 <file_pattern>file pattern here (optional)</file_pattern>
 <output_mode>content or files_with_matches (optional)</output_mode>
+<after_context>number of lines after match (optional)</after_context>
+<before_context>number of lines before match (optional)</before_context>
+<context>number of lines before and after match (optional)</context>
 </grep>
 
 Example: Requesting to search for 'abc' in .ts files and .js files in the current directory
@@ -31,6 +39,23 @@ Example: Requesting to search for 'abc' in .ts files and .js files in the curren
 <regex>abc</regex>
 <file_pattern>*.{ts,js}</file_pattern>
 <output_mode>files_with_matches</output_mode>
+</grep>
+
+Example: Requesting to search for 'TODO:' with 5 lines before and 50 lines after each match
+<grep>
+<path>.</path>
+<regex>TODO:</regex>
+<file_pattern>*.{ts,js}</file_pattern>
+<before_context>5</before_context>
+<after_context>50</after_context>
+</grep>
+
+Example: Requesting to search for 'ERROR:' with 10 lines before and after each match using context parameter
+<grep>
+<path>.</path>
+<regex>ERROR:</regex>
+<file_pattern>*.log</file_pattern>
+<context>10</context>
 </grep>
 `
 }
@@ -73,7 +98,19 @@ export function getGrepOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinitio
 					output_mode: {
 						type: "string",
 						enum: ["content", "files_with_matches"],
-						description: "Output mode for the search results. 'content' shows file content with matches, 'files_with_matches' shows only the list of files that contain matches."
+						description: "Output mode: \"content\" shows matching lines (supports -A/-B/-C context), \"files_with_matches\" shows file paths. Defaults to \"content\" (need -A/-B/-C context)."
+					},
+					after_context: {
+						type: "string",
+						description: "String of an integer representing Number of lines to show after each match (rg -A). Requires output_mode: \"content\", ignored otherwise."
+					},
+					before_context: {
+						type: "string",
+						description: "String of an integer representing Number of lines to show before each match (rg -B). Requires output_mode: \"content\", ignored otherwise."
+					},
+					context: {
+						type: "string",
+						description: "String of an integer representing Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\", ignored otherwise."
 					}
 				},
 				required: ["path", "regex"]

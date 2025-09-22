@@ -28,10 +28,14 @@
 		"notifications": "通知",
 		"contextManagement": "上下文",
 		"terminal": "终端",
+		"slashCommands": "斜杠命令",
 		"prompts": "提示词",
 		"experimental": "实验性",
 		"language": "语言",
 		"about": "关于 Roo Code"
+	},
+	"slashCommands": {
+		"description": "管理您的斜杠命令，以快速执行自定义工作流和操作。 <DocsLink>了解更多</DocsLink>"
 	},
 	"prompts": {
 		"description": "配置用于快速操作的支持提示词，如增强提示词、解释代码和修复问题。这些提示词帮助 Roo 为常见开发任务提供更好的支持。"
@@ -726,7 +730,7 @@
 			"description": "启用后防止编辑器焦点干扰。文件编辑在后台进行，不会打开差异视图或抢夺焦点。你可以在 Roo 进行更改时继续不受干扰地工作。文件可以在不获取焦点的情况下打开以捕获诊断信息，或保持完全关闭状态。"
 		},
 		"ALLOWED_MULTI_CALL": {
-			"name": "允许每条消息调用多个工具",
+			"name": "启用多个工具调用",
 			"description": "启用后，Roo 可以在单条消息中使用多个工具。禁用时，Roo 必须每条消息使用一个工具。启用此功能可以加快交互速度，但可能导致某些模型出现意外行为。"
 		},
 		"ASSISTANT_MESSAGE_PARSER": {
@@ -753,7 +757,7 @@
 			"description": "启用后 Roo 可运行斜杠命令执行工作流程。"
 		},
 		"USE_TOOL_CALLING": {
-			"name": "使用工具调用而非提示词描述",
+			"name": "使用系统提示词工具调用",
 			"description": "启用后，Roo 将使用 API 原生工具调用而不是在系统提示词中包含工具描述。这可以减少令牌使用量并可能提高支持的模型的性能。"
 		}
 	},

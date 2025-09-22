@@ -69,6 +69,9 @@ export const toolParamNames = [
 	"output_mode",
 	"prompt",
 	"image",
+	"after_context",
+	"before_context",
+	"context",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -115,7 +118,7 @@ export interface CodebaseSearchToolUse extends ToolUse {
 
 export interface GrepToolUse extends ToolUse {
 	name: "grep"
-	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode">>
+	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode" | "after_context" | "before_context" | "context">>
 }
 
 export interface GlobToolUse extends ToolUse {

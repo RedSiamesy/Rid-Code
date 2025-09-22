@@ -1,6 +1,6 @@
 import { CodeIndexManager } from "../../../services/code-index/manager"
 
-export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager): string {
+export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager, allowedMultiCall?: boolean,): string {
 	const isCodebaseSearchAvailable =
 		codeIndexManager &&
 		codeIndexManager.isFeatureEnabled &&
@@ -31,18 +31,26 @@ export function getToolUseGuidelinesSection(codeIndexManager?: CodeIndexManager)
 	}
 
 	// Remaining guidelines
-	guidelinesList.push(
-		`${itemNumber++}. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.`,
-	)
+	if (allowedMultiCall !== true) {
+		guidelinesList.push(
+			`${itemNumber++}. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.`,
+		)
+	} else {
+		guidelinesList.push(`${itemNumber++}. You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run \"git status\" and \"git diff\", send a single message with two tool calls to run the calls in parallel.`)
+	}
 	guidelinesList.push(`${itemNumber++}. Formulate your tool use using the XML format specified for each tool.`)
 	guidelinesList.push(`${itemNumber++}. After each tool use, the user will respond with the result of that tool use. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
   - Information about whether the tool succeeded or failed, along with any reasons for failure.
   - Linter errors that may have arisen due to the changes you made, which you'll need to address.
   - New terminal output in reaction to the changes, which you may need to consider or act upon.
   - Any other relevant feedback or information related to the tool use.`)
-	guidelinesList.push(
-		`${itemNumber++}. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.`,
-	)
+	if (allowedMultiCall !== true) {
+		guidelinesList.push(
+			`${itemNumber++}. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.`,
+		)
+	} else {
+		guidelinesList.push(`${itemNumber++}. If the user specifies that they want you to run tools \"in parallel\", you MUST send a single message with multiple tool use content blocks. For example, if you need to launch multiple agents in parallel, send a single message with multiple Task tool calls.`)
+	}
 
 	// Join guidelines and add the footer
 	return `# Tool Use Guidelines

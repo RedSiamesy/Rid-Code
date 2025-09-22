@@ -237,7 +237,6 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 		} else {
 			details += "\n(No open tabs)"
 		}
-	}
 
 		// // Get task-specific and background terminals.
 		// const busyTerminals = [
@@ -401,7 +400,6 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 			}
 		}
 
-	if (includeFileDetails) {
 		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()})\n`
 		details += "(Only folders are included. Files not shown automatically.)\n"
 		const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
@@ -547,36 +545,17 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 		codeIndexManager.isInitialized
 	}
 
-// 	const startNewTask = isCodebaseSearchAvailable ? `- The \`codebase_search\` tool is a powerful tool that can help you quickly find clues to start a task using semantic search at the beginning of the task. But its results can be inaccurate and incomplete, often missing a lot of relevant information. After an initial search, you should analyze the results, extract useful information, rewrite your query, and design a new, broader search.
-// - Because \`codebase_search\` can miss information, you should, at the appropriate time and based on the information you already have, deeply understand the known code and begin using \`Glob\`, \`Grep\`, \`list_code_definition_names\` or \`list_files\` for more precise and comprehensive searches. Use these tools to gain a more complete understanding of the code structure.
-// - Then, start widely using \`Glob\`, \`Grep\`, \`list_files\` and \`list_code_definition_names\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
-// - After this, you can use other tools like \`read_file\` to obtain the most complete and detailed contextual information.
-// `:
-// `- At the beginning of a task, you should widely use \`Glob\`, \`Grep\` to understand the directory structure, scope of functionality, or keywords involved in the project.
-// - You can use the \`read_file\` tool to read files you are interested in. Based on the information obtained from \`Glob\` and \`Grep\`, you can select and read only specific sections (a range of line numbers) to confirm if the file's content is relevant to the task.
-// - After finding relevant code clues, combine them with the information you already have to deeply understand the known code. Then, start using \`Glob\`, \`Grep\`, \`list_code_definition_names\` or \`list_files\` to conduct more accurate and comprehensive large-scale searches. Use these tools to gain a more complete understanding of the code structure.
-// - Following this, you can use \`read_file\` and other context-gathering tools to obtain the most complete and detailed information.
-// ` 
-
 	const UserSuggestions : Array<string> = []
 
 	switch (lastTool) {
 		case undefined:
-			// UserSuggestions.push("- When you first receive the task, You should to analyze the key points of the task and plan a general direction for solving the problem.")
-			// UserSuggestions.push("- Analyze the meaning of each key point in the task within the project.")
-			// UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
-			// UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
-			// UserSuggestions.push("- For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.")
-			// UserSuggestions.push(startNewTask)
 			break
 		case "execute_command":
 			break
 		case "read_file":
-			// UserSuggestions.push("- Attention! The number of lines you read in a file is limited, so never assume you've read the entire file and thus miss information. If necessary, you should use a search tool to locate the line number range of the content you need to find, and then read specific lines.")
-			// UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
-			// if (toolTimes > 3) {
-			// 	UserSuggestions.push("- You cannot understand the scope of the functionality simply by reading the files, as this is very inefficient. You should use search tools to extensively query the files involved in the functionality.")
-			// }
+			if (toolRepeat >= 3) {
+				UserSuggestions.push("- Use the available search tools to understand the codebase and the user's query. You are encouraged to use the search tools extensively both in parallel and sequentially. Using search tools to search for context is often more accurate than reading the files directly, resulting in a constructed context that aligns better with the logic contained in the code")
+			}
 			break
 		case "write_to_file":
 			break
@@ -589,9 +568,6 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 		case "glob":
 			break
 		case "grep":
-			// UserSuggestions.push("- Be thorough: Check multiple locations, consider different naming conventions, look for related files. ")
-			// UserSuggestions.push("- You can try selecting more patterns or keywords from tasks or known information to conduct a broader search.")
-			// UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
 			break
 		case "list_files":
 			break
@@ -606,28 +582,17 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 		case "ask_followup_question":
 			break
 		case "attempt_completion":
-			// UserSuggestions.push("- Use the `update_todo_list` tool to plan the task if required.")
-			// UserSuggestions.push(startNewTask)
 			break
 		case "switch_mode":
 			break
 		case "new_task":
-			UserSuggestions.push("- Review whether the subtasks you created return the results you expected. If the subtasks do not return the results you are satisfied with, you can restart the subtasks and describe the requirements more detailedly.")
 			break
 		case "fetch_instructions":
 			break
 		case "codebase_search":
-			// UserSuggestions.push("- If you discover key fields that involve critical logic, you should to use the search tool to search for their scope of influence.")
-			// if (toolTimes > 3) {
-			// 	UserSuggestions.push(startNewTask)
-			// }
 			break
-		case "update_todo_list": {
-			UserSuggestions.push("- IMPORTANT: Based on the current available information, re-analyze the user task in depth and plan the upcoming work. If necessary, create a new to-do list")
-			cline.toolSequence.push("review")
-			UserSuggestions.push("- IMPORTANT: Reflect on whether the phased tasks have been truly completed, consider whether it is comprehensive, and identify if there are omissions that need to be rolled back for further processing")
+		case "update_todo_list": 
 			break
-		}
 		case "web_search":
 			break
 		case "url_fetch":
@@ -637,9 +602,9 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 	}
 
 	if (cline.toolSequence.length > 4 && !cline.toolSequence.includes("review")) {
-		UserSuggestions.push("- IMPORTANT: Based on the current available information, re-analyze the user task in depth and plan the upcoming work. If necessary, create a new to-do list")
+		UserSuggestions.push("- REVIEW: Based on the current contextual information, conduct a thorough and comprehensive re-analysis of the user task to avoid omissions and errors.")
 		cline.toolSequence.push("review")
 	}
-
-	return UserSuggestions.join("\n") || undefined
+	return undefined
+	// return UserSuggestions.join("\n") || undefined
 }

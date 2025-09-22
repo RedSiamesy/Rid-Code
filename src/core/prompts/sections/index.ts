@@ -1,4 +1,5 @@
-export { getRulesSection, getPersonaSection } from "./rules"
+export { getRulesSection } from "./rules"
+export { getPersonaSection } from "./persona"
 export { getSystemInfoSection } from "./system-info"
 export { getObjectiveSection } from "./objective"
 export { addCustomInstructions, addLanguagePreferences } from "./custom-instructions"

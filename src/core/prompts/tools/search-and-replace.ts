@@ -4,6 +4,8 @@ export function getSearchAndReplaceDescription(args: ToolArgs): string {
 	return `## search_and_replace
 Description: Use this tool to find and replace specific text strings or patterns (using regex) within a file. It's suitable for targeted replacements across multiple locations within the file. Supports literal text and regex patterns, case sensitivity options, and optional line ranges. Shows a diff preview before applying changes.
 
+**IMPORTANT**: This is an editing tool, not a tool for obtaining context.
+
 Required Parameters:
 - path: The path of the file to modify (relative to the current workspace directory ${args.cwd.toPosix()})
 - search: The text or pattern to search for
@@ -43,7 +45,7 @@ export function getSearchAndReplaceOpenAIToolDefinition(args: ToolArgs): OpenAIT
 		type: "function",
 		function: {
 			name: "search_and_replace",
-			description: "Finds and replaces specific text strings or patterns (using regex) within a file. Supports literal text and regex patterns, case sensitivity options, and optional line ranges. Shows a diff preview before applying changes.",
+			description: "Finds and replaces specific text strings or patterns (using regex) within a file. Supports literal text and regex patterns, case sensitivity options, and optional line ranges. Shows a diff preview before applying changes. \n\n**IMPORTANT**: This is an editing tool, not a tool for obtaining context.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -70,12 +72,12 @@ export function getSearchAndReplaceOpenAIToolDefinition(args: ToolArgs): OpenAIT
 					use_regex: {
 						type: "string",
 						enum: ["true", "false"],
-						description: "Set to true to treat search as a regex pattern (default: false)"
+						description: "Set to true to treat search as a regex pattern (default: false). When use_regex is true, the search parameter is treated as a regular expression pattern."
 					},
 					ignore_case: {
 						type: "string",
 						enum: ["true", "false"],
-						description: "Set to true to ignore case when matching (default: false)"
+						description: "Set to true to ignore case when matching (default: false). When ignore_case is true, the search is case-insensitive regardless of regex mode."
 					}
 				},
 				required: ["path", "search", "replace"]

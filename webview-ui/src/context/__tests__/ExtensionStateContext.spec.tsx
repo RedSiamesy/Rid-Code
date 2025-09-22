@@ -237,6 +237,7 @@ describe("mergeExtensionState", () => {
 				imageGeneration: false,
 				runSlashCommand: false,
 				useToolCalling:false,
+				useNativePrompt: false,
 			} as Record<ExperimentId, boolean>,
 		}
 
@@ -259,6 +260,7 @@ describe("mergeExtensionState", () => {
 			imageGeneration: false,
 			runSlashCommand: false,
 			useToolCalling:false,
+			useNativePrompt: false,
 		})
 	})
 })

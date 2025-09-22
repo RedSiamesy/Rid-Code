@@ -8,6 +8,7 @@ export const EXPERIMENT_IDS = {
 	RUN_SLASH_COMMAND: "runSlashCommand",
 	ALLOWED_MULTI_CALL: "allowedMultiCall",
 	USE_TOOL_CALLING: "useToolCalling",
+	USE_NATIVE_PROMPT: "useNativePrompt",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -26,6 +27,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	RUN_SLASH_COMMAND: { enabled: false },
 	ALLOWED_MULTI_CALL: { enabled: false },
 	USE_TOOL_CALLING: { enabled: false },
+	USE_NATIVE_PROMPT: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

@@ -30,6 +30,7 @@ import {
 	addLanguagePreferences,
 	markdownFormattingSection,
 } from "./sections"
+import OpenAI from "openai"
 
 // Helper function to get prompt component, filtering out empty objects
 export function getPromptComponent(
@@ -84,60 +85,110 @@ async function generatePrompt(
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
 		shouldIncludeMcp
-			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation, mode)
+			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
 			: Promise.resolve(""),
 	])
 
 	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
 
-	// Extract allowedMultiCall from experiments
-	const allowedMultiCall = experiments?.allowedMultiCall ?? false
+	return `${roleDefinition}
 
-// 	const basePrompt = `${roleDefinition}
+${markdownFormattingSection()}
 
-// ${markdownFormattingSection()}
+${experiments?.useToolCalling ? "" : getSharedToolUseSection()}
 
-// ${true?"":getSharedToolUseSection(allowedMultiCall)}
+${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
+	mode,
+	cwd,
+	supportsComputerUse,
+	codeIndexManager,
+	effectiveDiffStrategy,
+	browserViewportSize,
+	shouldIncludeMcp ? mcpHub : undefined,
+	customModeConfigs,
+	experiments,
+	partialReadsEnabled,
+	settings,
+	enableMcpServerCreation,
+	modelId,
+)}
 
-// ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
-// 	mode,
-// 	cwd,
-// 	supportsComputerUse,
-// 	codeIndexManager,
-// 	effectiveDiffStrategy,
-// 	browserViewportSize,
-// 	shouldIncludeMcp ? mcpHub : undefined,
-// 	customModeConfigs,
-// 	experiments,
-// 	partialReadsEnabled,
-// 	settings,
-// 	enableMcpServerCreation,
-// 	modelId,
-// )}
+${getToolUseGuidelinesSection(codeIndexManager, experiments?.allowedMultiCall)}
 
-// ${true?"":getToolUseGuidelinesSection(codeIndexManager)}
+${mcpServersSection}
 
-// ${mcpServersSection}
+${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
 
-// ${true?"":getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
+${modesSection}
 
-// ${modesSection}
+${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager)}
 
-// ${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
+${getSystemInfoSection(cwd)}
 
-// ${getSystemInfoSection(cwd)}
+${getObjectiveSection(codeIndexManager, experiments)}
 
-// ${true?"":getObjectiveSection(codeIndexManager, experiments)}
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+	language: language ?? formatLanguage(vscode.env.language),
+	rooIgnoreInstructions,
+	settings,
+})}
 
-// ${true?"":await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-// 	language: language ?? formatLanguage(vscode.env.language),
-// 	rooIgnoreInstructions,
-// 	settings,
-// })}`
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
+`
+}
 
-	const basePrompt = `${roleDefinition}
 
-${getPersonaSection()}	
+
+async function generatePromptWithFileCustomSystemPrompt(
+	fileCustomSystemPrompt: string,
+	context: vscode.ExtensionContext,
+	cwd: string,
+	supportsComputerUse: boolean,
+	mode: Mode,
+	mcpHub?: McpHub,
+	diffStrategy?: DiffStrategy,
+	browserViewportSize?: string,
+	promptComponent?: PromptComponent,
+	customModeConfigs?: ModeConfig[],
+	globalCustomInstructions?: string,
+	diffEnabled?: boolean,
+	experiments?: Record<string, boolean>,
+	enableMcpServerCreation?: boolean,
+	language?: string,
+	rooIgnoreInstructions?: string,
+	partialReadsEnabled?: boolean,
+	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
+	modelId?: string,
+): Promise<string> {
+if (!context) {
+		throw new Error("Extension context is required for generating system prompt")
+	}
+
+	// If diff is disabled, don't pass the diffStrategy
+	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
+
+	// Get the full mode config to ensure we have the role definition (used for groups, etc.)
+	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
+	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
+
+	// Check if MCP functionality should be included
+	const hasMcpGroup = modeConfig.groups.some((groupEntry) => getGroupName(groupEntry) === "mcp")
+	const hasMcpServers = mcpHub && mcpHub.getServers().length > 0
+	const shouldIncludeMcp = hasMcpGroup && hasMcpServers
+
+	const [modesSection, mcpServersSection] = await Promise.all([
+		getModesSection(context),
+		shouldIncludeMcp
+			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
+			: Promise.resolve(""),
+	])
+
+	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
+
+	return `${roleDefinition}
+
+${fileCustomSystemPrompt}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	rooIgnoreInstructions,
@@ -145,8 +196,6 @@ ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", 
 })}
 
 ${markdownFormattingSection()}
-
-${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, codeIndexManager, allowedMultiCall)}
 
 ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
 	mode,
@@ -172,10 +221,110 @@ ${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
 
 ${getSystemInfoSection(cwd)}
 `
-
-
-	return basePrompt
 }
+
+
+
+async function generateCCPrompt(
+	context: vscode.ExtensionContext,
+	cwd: string,
+	supportsComputerUse: boolean,
+	mode: Mode,
+	mcpHub?: McpHub,
+	diffStrategy?: DiffStrategy,
+	browserViewportSize?: string,
+	promptComponent?: PromptComponent,
+	customModeConfigs?: ModeConfig[],
+	globalCustomInstructions?: string,
+	diffEnabled?: boolean,
+	experiments?: Record<string, boolean>,
+	enableMcpServerCreation?: boolean,
+	language?: string,
+	rooIgnoreInstructions?: string,
+	partialReadsEnabled?: boolean,
+	settings?: SystemPromptSettings,
+	todoList?: TodoItem[],
+	modelId?: string,
+): Promise<string> {
+	if (!context) {
+		throw new Error("Extension context is required for generating system prompt")
+	}
+
+	// If diff is disabled, don't pass the diffStrategy
+	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
+
+	// Get the full mode config to ensure we have the role definition (used for groups, etc.)
+	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
+	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
+
+	// Check if MCP functionality should be included
+	const hasMcpGroup = modeConfig.groups.some((groupEntry) => getGroupName(groupEntry) === "mcp")
+	const hasMcpServers = mcpHub && mcpHub.getServers().length > 0
+	const shouldIncludeMcp = hasMcpGroup && hasMcpServers
+
+	const [modesSection, mcpServersSection] = await Promise.all([
+		getModesSection(context),
+		shouldIncludeMcp
+			? getMcpServersSection(mcpHub, effectiveDiffStrategy, enableMcpServerCreation, mode)
+			: Promise.resolve(""),
+	])
+
+	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
+
+	return `${roleDefinition}
+
+${getPersonaSection()}	
+
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+	rooIgnoreInstructions,
+	settings,
+})}
+
+${markdownFormattingSection()}
+
+${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
+	mode,
+	cwd,
+	supportsComputerUse,
+	codeIndexManager,
+	effectiveDiffStrategy,
+	browserViewportSize,
+	shouldIncludeMcp ? mcpHub : undefined,
+	customModeConfigs,
+	experiments,
+	partialReadsEnabled,
+	settings,
+	enableMcpServerCreation,
+	modelId,
+)}
+
+${mcpServersSection}
+
+${modesSection}
+
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
+
+${getSystemInfoSection(cwd)}
+`
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export const SYSTEM_PROMPT = async (
 	context: vscode.ExtensionContext,
@@ -218,71 +367,81 @@ export const SYSTEM_PROMPT = async (
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
 
-	if (mode === "native") {
-		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
-			mode,
-			promptComponent,
-			customModes,
-		)
-
-		return `${roleDefinition}
-
-${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}`
-	}
-
-	// If a file-based custom system prompt exists, use it
-	if (fileCustomSystemPrompt) {
-		const { roleDefinition, baseInstructions: baseInstructionsForFile } = getModeSelection(
-			mode,
-			promptComponent,
-			customModes,
-		)
-
-		const customInstructions = await addCustomInstructions(
-			baseInstructionsForFile,
-			globalCustomInstructions || "",
-			cwd,
-			mode,
-			{
-				rooIgnoreInstructions,
-				settings,
-			},
-		)
-
-		// For file-based prompts, don't include the tool sections
-		return `${roleDefinition}
-
-${fileCustomSystemPrompt}
-
-${customInstructions}
-
-${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}`
-	}
-
 	// If diff is disabled, don't pass the diffStrategy
 	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
 
-	return generatePrompt(
-		context,
-		cwd,
-		supportsComputerUse,
-		currentMode.slug,
-		mcpHub,
-		effectiveDiffStrategy,
-		browserViewportSize,
-		promptComponent,
-		customModes,
-		globalCustomInstructions,
-		diffEnabled,
-		experiments,
-		enableMcpServerCreation,
-		language,
-		rooIgnoreInstructions,
-		partialReadsEnabled,
-		settings,
-		todoList,
-		modelId,
-	)
+	// 根据实验性选项选择使用哪个提示生成函数
+	const useNativePrompt = experiments?.useNativePrompt ?? false
+	
+	// If a file-based custom system prompt exists, use it
+	if (fileCustomSystemPrompt) {
+		return generatePromptWithFileCustomSystemPrompt(
+			fileCustomSystemPrompt,
+			context,
+			cwd,
+			supportsComputerUse,
+			currentMode.slug,
+			mcpHub,
+			effectiveDiffStrategy,
+			browserViewportSize,
+			promptComponent,
+			customModes,
+			globalCustomInstructions,
+			diffEnabled,
+			experiments,
+			enableMcpServerCreation,
+			language,
+			rooIgnoreInstructions,
+			partialReadsEnabled,
+			settings,
+			todoList,
+			modelId,
+		)
+	} else if (useNativePrompt) {
+		return generatePrompt(
+			context,
+			cwd,
+			supportsComputerUse,
+			currentMode.slug,
+			mcpHub,
+			effectiveDiffStrategy,
+			browserViewportSize,
+			promptComponent,
+			customModes,
+			globalCustomInstructions,
+			diffEnabled,
+			experiments,
+			enableMcpServerCreation,
+			language,
+			rooIgnoreInstructions,
+			partialReadsEnabled,
+			settings,
+			todoList,
+			modelId,
+		)
+	} else {
+		return generateCCPrompt(
+			context,
+			cwd,
+			supportsComputerUse,
+			currentMode.slug,
+			mcpHub,
+			effectiveDiffStrategy,
+			browserViewportSize,
+			promptComponent,
+			customModes,
+			globalCustomInstructions,
+			diffEnabled,
+			experiments,
+			enableMcpServerCreation,
+			language,
+			rooIgnoreInstructions,
+			partialReadsEnabled,
+			settings,
+			todoList,
+			modelId,
+		)
+	}
 }
 
 
@@ -296,9 +455,6 @@ ${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}`
 
 
 
-
-
-import OpenAI from "openai"
 /**
  * Get OpenAI tool definitions for a given mode (similar to SYSTEM_PROMPT but for tools)
  */

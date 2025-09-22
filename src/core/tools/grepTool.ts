@@ -19,6 +19,9 @@ export async function grepTool(
 	const regex: string | undefined = block.params.regex
 	const filePattern: string | undefined = block.params.file_pattern
 	const outputMode: string | undefined = block.params.output_mode
+	const afterContext: string | undefined = block.params.after_context
+	const beforeContext: string | undefined = block.params.before_context
+	const context: string | undefined = block.params.context
 
 	const absolutePath = relDirPath ? path.resolve(cline.cwd, relDirPath) : cline.cwd
 	const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
@@ -26,7 +29,7 @@ export async function grepTool(
 	const sharedMessageProps: ClineSayTool = {
 		tool: "searchFiles",
 		path: getReadablePath(cline.cwd, removeClosingTag("path", relDirPath)),
-		regex: removeClosingTag("regex", regex),
+		regex: removeClosingTag("regex", regex) + (afterContext || beforeContext || context ? `    (${afterContext ? "-A " + afterContext + " " : ""}${beforeContext ? "-B " + beforeContext + " " : ""}${context ? "-C " + context + " " : ""})` : ""),
 		filePattern: removeClosingTag("file_pattern", filePattern),
 		isOutsideWorkspace,
 	}
@@ -37,6 +40,14 @@ export async function grepTool(
 			await cline.ask("tool", partialMessage, block.partial).catch(() => {})
 			return
 		} else {
+			if (!cline.clineMessages || cline.clineMessages.length === 0 
+				|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
+				|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "tool"
+			){
+				const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+				await cline.ask("tool", partialMessage, true).catch(() => {})
+			}
+
 			if (!relDirPath) {
 				cline.consecutiveMistakeCount++
 				cline.recordToolError("grep")
@@ -62,6 +73,35 @@ export async function grepTool(
 				}
 			}
 
+			// Validate and set context parameters
+			let validatedAfterContext: number | undefined
+			let validatedBeforeContext: number | undefined
+			let validatedContext: number | undefined
+
+			if (context) {
+				const cleanedContext = removeClosingTag("context", context)
+				const contextNum = parseInt(cleanedContext, 10)
+				if (!isNaN(contextNum) && contextNum >= 0) {
+					validatedContext = contextNum
+				}
+			} else {
+				if (afterContext) {
+					const cleanedAfterContext = removeClosingTag("after_context", afterContext)
+					const afterContextNum = parseInt(cleanedAfterContext, 10)
+					if (!isNaN(afterContextNum) && afterContextNum >= 0) {
+						validatedAfterContext = afterContextNum
+					}
+				}
+
+				if (beforeContext) {
+					const cleanedBeforeContext = removeClosingTag("before_context", beforeContext)
+					const beforeContextNum = parseInt(cleanedBeforeContext, 10)
+					if (!isNaN(beforeContextNum) && beforeContextNum >= 0) {
+						validatedBeforeContext = beforeContextNum
+					}
+				}
+			}
+
 			const results = await regexSearchFiles(
 				cline.cwd,
 				absolutePath,
@@ -69,6 +109,9 @@ export async function grepTool(
 				filePattern,
 				cline.rooIgnoreController,
 				validatedOutputMode,
+				validatedAfterContext,
+				validatedBeforeContext,
+				validatedContext,
 			)
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ClineSayTool)

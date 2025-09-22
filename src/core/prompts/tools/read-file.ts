@@ -84,7 +84,12 @@ import { ToolArgs, OpenAIToolDefinition } from "./types"
 // ${isMultipleReadsEnabled ? `- When you need to read more than ${maxConcurrentReads} files, prioritize the most critical files first, then use subsequent read_file requests for additional files` : ""}`
 // }
 
-
+const partialReadsGuide = `- You MUST use line ranges to read specific portions of large files, rather than reading entire files when not needed
+- You MUST combine adjacent line ranges (<10 lines apart)
+- You MUST use multiple ranges for content separated by >10 lines
+- You MUST include sufficient line context for planned modifications while keeping ranges minimal
+- Can ONLY Read Files, NOT Directories.
+`
 
 export function getReadFileDescription(args: ToolArgs): string {
 	const maxConcurrentReads = args.settings?.maxConcurrentFileReads ?? 5
@@ -151,12 +156,7 @@ ${isMultipleReadsEnabled ? `2. Reading multiple files (within the ${maxConcurren
 - You MUST obtain all necessary context before proceeding with changes
 ${
 	args.partialReadsEnabled
-		? `- You MUST use line ranges to read specific portions of large files, rather than reading entire files when not needed
-- You MUST combine adjacent line ranges (<10 lines apart)
-- You MUST use multiple ranges for content separated by >10 lines
-- You MUST include sufficient line context for planned modifications while keeping ranges minimal
-- Can only read files, not directories.
-`
+		? partialReadsGuide
 		: ""
 }
 ${isMultipleReadsEnabled ? `- When you need to read more than ${maxConcurrentReads} files, prioritize the most critical files first, then use subsequent read_file requests for additional files` : ""}`
@@ -173,7 +173,7 @@ export function getReadFileOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefin
 	const properties: Record<string, any> = {
 		path: {
 			type: "string",
-			description: `File path (relative to workspace directory ${args.cwd})(Can only read files, not directories.)`
+			description: `File path (relative to workspace directory ${args.cwd})(Can ONLY Read Files, NOT Directories.)`
 		}
 	}
 
@@ -203,7 +203,7 @@ export function getReadFileOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefin
 			type: "function",
 			function: {
 				name: "read_file",
-				description: `Reads one or more files from the local filesystem. Outputs line-numbered content for easy reference. Supports text extraction from PDF and DOCX files. You can read a maximum of ${maxConcurrentReads} files in a single request. By default, reads up to ${maxLinesCount} lines.${args.partialReadsEnabled ? " Use line ranges to efficiently read specific portions of large files." : ""}`,
+				description: `Reads one or more files from the local filesystem. Outputs line-numbered content for easy reference. Supports text extraction from PDF and DOCX files. You can read a maximum of ${maxConcurrentReads} files in a single request. By default, reads up to ${maxLinesCount} lines.${args.partialReadsEnabled ? partialReadsGuide : ""}`,
 				parameters: {
 					type: "object",
 					properties: {

@@ -148,6 +148,9 @@ export async function regexSearchFiles(
 	filePattern?: string,
 	rooIgnoreController?: RooIgnoreController,
 	outputMode: OutputMode = "content",
+	afterContext?: number,
+	beforeContext?: number,
+	context?: number,
 ): Promise<string> {
 	const vscodeAppRoot = vscode.env.appRoot
 	const rgPath = await getBinPath(vscodeAppRoot)
@@ -157,9 +160,35 @@ export async function regexSearchFiles(
 	}
 
 	// Adjust args based on output mode
-	const args = outputMode === "files_with_matches"
-		? ["-l", "-e", regex, "--glob", filePattern || "*", directoryPath]
-		: ["--json", "-e", regex, "--glob", filePattern || "*", "--context", "1", directoryPath]
+	let args: string[]
+	if (outputMode === "files_with_matches") {
+		args = ["-l", "-e", regex, "--glob", filePattern || "*", directoryPath]
+	} else {
+		// Build args for content mode with context control
+		args = ["--json", "-e", regex, "--glob", filePattern || "*"]
+		
+		// Add context parameters
+		if (context !== undefined) {
+			// If context is provided, it overrides afterContext and beforeContext
+			args.push("--context", context.toString())
+		} else {
+			// Add after context if provided (default to 1 if neither context nor afterContext is provided)
+			if (afterContext !== undefined) {
+				args.push("--after-context", afterContext.toString())
+			} else {
+				args.push("--after-context", "1")
+			}
+			
+			// Add before context if provided (default to 1 if neither context nor beforeContext is provided)
+			if (beforeContext !== undefined) {
+				args.push("--before-context", beforeContext.toString())
+			} else {
+				args.push("--before-context", "1")
+			}
+		}
+		
+		args.push(directoryPath)
+	}
 
 	let output: string
 	try {
