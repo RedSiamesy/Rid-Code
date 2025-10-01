@@ -218,9 +218,9 @@ ${experiments?.useToolCalling ? "" : mcpServersSection}
 
 ${modesSection}
 
-${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
-
 ${getSystemInfoSection(cwd)}
+
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
 `
 }
 
@@ -303,9 +303,9 @@ ${experiments?.useToolCalling ? "" : mcpServersSection}
 
 ${modesSection}
 
-${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
-
 ${getSystemInfoSection(cwd)}
+
+${addLanguagePreferences(language ?? formatLanguage(vscode.env.language),)}
 `
 }
 
