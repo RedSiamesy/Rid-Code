@@ -54,6 +54,20 @@ export async function applyDiffToolLegacy(
 
 			return
 		} else {
+			if (!cline.clineMessages || cline.clineMessages.length === 0 
+				|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
+				|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "tool"
+			){
+
+				const icon = "diff-multiple"
+				const searchBlockCount = ((diffContent || "").match(/SEARCH/g) || []).length
+				if (searchBlockCount) {
+					await cline
+						.ask("tool", JSON.stringify(sharedMessageProps), true, { icon, text: `0/${searchBlockCount}` })
+						.catch(() => {})
+				}
+			}
+
 			if (!relPath) {
 				cline.consecutiveMistakeCount++
 				cline.recordToolError("apply_diff")
@@ -220,7 +234,7 @@ export async function applyDiffToolLegacy(
 				const say: ClineSayTool = {
 					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
 					path: getReadablePath(cline.cwd, relPath),
-					diff: `# agentEdits\n${agentEdits}\n`,
+					diff: `# agentEdits ${relPath}\n${agentEdits}\n`,
 				}
 	
 				// Send the user feedback

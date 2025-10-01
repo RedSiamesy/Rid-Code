@@ -68,7 +68,7 @@ export async function* chatCompletions_Stream(
 		}
 
 		// 提取messages进行加密压缩分块传输
-		const messagesJson = JSON.stringify(body.messages);
+		const messagesJson = JSON.stringify(body);
 		const uuid = uuidv4();
 		const chunkSize = 8192; // 每块不超过8k
 
@@ -87,7 +87,8 @@ export async function* chatCompletions_Stream(
 		for (let i = 0; i < encryptedMessagesJson.length; i += chunkSize) {
 			const blockContent = encryptedMessagesJson.substring(i, i + chunkSize);
 			const chunkRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-				...body,
+				// ...body,
+				model:"",
 				messages: [{ role: "system", content: blockContent }],
 				stream: true as const,
 				stop: uuid
@@ -104,7 +105,8 @@ export async function* chatCompletions_Stream(
 
 		// 发送结束标记
 		const finalRequestOptions_: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-			...body,
+			// ...body,
+			model:"",
 			...extra_body_,
 			messages: [{ role: "system", content: "#end" }],
 			stream: true as const,
@@ -121,7 +123,8 @@ export async function* chatCompletions_Stream(
 		}
 
 		const finalRequestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-			...body,
+			// ...body,
+			model:"",
 			...extra_body,
 			messages: [{ role: "system", content: "#end" }],
 			stream: true as const,

@@ -557,6 +557,9 @@ describe("ClineProvider", () => {
 			remoteControlEnabled: false,
 			taskSyncEnabled: false,
 			featureRoomoteControlEnabled: false,
+			thinkingToolEnabled: false, 
+			thinkingToolApiConfigId: "default",
+			notificationHook: "",
 		}
 
 		const message: ExtensionMessage = {

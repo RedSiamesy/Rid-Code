@@ -190,6 +190,18 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 			let firstTokenTime: number | null = null
 			let hasFirstToken = false
 
+			let lastToolCache: ApiStreamToolChunk = {
+				type: "tool",
+				index: undefined,
+				tool_call_id: "",
+				name: "",
+				params: ""
+			}
+
+			yield {
+				type: "text",
+				text: " \n\n",
+			}
 			for await (const chunk of stream) {
 				const delta = chunk.choices[0]?.delta ?? {}
 
@@ -220,18 +232,61 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 
 				// Handle tool calls
 				if (delta.tool_calls && delta.tool_calls.length > 0) {
+					if (!hasFirstToken) {
+						firstTokenTime = Date.now()
+						hasFirstToken = true
+					}
 					for (const toolCall of delta.tool_calls) {
-						if ('function' in toolCall && toolCall.function && toolCall.function.name && toolCall.function.arguments) {
+						// && toolCall.function.name && toolCall.function.arguments
+						if ('function' in toolCall && toolCall.function ) {
 							try {
-								const tool: ApiStreamToolChunk = {
-									type: "tool",
-									tool_call_id: toolCall.id,
-									name: toolCall.function.name,
-									params: JSON.parse(toolCall.function.arguments)
+								// const tool: ApiStreamToolChunk = {
+								// 	type: "tool",
+								// 	tool_call_id: toolCall.id,
+								// 	name: toolCall.function.name,
+								// 	params: JSON.parse(toolCall.function.arguments)
+								// }
+								if (lastToolCache.index !== undefined && toolCall.index !== lastToolCache.index) {
+									lastToolCache.params = JSON.parse(lastToolCache.params)
+									yield lastToolCache
+									lastToolCache = {
+										type: "tool",
+										index: undefined,
+										tool_call_id: "",
+										name: "",
+										params: ""
+									}
+								} 
+								if (lastToolCache.index === undefined) {
+									lastToolCache = {
+										type: "tool",
+										index: toolCall.index,
+										tool_call_id: toolCall.id,
+										name: toolCall.function.name || "",
+										params: toolCall.function.arguments || ""
+									}
+									if (chunk.choices[0]?.finish_reason === "tool_calls") {
+										lastToolCache.params = JSON.parse(lastToolCache.params)
+										yield lastToolCache
+										lastToolCache = {
+											type: "tool",
+											index: undefined,
+											tool_call_id: "",
+											name: "",
+											params: ""
+										}
+									}
+								} else {
+									lastToolCache = {
+										type: "tool",
+										index: lastToolCache.index,
+										tool_call_id: lastToolCache.tool_call_id,
+										name: lastToolCache.name + (toolCall.function.name || ""),
+										params: lastToolCache.params + (toolCall.function.arguments || "")
+									}
 								}
-								yield tool
 							} catch (error) {
-								throw new Error(`Tool call JSON parsing failed: ${error}`)
+								throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
 							}
 						}
 					}
@@ -239,6 +294,14 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
 
 				if (chunk.usage) {
 					lastUsage = chunk.usage
+				}
+			}
+			if (lastToolCache.index !== undefined) {
+				try {
+					lastToolCache.params = JSON.parse(lastToolCache.params)
+					yield lastToolCache
+				} catch (error) {
+					throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
 				}
 			}
 

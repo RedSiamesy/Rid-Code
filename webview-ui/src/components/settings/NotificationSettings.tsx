@@ -13,7 +13,8 @@ type NotificationSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	ttsSpeed?: number
 	soundEnabled?: boolean
 	soundVolume?: number
-	setCachedStateField: SetCachedStateField<"ttsEnabled" | "ttsSpeed" | "soundEnabled" | "soundVolume">
+	notificationHook?: string
+	setCachedStateField: SetCachedStateField<"ttsEnabled" | "ttsSpeed" | "soundEnabled" | "soundVolume" | "notificationHook">
 }
 
 export const NotificationSettings = ({
@@ -21,6 +22,7 @@ export const NotificationSettings = ({
 	ttsSpeed,
 	soundEnabled,
 	soundVolume,
+	notificationHook,
 	setCachedStateField,
 	...props
 }: NotificationSettingsProps) => {
@@ -100,6 +102,25 @@ export const NotificationSettings = ({
 						</div>
 					</div>
 				)}
+				
+			<div className="mt-4">
+				<label className="block font-medium mb-2">
+					{t("settings:notifications.notificationHook.label", { defaultValue: "Notification Hook" })}
+				</label>
+				<div className="flex items-center gap-2">
+					<input
+						type="text"
+						className="w-full p-2 border border-vscode-dropdown-border bg-vscode-input-background rounded focus:outline-0 focus-visible:outline-none focus-visible:border-vscode-focusBorder"
+						value={notificationHook || ""}
+						onChange={(e) => setCachedStateField("notificationHook", e.target.value)}
+						placeholder={t("settings:notifications.notificationHook.placeholder", { defaultValue: "Terminal command to run on notification" })}
+						data-testid="notification-hook-input"
+					/>
+				</div>
+				<div className="text-vscode-descriptionForeground text-sm mt-1">
+					{t("settings:notifications.notificationHook.description", { defaultValue: "A terminal command that will be executed when a notification is triggered." })}
+				</div>
+			</div>
 			</Section>
 		</div>
 	)

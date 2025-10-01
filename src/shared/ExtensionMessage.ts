@@ -246,6 +246,7 @@ export type ExtensionState = Pick<
 	| "ttsSpeed"
 	| "soundEnabled"
 	| "soundVolume"
+	// | "notificationHook"
 	// | "maxOpenTabsContext" // Optional in GlobalSettings, required here.
 	// | "maxWorkspaceFiles" // Optional in GlobalSettings, required here.
 	// | "showRooIgnoredFiles" // Optional in GlobalSettings, required here.
@@ -334,6 +335,9 @@ export type ExtensionState = Pick<
 
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
+	notificationHook: string
+	thinkingToolEnabled: boolean
+	thinkingToolApiConfigId: string
 	marketplaceItems?: MarketplaceItem[]
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 	profileThresholds: Record<string, number>

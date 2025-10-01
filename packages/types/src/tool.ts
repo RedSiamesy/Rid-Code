@@ -38,7 +38,8 @@ export const toolNames = [
 	"web_search",
 	"url_fetch",
 	"run_slash_command",
-	"generate_image"
+	"generate_image",
+	"thinking_tool"
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

@@ -23,6 +23,7 @@ import {
 	getObjectiveSection,
 	getSharedToolUseSection,
 	getMcpServersSection,
+	getMcpServersAsTool,
 	getToolUseGuidelinesSection,
 	getCapabilitiesSection,
 	getModesSection,
@@ -115,7 +116,7 @@ ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
 
 ${getToolUseGuidelinesSection(codeIndexManager, experiments?.allowedMultiCall)}
 
-${mcpServersSection}
+${experiments?.useToolCalling ? "" : mcpServersSection}
 
 ${getCapabilitiesSection(cwd, supportsComputerUse, shouldIncludeMcp ? mcpHub : undefined, effectiveDiffStrategy, codeIndexManager)}
 
@@ -213,7 +214,7 @@ ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
 	modelId,
 )}
 
-${mcpServersSection}
+${experiments?.useToolCalling ? "" : mcpServersSection}
 
 ${modesSection}
 
@@ -298,7 +299,7 @@ ${experiments?.useToolCalling ? "" : getToolDescriptionsForMode(
 	modelId,
 )}
 
-${mcpServersSection}
+${experiments?.useToolCalling ? "" : mcpServersSection}
 
 ${modesSection}
 
@@ -479,7 +480,9 @@ export const OPENAI_TOOLS_LIST = async (
 	// If diff is disabled, don't pass the diffStrategy (same logic as SYSTEM_PROMPT)
 	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
 
-	return getOpenAIToolDefinitionsForMode(
+	const mcpTools = await getMcpServersAsTool(mcpHub, effectiveDiffStrategy, enableMcpServerCreation)
+
+	const systemTools = getOpenAIToolDefinitionsForMode(
 		mode,
 		cwd,
 		supportsComputerUse,
@@ -494,4 +497,6 @@ export const OPENAI_TOOLS_LIST = async (
 		enableMcpServerCreation,
 		modelId,
 	)
+
+	return [...systemTools, ...mcpTools]
 }

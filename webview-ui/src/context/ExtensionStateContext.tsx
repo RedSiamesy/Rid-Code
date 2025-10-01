@@ -76,6 +76,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAllowedMaxCost: (value: number | undefined) => void
 	setSoundEnabled: (value: boolean) => void
 	setSoundVolume: (value: number) => void
+	notificationHook: string
+	setNotificationHook: (value: string) => void
 	terminalShellIntegrationTimeout?: number
 	setTerminalShellIntegrationTimeout: (value: number) => void
 	terminalShellIntegrationDisabled?: boolean
@@ -146,6 +148,10 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAutoCondenseContext: (value: boolean) => void
 	autoCondenseContextPercent: number
 	setAutoCondenseContextPercent: (value: number) => void
+	thinkingToolEnabled: boolean
+	setThinkingToolEnabled: (value: boolean) => void
+	thinkingToolApiConfigId: string
+	setThinkingToolApiConfigId: (value: string) => void
 	routerModels?: RouterModels
 	alwaysAllowUpdateTodoList?: boolean
 	setAlwaysAllowUpdateTodoList: (value: boolean) => void
@@ -190,6 +196,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		deniedCommands: [],
 		soundEnabled: false,
 		soundVolume: 0.5,
+		notificationHook: "",
 		ttsEnabled: false,
 		ttsSpeed: 1.0,
 		diffEnabled: false,
@@ -245,6 +252,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		organizationSettingsVersion: -1,
 		autoCondenseContext: true,
 		autoCondenseContextPercent: 100,
+		thinkingToolEnabled: false,
+		thinkingToolApiConfigId: "",
 		profileThresholds: {},
 		codebaseIndexConfig: {
 			codebaseIndexEnabled: true,
@@ -410,6 +419,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		openedTabs,
 		commands,
 		soundVolume: state.soundVolume,
+		notificationHook: state.notificationHook,
 		ttsSpeed: state.ttsSpeed,
 		fuzzyMatchThreshold: state.fuzzyMatchThreshold,
 		writeDelayMs: state.writeDelayMs,
@@ -450,6 +460,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setAllowedMaxCost: (value) => setState((prevState) => ({ ...prevState, allowedMaxCost: value })),
 		setSoundEnabled: (value) => setState((prevState) => ({ ...prevState, soundEnabled: value })),
 		setSoundVolume: (value) => setState((prevState) => ({ ...prevState, soundVolume: value })),
+		setNotificationHook: (value) => setState((prevState) => ({ ...prevState, notificationHook: value })),
 		setTtsEnabled: (value) => setState((prevState) => ({ ...prevState, ttsEnabled: value })),
 		setTtsSpeed: (value) => setState((prevState) => ({ ...prevState, ttsSpeed: value })),
 		setDiffEnabled: (value) => setState((prevState) => ({ ...prevState, diffEnabled: value })),
@@ -520,6 +531,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setAutoCondenseContext: (value) => setState((prevState) => ({ ...prevState, autoCondenseContext: value })),
 		setAutoCondenseContextPercent: (value) =>
 			setState((prevState) => ({ ...prevState, autoCondenseContextPercent: value })),
+		setThinkingToolEnabled: (value) => setState((prevState) => ({ ...prevState, thinkingToolEnabled: value })),
+		setThinkingToolApiConfigId: (value) => setState((prevState) => ({ ...prevState, thinkingToolApiConfigId: value })),
 		setCondensingApiConfigId: (value) => setState((prevState) => ({ ...prevState, condensingApiConfigId: value })),
 		setCustomCondensingPrompt: (value) =>
 			setState((prevState) => ({ ...prevState, customCondensingPrompt: value })),

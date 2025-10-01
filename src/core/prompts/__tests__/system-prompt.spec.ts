@@ -581,6 +581,7 @@ describe("SYSTEM_PROMPT", () => {
 			todoListEnabled: false,
 			useAgentRules: true,
 			newTaskRequireTodos: false,
+			thinkingToolEnabled: false
 		}
 
 		const prompt = await SYSTEM_PROMPT(
@@ -614,6 +615,7 @@ describe("SYSTEM_PROMPT", () => {
 			todoListEnabled: true,
 			useAgentRules: true,
 			newTaskRequireTodos: false,
+			thinkingToolEnabled: false
 		}
 
 		const prompt = await SYSTEM_PROMPT(
@@ -646,6 +648,7 @@ describe("SYSTEM_PROMPT", () => {
 			todoListEnabled: true,
 			useAgentRules: true,
 			newTaskRequireTodos: false,
+			thinkingToolEnabled: false
 		}
 
 		const prompt = await SYSTEM_PROMPT(

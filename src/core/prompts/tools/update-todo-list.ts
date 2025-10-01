@@ -1,34 +1,7 @@
 import { ToolArgs, OpenAIToolDefinition } from "./types"
 
 
-const description = `
-Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
-It also helps the user understand the progress of the task and overall progress of their requests.
-
-Create a TODO list or replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; if the task list is already included, the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
-
-## Checklist Format: 
-- Use a single-level markdown checklist (no nesting or subtasks).
-- List todos in the intended execution order.
-- Status options: '[ ]' for 'pending', '[x]' for 'completed', '[-]' for 'in progress'
-
-## Status Rules: 
-[ ] = pending (not started)
-[x] = completed (fully finished, no unresolved issues)
-[-] = in progress (currently being worked on)
-
-## Core Principles:
-- Before updating, always confirm which todos have been completed since the last update.
-- You may update multiple statuses in a single update (e.g., mark the previous as completed and the next as in progress).
-- When a new actionable item is discovered during a long or complex task, add it to the todo list immediately.
-- Do not remove any unfinished todos unless explicitly instructed.
-- Always retain all unfinished tasks, updating their status as needed.
-- Only mark a task as completed when it is fully accomplished (no partials, no unresolved dependencies).
-- If a task is blocked, keep it as in progress and add a new todo describing what needs to be resolved.
-- Remove tasks only if they are no longer relevant or if the user requests deletion.
-
-## Usage Example:
-<update_todo_list>
+const prompt_example = `<update_todo_list>
 <todos>
 [x] Analyze requirements
 [x] Design architecture
@@ -60,6 +33,74 @@ Create a TODO list or replace the entire TODO list with an updated checklist ref
 [ ] Add performance benchmarks
 </todos>
 </update_todo_list>
+`
+
+const tooluse_example = `{
+    "todos": [
+        "[x] Analyze requirements",
+        "[x] Design architecture",
+        "[-] Implement core logic",
+        "[ ] Write tests",
+        "[ ] Update documentation"
+    ]
+}
+
+*After completing "Implement core logic" and starting "Write tests":*
+{
+    "todos": [
+        "[x] Analyze requirements",
+        "[x] Design architecture",
+        "[x] Implement core logic",
+        "[-] Write tests",
+        "[ ] Update documentation"
+    ]
+}
+
+*Add a todo "Add performance benchmarks":*
+{
+    "todos": [
+        "[x] Analyze requirements",
+        "[x] Design architecture",
+        "[x] Implement core logic",
+        "[-] Write tests",
+        "[ ] Update documentation",
+        "[ ] Add performance benchmarks"
+    ]
+}
+`
+
+function get_description(args?: ToolArgs) {
+   return `
+Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
+It also helps the user understand the progress of the task and overall progress of their requests.
+
+Create a TODO list or replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; if the task list is already included, the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
+
+## Checklist Format: 
+- Use a single-level markdown checklist (no nesting or subtasks).
+- List todos in the intended execution order.
+- Status options:
+    - [ ] Task description (pending)
+    - [x] Task description (completed)
+    - [-] Task description (in progress)
+
+## Status Rules: 
+[ ] = pending (not started)
+[x] = completed (fully finished, no unresolved issues)
+[-] = in progress (currently being worked on)
+
+## Core Principles:
+- Before updating, always confirm which todos have been completed since the last update.
+- You may update multiple statuses in a single update (e.g., mark the previous as completed and the next as in progress).
+- When a new actionable item is discovered during a long or complex task, add it to the todo list immediately.
+- Do not remove any unfinished todos unless explicitly instructed.
+- Always retain all unfinished tasks, updating their status as needed.
+- Only mark a task as completed when it is fully accomplished (no partials, no unresolved dependencies).
+- If a task is blocked, keep it as in progress and add a new todo describing what needs to be resolved.
+- Remove tasks only if they are no longer relevant or if the user requests deletion.
+
+## Usage Example:
+${args?.experiments?.useToolCalling? prompt_example : tooluse_example}
 
 
 ## When to Use This Tool
@@ -207,9 +248,9 @@ The assistant did not use the todo list because this is a single command executi
 ## Task States and Management
 
 1. **Task States**: Use these states to track progress:
-   - pending: Task not yet started
-   - in_progress: Currently working on (limit to ONE task at a time)
-   - completed: Task finished successfully
+   - [ ] (pending): Task not yet started
+   - [-] (in_progress): Currently working on (limit to ONE task at a time)
+   - [x] (completed): Task finished successfully
 
    **IMPORTANT**: Task descriptions must have two forms:
    - content: The imperative form describing what needs to be done (e.g., \"Run tests\", \"Build the project\")
@@ -242,7 +283,7 @@ The assistant did not use the todo list because this is a single command executi
 
 When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
 `
-
+}
 
 /**
  * Get the description for the update_todo_list tool.
@@ -251,7 +292,7 @@ export function getUpdateTodoListDescription(args?: ToolArgs): string {
 	return `## update_todo_list
 
 Description:
-${description}
+${get_description(args)}
 `
 }
 
@@ -262,7 +303,7 @@ export function getUpdateTodoListOpenAIToolDefinition(args?: ToolArgs): OpenAITo
 		type: "function",
 		function: {
 			name: "update_todo_list",
-			description,
+			description:get_description(args),
 			parameters: {
 				type: "object",
 				properties: {

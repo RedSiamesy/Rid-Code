@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.28.301",
+	"version": "3.28.304",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -169,6 +169,11 @@
 				"command": "roo-cline.acceptInput",
 				"title": "%command.acceptInput.title%",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "roo-cline.addFilePathToContext",
+				"title": "%command.addFilePathToContext.title%",
+				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -285,15 +290,21 @@
 					"group": "overflow@4",
 					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
 				}
+			],
+			"explorer/context": [
+				{
+					"command": "roo-cline.addFilePathToContext",
+					"group": "1_actions@1"
+				}
 			]
 		},
 		"keybindings": [
 			{
 				"command": "roo-cline.addToContext",
-				"key": "cmd+y",
-				"mac": "cmd+y",
-				"win": "ctrl+y",
-				"linux": "ctrl+y",
+				"key": "cmd+i",
+				"mac": "cmd+i",
+				"win": "ctrl+i",
+				"linux": "ctrl+i",
 				"when": "editorTextFocus && editorHasSelection"
 			}
 		],

@@ -2,7 +2,7 @@ import { HTMLAttributes } from "react"
 import React from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
-import { Database, FoldVertical } from "lucide-react"
+import { Database, FoldVertical, Brain } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Button } from "@/components/ui"
@@ -27,6 +27,8 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	includeDiagnosticMessages?: boolean
 	maxDiagnosticMessages?: number
 	writeDelayMs: number
+	thinkingToolEnabled?: boolean
+	thinkingToolApiConfigId?: string
 	setCachedStateField: SetCachedStateField<
 		| "autoCondenseContext"
 		| "autoCondenseContextPercent"
@@ -41,6 +43,8 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "includeDiagnosticMessages"
 		| "maxDiagnosticMessages"
 		| "writeDelayMs"
+		| "thinkingToolEnabled"
+		| "thinkingToolApiConfigId"
 	>
 }
 
@@ -60,6 +64,8 @@ export const ContextManagementSettings = ({
 	includeDiagnosticMessages,
 	maxDiagnosticMessages,
 	writeDelayMs,
+	thinkingToolEnabled,
+	thinkingToolApiConfigId,
 	className,
 	...props
 }: ContextManagementSettingsProps) => {
@@ -111,11 +117,11 @@ export const ContextManagementSettings = ({
 							min={0}
 							max={500}
 							step={1}
-							value={[maxOpenTabsContext ?? 20]}
+							value={[maxOpenTabsContext ?? 100]}
 							onValueChange={([value]) => setCachedStateField("maxOpenTabsContext", value)}
 							data-testid="open-tabs-limit-slider"
 						/>
-						<span className="w-10">{maxOpenTabsContext ?? 20}</span>
+						<span className="w-10">{maxOpenTabsContext ?? 100}</span>
 					</div>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
 						{t("settings:contextManagement.openTabs.description")}
@@ -433,6 +439,55 @@ export const ContextManagementSettings = ({
 											threshold: autoCondenseContextPercent,
 										})
 									: t("settings:contextManagement.condensingThreshold.profileDescription")}
+							</div>
+						</div>
+					</div>
+				)}
+			</Section>
+
+			{/* Thinking Tool Section */}
+			<Section className="pt-2">
+				<VSCodeCheckbox
+					checked={thinkingToolEnabled || false}
+					onChange={(e: any) => setCachedStateField("thinkingToolEnabled", e.target.checked)}
+					data-testid="thinking-tool-enabled-checkbox">
+					<span className="font-medium">{t("settings:contextManagement.thinkingTool.enabled")}</span>
+				</VSCodeCheckbox>
+				{thinkingToolEnabled && (
+					<div className="flex flex-col gap-3 pl-3 border-l-2 border-vscode-button-background">
+						<div className="flex items-center gap-4 font-bold">
+							<Brain size={16} />
+							<div>{t("settings:contextManagement.thinkingTool.name")}</div>
+						</div>
+						<div>
+							<span className="block font-medium mb-1">
+								{t("settings:contextManagement.thinkingTool.modelLabel")}
+							</span>
+							<Select
+								value={thinkingToolApiConfigId || "default"}
+								onValueChange={(value) => setCachedStateField("thinkingToolApiConfigId", value)}
+								data-testid="thinking-tool-model-select">
+								<SelectTrigger className="w-full">
+									<SelectValue
+										placeholder={
+											t("settings:contextManagement.thinkingTool.modelDescription") ||
+											"Select model for thinking analysis"
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="default">
+										{t("settings:contextManagement.condensingThreshold.defaultProfile") || "Use current model"}
+									</SelectItem>
+									{(listApiConfigMeta || []).map((config) => (
+										<SelectItem key={config.id} value={config.id}>
+											{config.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<div className="text-vscode-descriptionForeground text-sm mt-1">
+								{t("settings:contextManagement.thinkingTool.modelDescription")}
 							</div>
 						</div>
 					</div>

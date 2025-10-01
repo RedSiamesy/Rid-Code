@@ -644,7 +644,7 @@ export class ClineProvider
 		// TODO: Improve type safety for promptType.
 		const prompt = supportPrompt.create(promptType, params, customSupportPrompts)
 
-		if (command === "addToContext") {
+		if (command === "addToContext" || command === "addFilePathToContext") {
 			await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "setChatBoxMessage", text: prompt })
 			return
 		}
@@ -1783,6 +1783,9 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel,
 			openRouterUseMiddleOutTransform,
 			featureRoomoteControlEnabled,
+			notificationHook,
+			thinkingToolEnabled,
+			thinkingToolApiConfigId,
 		} = await this.getState()
 
 		const telemetryKey = process.env.POSTHOG_API_KEY
@@ -1920,6 +1923,9 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel,
 			openRouterUseMiddleOutTransform,
 			featureRoomoteControlEnabled,
+			notificationHook: notificationHook ?? "",
+			thinkingToolEnabled: thinkingToolEnabled ?? false,
+			thinkingToolApiConfigId: thinkingToolApiConfigId,
 		}
 	}
 
@@ -2150,6 +2156,9 @@ export class ClineProvider
 					return false
 				}
 			})(),
+			thinkingToolEnabled: stateValues.thinkingToolEnabled ?? false,
+			thinkingToolApiConfigId: stateValues.thinkingToolApiConfigId ?? "default",
+			notificationHook: stateValues.notificationHook ?? "",
 		}
 	}
 

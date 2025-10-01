@@ -72,6 +72,7 @@ export const toolParamNames = [
 	"after_context",
 	"before_context",
 	"context",
+	"insensitive_case",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -118,7 +119,7 @@ export interface CodebaseSearchToolUse extends ToolUse {
 
 export interface GrepToolUse extends ToolUse {
 	name: "grep"
-	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode" | "after_context" | "before_context" | "context">>
+	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern" | "output_mode" | "after_context" | "before_context" | "context" | "insensitive_case">>
 }
 
 export interface GlobToolUse extends ToolUse {
@@ -187,6 +188,11 @@ export interface GenerateImageToolUse extends ToolUse {
 	params: Partial<Pick<Record<ToolParamName, string>, "prompt" | "path" | "image">>
 }
 
+export interface ThinkingToolToolUse extends ToolUse {
+	name: "thinking_tool"
+	params: Record<string, never> // No parameters required
+}
+
 export interface WebSearchToolUse extends ToolUse {
 	name: "web_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "query">>
@@ -228,6 +234,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	url_fetch: "fetch url content",
 	run_slash_command: "run slash command",
 	generate_image: "generate images",
+	thinking_tool: "thinking analysis",
 } as const
 
 // Define available tool groups.
@@ -271,6 +278,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"new_task",
 	"update_todo_list",
 	"run_slash_command",
+	"thinking_tool",
 ] as const
 
 export type DiffResult =

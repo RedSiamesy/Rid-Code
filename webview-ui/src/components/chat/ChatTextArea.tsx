@@ -31,6 +31,7 @@ import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
 import { usePromptHistory } from "./hooks/usePromptHistory"
+import { useColorGradient } from "../../hooks/useColorGradient"
 
 interface ChatTextAreaProps {
 	inputValue: string
@@ -218,6 +219,17 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [isCommandMode, setIsCommandMode] = useState(false)
 		const [isMemoryMode, setIsMemoryMode] = useState(false)
 
+		
+		// 使用颜色渐变Hook来实现think状态的自动颜色变化效果
+		const isThinkMode = inputValue.startsWith("think") || inputValue.startsWith("ultrathink")
+		const thinkGradientColor = useColorGradient(
+			"#efa244ff",
+			isFocused && isThinkMode,
+			100, // 100ms更新一次颜色，变化更快
+			[40, 80], // 饱和度范围 0-100
+			[45, 70] // 亮度范围 0-100
+		)
+		// const thinkGradientColor = "#efa244ff"
 
 		// Use custom hook for prompt history navigation
 		const { handleHistoryNavigation, resetHistoryNavigation, resetOnInputChange } = usePromptHistory({
@@ -1140,8 +1152,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								)}
 								style={{
 									...(isFocused && {
-										borderColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff':'var(--vscode-focusBorder)',
-										outlineColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff':'var(--vscode-focusBorder)',
+										borderColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff': isThinkMode ? thinkGradientColor : 'var(--vscode-focusBorder)',
+										outlineColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff': isThinkMode ? thinkGradientColor : 'var(--vscode-focusBorder)',
 									}),
 								}}
 								onScroll={() => updateHighlights()}

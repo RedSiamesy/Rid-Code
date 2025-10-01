@@ -46,7 +46,7 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 					<DialogTitle>{t("chat:announcement.title", { version: Package.version })}</DialogTitle>
 					<DialogDescription>
 						<Trans
-							i18nKey="chat:announcement.description"
+							i18nKey={t("chat:announcement.title", { version: Package.version })}
 							components={{
 								bold: <b />,
 							}}
@@ -75,7 +75,7 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 						</li>
 					</ul>
 
-					<div className="mt-4">
+					{/* <div className="mt-4">
 						<Trans
 							i18nKey="chat:announcement.learnMore"
 							components={{
@@ -120,7 +120,7 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 								redditLink: <RedditLink />,
 							}}
 						/>
-					</div>
+					</div> */}
 				</div>
 			</DialogContent>
 		</Dialog>

@@ -292,7 +292,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 									}
 								}
 							} catch (error) {
-								throw new Error(`Tool call JSON parsing failed: ${error}`)
+								throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
 							}
 						}
 					}
@@ -303,8 +303,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				}
 			}
 			if (lastToolCache.index !== undefined) {
-				lastToolCache.params = JSON.parse(lastToolCache.params)
-				yield lastToolCache
+				try {
+					lastToolCache.params = JSON.parse(lastToolCache.params)
+					yield lastToolCache
+				} catch (error) {
+					throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
+				}
 			}
 
 			for (const chunk of matcher.final()) {

@@ -30,6 +30,7 @@ import { getWebSearchDescription } from "./web-search"
 import { getUrlFetchDescription } from "./url-fetch"
 import { getRunSlashCommandDescription } from "./run-slash-command"
 import { getGenerateImageDescription } from "./generate-image"
+import { getThinkingToolDescription } from "./thinking-tool"
 import { CodeIndexManager } from "../../../services/code-index/manager"
 
 // Map of tool names to their description functions
@@ -66,6 +67,7 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
 	url_fetch: (args) => getUrlFetchDescription(args),
 	run_slash_command: () => getRunSlashCommandDescription(),
 	generate_image: (args) => getGenerateImageDescription(args),
+	thinking_tool: (args) => getThinkingToolDescription(args),
 }
 
 export function getToolDescriptionsForMode(
@@ -149,6 +151,11 @@ export function getToolDescriptionsForMode(
 		tools.delete("run_slash_command")
 	}
 
+	// Conditionally exclude thinking_tool if tool is not enabled
+	if (!settings?.thinkingToolEnabled) {
+		tools.delete("thinking_tool")
+	}
+
 	// Tool names in the specified order
 	const toolNames = [
 		"attempt_completion",
@@ -170,11 +177,12 @@ export function getToolDescriptionsForMode(
 		"browser_action",
 		"use_mcp_tool",
 		"access_mcp_resource",
-		"switch_mode",
+		// "switch_mode", 
 		"list_files",
 		"run_slash_command",
 		"generate_image",
-		"fetch_instructions"
+		"thinking_tool",
+		// "fetch_instructions"
 	];
 
 	// Sort tools according to the specified order
@@ -217,6 +225,7 @@ export {
 	getRunSlashCommandDescription,
 	getGenerateImageDescription,
 	getCodebaseSearchDescription,
+	getThinkingToolDescription,
 }
 
 
@@ -272,12 +281,13 @@ import { getApplyDiffOpenAIToolDefinition } from "./apply-diff-riddler"
 import { getCodebaseSearchOpenAIToolDefinition } from "./codebase-search"
 import { getWebSearchOpenAIToolDefinition } from "./web-search"
 import { getUrlFetchOpenAIToolDefinition } from "./url-fetch"
-import { getUseMcpToolOpenAIToolDefinition } from "./use-mcp-tool"
+// import { getUseMcpToolOpenAIToolDefinition } from "./use-mcp-tool"
 import { getSwitchModeOpenAIToolDefinition } from "./switch-mode"
 import { getSimpleReadFileOpenAIToolDefinition } from "./simple-read-file"
 import { getRunSlashCommandOpenAIToolDefinition } from "./run-slash-command"
 import { getGenerateImageOpenAIToolDefinition } from "./generate-image"
 import { getFetchInstructionsOpenAIToolDefinition } from "./fetch-instructions"
+import { getThinkingToolOpenAIToolDefinition } from "./thinking-tool"
 import { getBrowserActionOpenAIToolDefinition } from "./browser-action"
 import { getAskFollowupQuestionOpenAIToolDefinition } from "./ask-followup-question"
 import { getAccessMcpResourceOpenAIToolDefinition } from "./access-mcp-resource"
@@ -288,6 +298,7 @@ import {
 	convertUpdateTodoListToXml,
 	convertApplyDiffToXml,
 	convertAskFollowUpQuestionToXml,
+	convertOpenAIToolCallToMcp,
 } from "./tool-convert-riddler"
 
 // Map of tool names to their OpenAI tool definition functions
@@ -310,7 +321,7 @@ const openAIToolDefinitionMap: Record<string, (args: ToolArgs) => any> = {
 	browser_action: (args) => getBrowserActionOpenAIToolDefinition(args),
 	ask_followup_question: () => getAskFollowupQuestionOpenAIToolDefinition(),
 	attempt_completion: (args) => getAttemptCompletionOpenAIToolDefinition(args),
-	use_mcp_tool: (args) => getUseMcpToolOpenAIToolDefinition(args),
+	// use_mcp_tool: (args) => getUseMcpToolOpenAIToolDefinition(args),
 	access_mcp_resource: (args) => getAccessMcpResourceOpenAIToolDefinition(args),
 	codebase_search: (args) => getCodebaseSearchOpenAIToolDefinition(args),
 	switch_mode: () => getSwitchModeOpenAIToolDefinition(),
@@ -321,6 +332,7 @@ const openAIToolDefinitionMap: Record<string, (args: ToolArgs) => any> = {
 	update_todo_list: (args) => getUpdateTodoListOpenAIToolDefinition(args),
 	run_slash_command: () => getRunSlashCommandOpenAIToolDefinition(),
 	generate_image: (args) => getGenerateImageOpenAIToolDefinition(args),
+	thinking_tool: (args) => getThinkingToolOpenAIToolDefinition(args),
 	web_search: (args) => getWebSearchOpenAIToolDefinition(args),
 	url_fetch: (args) => getUrlFetchOpenAIToolDefinition(args),
 }
@@ -411,6 +423,11 @@ export function getOpenAIToolDefinitionsForMode(
 		tools.delete("run_slash_command")
 	}
 
+	// Conditionally exclude thinking_tool if tool is not enabled
+	if (!settings?.thinkingToolEnabled) {
+		tools.delete("thinking_tool")
+	}
+
 	// Tool names in the specified order
 	const toolNames = [
 		"attempt_completion",
@@ -432,11 +449,12 @@ export function getOpenAIToolDefinitionsForMode(
 		"browser_action",
 		"use_mcp_tool",
 		"access_mcp_resource",
-		"switch_mode",
+		// "switch_mode",
 		"list_files",
 		"run_slash_command",
 		"generate_image",
-		"fetch_instructions"
+		"thinking_tool",
+		// "fetch_instructions"
 	];
 
 	// Sort tools according to the specified order
@@ -477,7 +495,7 @@ export {
 	getCodebaseSearchOpenAIToolDefinition,
 	getWebSearchOpenAIToolDefinition,
 	getUrlFetchOpenAIToolDefinition,
-	getUseMcpToolOpenAIToolDefinition,
+	// getUseMcpToolOpenAIToolDefinition,
 	getSwitchModeOpenAIToolDefinition,
 	getSimpleReadFileOpenAIToolDefinition,
 	getRunSlashCommandOpenAIToolDefinition,
@@ -486,6 +504,7 @@ export {
 	getBrowserActionOpenAIToolDefinition,
 	getAskFollowupQuestionOpenAIToolDefinition,
 	getAccessMcpResourceOpenAIToolDefinition,
+	getThinkingToolOpenAIToolDefinition,
 }
 
 // Export conversion functions
@@ -494,4 +513,5 @@ export {
 	convertUpdateTodoListToXml,
 	convertApplyDiffToXml,
 	convertAskFollowUpQuestionToXml,
+	convertOpenAIToolCallToMcp,
 }

@@ -25,6 +25,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 		language,
 		maxReadFileLine,
 		maxConcurrentFileReads,
+		thinkingToolEnabled,
 	} = await provider.getState()
 
 	// Check experiment to determine which diff strategy to use
@@ -88,6 +89,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 			newTaskRequireTodos: vscode.workspace
 				.getConfiguration("roo-cline")
 				.get<boolean>("newTaskRequireTodos", false),
+			thinkingToolEnabled: thinkingToolEnabled ?? false,
 		},
 	)
 

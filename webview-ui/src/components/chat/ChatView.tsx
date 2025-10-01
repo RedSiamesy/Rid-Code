@@ -122,6 +122,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		soundEnabled,
 		soundVolume,
 		cloudIsAuthenticated,
+		notificationHook,
 		messageQueue = [],
 	} = useExtensionState()
 
@@ -275,6 +276,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 	}
 
+	function NotificationHook(msg?: string) {
+		vscode.postMessage({ type: "executeNotificationHook", text: notificationHook.replace("{msg}", msg ?? "") })
+	}
+
 	function playTts(text: string) {
 		vscode.postMessage({ type: "playTts", text })
 	}
@@ -292,6 +297,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					switch (lastMessage.ask) {
 						case "api_req_failed":
 							playSound("progress_loop")
+							NotificationHook("api_req_failed")
 							setSendingDisabled(true)
 							setClineAsk("api_req_failed")
 							setEnableButtons(true)
@@ -300,6 +306,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 						case "mistake_limit_reached":
 							playSound("progress_loop")
+							NotificationHook("mistake_limit_reached")
 							setSendingDisabled(false)
 							setClineAsk("mistake_limit_reached")
 							setEnableButtons(true)
@@ -309,6 +316,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "followup":
 							if (!isPartial) {
 								playSound("notification")
+								NotificationHook("followup")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("followup")
@@ -328,6 +336,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setClineAsk("tool")
 							setEnableButtons(!isPartial)
 							const tool = JSON.parse(lastMessage.text || "{}") as ClineSayTool
+							if (!isAutoApproved(lastMessage) && !isPartial) {
+								NotificationHook(tool.tool??"tool")
+							}
 							switch (tool.tool) {
 								case "editedExistingFile":
 								case "appliedDiff":
@@ -359,6 +370,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "browser_action_launch":
 							if (!isAutoApproved(lastMessage) && !isPartial) {
 								playSound("notification")
+								NotificationHook("browser_action_launch")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("browser_action_launch")
@@ -369,6 +381,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "command":
 							if (!isAutoApproved(lastMessage) && !isPartial) {
 								playSound("notification")
+								NotificationHook("command")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("command")
@@ -386,6 +399,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "use_mcp_server":
 							if (!isAutoApproved(lastMessage) && !isPartial) {
 								playSound("notification")
+								NotificationHook("use_mcp_server")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("use_mcp_server")
@@ -396,6 +410,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "web_search":
 							if (!isAutoApproved(lastMessage) && !isPartial) {
 								playSound("notification")
+								NotificationHook("web_search")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("web_search")
@@ -406,6 +421,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "url_fetch":
 							if (!isAutoApproved(lastMessage) && !isPartial) {
 								playSound("notification")
+								NotificationHook("url_fetch")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("url_fetch")
@@ -417,6 +433,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							// extension waiting for feedback. but we can just present a new task button
 							if (!isPartial) {
 								playSound("celebration")
+								NotificationHook("completion_result")
 							}
 							setSendingDisabled(isPartial)
 							setClineAsk("completion_result")

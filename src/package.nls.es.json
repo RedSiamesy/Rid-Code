@@ -6,6 +6,7 @@
 	"command.fixCode.title": "Corregir Código",
 	"command.improveCode.title": "Mejorar Código",
 	"command.addToContext.title": "Añadir al Contexto",
+	"command.addFilePathToContext.title": "Añadir Ruta al Contexto Roo",
 	"command.openInNewTab.title": "Abrir en Nueva Pestaña",
 	"command.focusInput.title": "Enfocar Campo de Entrada",
 	"command.setCustomStoragePath.title": "Establecer Ruta de Almacenamiento Personalizada",

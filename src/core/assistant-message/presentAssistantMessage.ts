@@ -38,10 +38,11 @@ import { Task } from "../task/Task"
 import { codebaseSearchTool } from "../tools/codebaseSearchTool"
 import { webSearchTool } from "../tools/webSearchTool"
 import { urlFetchTool } from "../tools/urlFetchTool"
+import { thinkingTool } from "../tools/thinkingTool"
 import { experiments, EXPERIMENT_IDS } from "../../shared/experiments"
 import { applyDiffToolLegacy } from "../tools/applyDiffTool"
 
-import { convertReadFileArgsToXml, convertUpdateTodoListToXml, convertApplyDiffToXml, convertAskFollowUpQuestionToXml } from "../../core/prompts/tools"
+import { convertReadFileArgsToXml, convertUpdateTodoListToXml, convertApplyDiffToXml, convertAskFollowUpQuestionToXml, convertOpenAIToolCallToMcp } from "../../core/prompts/tools"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -230,6 +231,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.query}']`
 					case "url_fetch":
 						return `[${block.name} for '${block.params.url}']`
+					case "thinking_tool":
+						return `[${block.name}]`
 					case "new_task": {
 						const mode = block.params.mode ?? defaultModeSlug
 						const message = block.params.message ?? "(no message)"
@@ -240,6 +243,12 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
+					default:
+						const name : string = block.name
+						if (name.startsWith("_mcp")) {
+							return `[${block.name}]`
+						}
+						return ''
 				}
 			}
 
@@ -395,7 +404,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 			try {
 				validateToolUse(
-					block.name as ToolName,
+					!block.name.startsWith("_mcp") ? block.name as ToolName : "use_mcp_tool",
 					mode ?? defaultModeSlug,
 					customModes ?? [],
 					{ apply_diff: cline.diffEnabled },
@@ -534,6 +543,9 @@ export async function presentAssistantMessage(cline: Task) {
 				case "url_fetch":
 					await urlFetchTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
 					break
+				case "thinking_tool":
+					await thinkingTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
+					break
 				case "list_code_definition_names":
 					await listCodeDefinitionNamesTool(
 						cline,
@@ -608,6 +620,14 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "generate_image":
 					await generateImageTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
+					break
+				default:
+					const name : string = block.name
+					if (name.startsWith("_mcp")) {
+						const mcpToolBlock = convertOpenAIToolCallToMcp(block)
+						await useMcpToolTool(cline, mcpToolBlock, askApproval, handleError, pushToolResult, removeClosingTag)
+						break
+					}
 					break
 			}
 

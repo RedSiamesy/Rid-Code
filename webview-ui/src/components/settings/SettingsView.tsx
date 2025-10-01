@@ -144,6 +144,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		alwaysApproveResubmit,
 		autoCondenseContext,
 		autoCondenseContextPercent,
+		thinkingToolEnabled,
+		thinkingToolApiConfigId,
 		browserToolEnabled,
 		browserViewportSize,
 		enableCheckpoints,
@@ -160,6 +162,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		ttsEnabled,
 		ttsSpeed,
 		soundVolume,
+		notificationHook,
 		telemetrySetting,
 		terminalOutputLineLimit,
 		terminalOutputCharacterLimit,
@@ -327,6 +330,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			vscode.postMessage({ type: "allowedMaxCost", value: allowedMaxCost ?? undefined })
 			vscode.postMessage({ type: "autoCondenseContext", bool: autoCondenseContext })
 			vscode.postMessage({ type: "autoCondenseContextPercent", value: autoCondenseContextPercent })
+			vscode.postMessage({ type: "thinkingToolEnabled", bool: thinkingToolEnabled })
+			vscode.postMessage({ type: "thinkingToolApiConfigId", text: thinkingToolApiConfigId ?? "default" })
+			vscode.postMessage({ type: "notificationHook", text: notificationHook ?? "" })
 			vscode.postMessage({ type: "browserToolEnabled", bool: browserToolEnabled })
 			vscode.postMessage({ type: "soundEnabled", bool: soundEnabled })
 			vscode.postMessage({ type: "ttsEnabled", bool: ttsEnabled })
@@ -712,6 +718,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							ttsSpeed={ttsSpeed}
 							soundEnabled={soundEnabled}
 							soundVolume={soundVolume}
+							notificationHook={notificationHook}
 							setCachedStateField={setCachedStateField}
 						/>
 					)}
@@ -733,6 +740,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							includeDiagnosticMessages={includeDiagnosticMessages}
 							maxDiagnosticMessages={maxDiagnosticMessages}
 							writeDelayMs={writeDelayMs}
+							thinkingToolEnabled={thinkingToolEnabled}
+							thinkingToolApiConfigId={thinkingToolApiConfigId}
 							setCachedStateField={setCachedStateField}
 						/>
 					)}

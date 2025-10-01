@@ -101,7 +101,7 @@ export async function getBinPath(vscodeAppRoot: string): Promise<string | undefi
 	)
 }
 
-async function execRipgrep(bin: string, args: string[], mode:string): Promise<string> {
+async function execRipgrep(bin: string, args: string[], mode:string, linePerRes?: number): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const rgProcess = childProcess.spawn(bin, args)
 		// cross-platform alternative to head, which is ripgrep author's recommendation for limiting output.
@@ -112,7 +112,7 @@ async function execRipgrep(bin: string, args: string[], mode:string): Promise<st
 
 		let output = ""
 		let lineCount = 0
-		const maxLines = MAX_RESULTS * (mode === "content" ? 5 : 1) // limiting ripgrep output with max lines since there's no other way to limit results. it's okay that we're outputting as json, since we're parsing it line by line and ignore anything that's not part of a match. This assumes each result is at most 5 lines.
+		const maxLines = MAX_RESULTS * (mode === "content" ? (linePerRes ?? 3) : 1) // limiting ripgrep output with max lines since there's no other way to limit results. it's okay that we're outputting as json, since we're parsing it line by line and ignore anything that's not part of a match. This assumes each result is at most 5 lines.
 
 		rl.on("line", (line) => {
 			if (lineCount < maxLines) {
@@ -151,6 +151,7 @@ export async function regexSearchFiles(
 	afterContext?: number,
 	beforeContext?: number,
 	context?: number,
+	insensitiveCase?: boolean,
 ): Promise<string> {
 	const vscodeAppRoot = vscode.env.appRoot
 	const rgPath = await getBinPath(vscodeAppRoot)
@@ -163,10 +164,13 @@ export async function regexSearchFiles(
 	let args: string[]
 	if (outputMode === "files_with_matches") {
 		args = ["-l", "-e", regex, "--glob", filePattern || "*", directoryPath]
+		if (insensitiveCase) {
+			args.unshift("-i")
+		}
 	} else {
 		// Build args for content mode with context control
 		args = ["--json", "-e", regex, "--glob", filePattern || "*"]
-		
+
 		// Add context parameters
 		if (context !== undefined) {
 			// If context is provided, it overrides afterContext and beforeContext
@@ -186,13 +190,18 @@ export async function regexSearchFiles(
 				args.push("--before-context", "1")
 			}
 		}
-		
+
+		// Add case insensitive flag if provided
+		if (insensitiveCase) {
+			args.unshift("-i")
+		}
+
 		args.push(directoryPath)
 	}
 
 	let output: string
 	try {
-		output = await execRipgrep(rgPath, args, outputMode)
+		output = await execRipgrep(rgPath, args, outputMode, context ? context * 2 + 1 : (afterContext ?? 1) + (beforeContext ?? 1) + 1)
 	} catch (error) {
 		console.error("Error executing ripgrep:", error)
 		return "No results found"

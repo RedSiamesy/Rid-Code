@@ -36,6 +36,7 @@ import {
 	SambaNovaHandler,
 	IOIntelligenceHandler,
 	DoubaoHandler,
+	IFlowHandler,
 	ModelScopeHandler,
 	ZAiHandler,
 	FireworksHandler,
@@ -125,6 +126,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new DeepSeekHandler(options)
 		case "doubao":
 			return new DoubaoHandler(options)
+		case "iflow":
+			return new IFlowHandler(options)
 		case "modelscope":
 			return new ModelScopeHandler(options)
 		case "qwen-code":

@@ -279,8 +279,8 @@
 	"announcement": {
 		"title": "🎉 Roo Code {{version}} 已发布",
 		"description": "介绍 <bold>Roo Code Cloud：</bold>将 Roo 的强大功能扩展到 IDE 之外",
-		"feature1": "<bold>随时随地跟踪任务进度（免费）：</bold>获取长时间运行任务的实时更新，无需困在 IDE 中",
-		"feature2": "<bold>远程控制 Roo 扩展（Pro）：</bold>通过基于聊天的浏览器界面启动、停止和与任务交互。",
+		"feature1": "<bold>全新系统提示词：</bold>对齐到 Claude Code 系统提示词。支持使用 LLM 原生工具调用，并支持以工具调用的形式使用 MCP 。",
+		"feature2": "<bold>资源管理器菜单：</bold>添加资源管理器菜单右键项菜单，将路径添加到 Roo 上下文。",
 		"learnMore": "准备掌控一切？在<learnMoreLink>这里</learnMoreLink>了解更多。",
 		"visitCloudButton": "访问 Roo Code Cloud",
 		"socialLinks": "在 <xLink>X</xLink>、<discordLink>Discord</discordLink> 或 <redditLink>r/RooCode</redditLink> 上关注我们"

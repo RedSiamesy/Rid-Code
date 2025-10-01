@@ -35,6 +35,7 @@ import {
 import { checkExistKey } from "../../shared/checkExistApiConfig"
 import { experimentDefault } from "../../shared/experiments"
 import { Terminal } from "../../integrations/terminal/Terminal"
+import { TerminalProcess } from "../../integrations/terminal/TerminalProcess"
 import { openFile } from "../../integrations/misc/open-file"
 import { openImage, saveImage } from "../../integrations/misc/image-handler"
 import { selectImages } from "../../integrations/misc/process-images"
@@ -227,7 +228,7 @@ export const webviewMessageHandler = async (
 
 				// Update the UI to reflect the deletion
 				await provider.postStateToWebview()
-				await provider?.cancelTask()
+				await provider.cancelTask()
 			}
 		} catch (error) {
 			console.error("Error in delete message:", error)
@@ -428,6 +429,18 @@ export const webviewMessageHandler = async (
 	}
 
 	switch (message.type) {
+		case "executeNotificationHook":
+			try {
+				const hookCommand = message.text as string | undefined
+				if (hookCommand && hookCommand.trim()) {
+					const terminal:Terminal = new Terminal(-65535, undefined, getCurrentCwd())
+					const tp = new TerminalProcess(terminal)
+					await tp.run(hookCommand.trim())
+				}
+			} catch (error) {
+				console.error("Failed to execute notification hook:", error)
+			}
+			break
 		case "webviewDidLaunch":
 			// Load custom modes first
 			const customModes = await provider.customModesManager.getCustomModes()
@@ -507,7 +520,10 @@ export const webviewMessageHandler = async (
 			// agentically running promises in old instance don't affect our new
 			// task. This essentially creates a fresh slate for the new task.
 			try {
-				await provider.createTask(message.text, message.images)
+				const new_task = await provider.createTask(message.text, message.images)
+				if (message.text?.startsWith("think") || message.text?.startsWith("ultrathink")) {
+					new_task.postprocess._thinking = true
+				}
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({
 					type: "invoke",
@@ -581,6 +597,12 @@ export const webviewMessageHandler = async (
 			await provider.postStateToWebview()
 			break
 		case "askResponse":
+			if (message.text?.startsWith("think") || message.text?.startsWith("ultrathink")) {
+				const currentCline = provider.getCurrentTask()
+				if (currentCline) {
+					currentCline.postprocess._thinking = true
+				}
+			}
 			provider.getCurrentTask()?.handleWebviewAskResponse(message.askResponse!, message.text, message.images)
 			break
 		case "autoCondenseContext":
@@ -589,6 +611,14 @@ export const webviewMessageHandler = async (
 			break
 		case "autoCondenseContextPercent":
 			await updateGlobalState("autoCondenseContextPercent", message.value)
+			await provider.postStateToWebview()
+			break
+		case "thinkingToolEnabled":
+			await updateGlobalState("thinkingToolEnabled", message.bool)
+			await provider.postStateToWebview()
+			break
+		case "thinkingToolApiConfigId":
+			await updateGlobalState("thinkingToolApiConfigId", message.text)
 			await provider.postStateToWebview()
 			break
 		case "terminalOperation":
@@ -1226,6 +1256,11 @@ export const webviewMessageHandler = async (
 		case "soundVolume":
 			const soundVolume = message.value ?? 0.5
 			await updateGlobalState("soundVolume", soundVolume)
+			await provider.postStateToWebview()
+			break
+		case "notificationHook":
+			const notificationHook = message.text
+			await updateGlobalState("notificationHook", notificationHook)
 			await provider.postStateToWebview()
 			break
 		case "ttsEnabled":

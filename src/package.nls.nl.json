@@ -19,6 +19,7 @@
 	"command.fixCode.title": "Repareer Code",
 	"command.improveCode.title": "Verbeter Code",
 	"command.addToContext.title": "Toevoegen aan Context",
+	"command.addFilePathToContext.title": "Pad toevoegen aan Roo Context",
 	"command.focusInput.title": "Focus op Invoerveld",
 	"command.setCustomStoragePath.title": "Aangepast Opslagpad Instellen",
 	"command.importSettings.title": "Instellingen Importeren",

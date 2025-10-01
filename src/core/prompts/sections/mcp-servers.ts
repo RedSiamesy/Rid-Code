@@ -74,7 +74,7 @@ When a server is connected, you can use the server's tools via the \`use_mcp_too
 
 ${connectedServers}`
 
-	if (!enableMcpServerCreation) {
+	if (!enableMcpServerCreation && false) {
 		return baseSection
 	}
 
@@ -88,4 +88,69 @@ The user may ask you something along the lines of "add a tool" that does some fu
 <task>create_mcp_server</task>
 </fetch_instructions>`
 	)
+}
+
+
+
+import { OpenAIToolDefinition } from "../tools/types"
+
+/**
+	* Get MCP server tools as OpenAI function call format tool definitions
+	*/
+export async function getMcpServersAsTool(
+	mcpHub?: McpHub,
+	diffStrategy?: DiffStrategy,
+	enableMcpServerCreation?: boolean,
+	mode?: string
+): Promise<OpenAIToolDefinition[]> {
+	if (!mcpHub) {
+		return []
+	}
+
+	const tools: OpenAIToolDefinition[] = []
+
+	// Get all connected servers
+	const connectedServers = mcpHub.getServers().filter((server) => server.status === "connected")
+
+	// Filter servers based on mode
+	const filteredServers = connectedServers.filter((server) => {
+		if (!mode) return true
+		const cfg = server.config ? JSON.parse(server.config) : {}
+		const enabledModes = cfg.enabledModes || []
+		const disabledModes = cfg.disabledModes || []
+		
+		if (enabledModes.length > 0) {
+			return enabledModes.includes(mode) && !disabledModes.includes(mode)
+		}
+		return !disabledModes.includes(mode)
+	})
+
+	// Convert each MCP tool to OpenAI function call format
+	for (const server of filteredServers) {
+		if (server.tools) {
+			for (const tool of server.tools) {
+				// Skip tools that are not enabled for prompt
+				if (tool.enabledForPrompt === false) {
+					continue
+				}
+
+				// Convert MCP tool to OpenAI function call format
+				const openaiTool: OpenAIToolDefinition = {
+					type: "function",
+					function: {
+						name: `_mcp|${server.name}|${tool.name}`,
+						description: tool.description || `Tool from ${server.name}`,
+						parameters: (tool.inputSchema as any) || {
+								type: "object",
+								properties: {},
+							},
+					},
+				}
+
+				tools.push(openaiTool)
+			}
+		}
+	}
+
+	return tools
 }

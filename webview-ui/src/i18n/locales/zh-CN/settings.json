@@ -521,6 +521,11 @@
 			"label": "启用文本转语音",
 			"description": "启用后，Roo 将使用文本转语音功能朗读其响应。",
 			"speedLabel": "速度"
+		},
+		"notificationHook": {
+			"label": "通知 Hook",
+			"placeholder": "通知时运行的终端命令",
+			"description": "触发通知时将执行终端命令。其中，可以使用{msg}作为占位符，接收触发通知消息（如：'readFile', 'appliedDiff', 'finishTask'等），例如:`powershell -c \"[console]::beep()\"`"
 		}
 	},
 	"contextManagement": {
@@ -544,6 +549,13 @@
 		"autoCondenseContext": {
 			"name": "自动触发智能上下文压缩",
 			"description": "启用时，Roo 将在达到阈值时自动压缩上下文。禁用时，您仍可以手动触发上下文压缩。"
+		},
+		"thinkingTool": {
+			"name": "思维工具",
+			"description": "使用选定的模型对当前任务进行深入分析和思考",
+			"enabled": "启用思维工具",
+			"modelLabel": "分析模型",
+			"modelDescription": "选择用于任务分析的模型"
 		},
 		"openTabs": {
 			"label": "标签页数量限制",
@@ -717,6 +729,10 @@
 			"name": "启用并发文件读取",
 			"description": "启用后，Roo 可以在单个请求中读取多个文件。禁用后，Roo 必须逐个读取文件。在使用能力较弱的模型或希望对文件访问有更多控制时，禁用此功能可能会有所帮助。"
 		},
+		"THINKING_TOOL": {
+			"name": "启用思维工具",
+			"description": "启用思维工具，使用选定的模型对当前任务进行深入分析和思考。"
+		},
 		"MARKETPLACE": {
 			"name": "启用 Marketplace",
 			"description": "启用后，你可以从 Marketplace 安装 MCP 和自定义模式。"
@@ -730,7 +746,7 @@
 			"description": "启用后防止编辑器焦点干扰。文件编辑在后台进行，不会打开差异视图或抢夺焦点。你可以在 Roo 进行更改时继续不受干扰地工作。文件可以在不获取焦点的情况下打开以捕获诊断信息，或保持完全关闭状态。"
 		},
 		"ALLOWED_MULTI_CALL": {
-			"name": "启用多个工具调用",
+			"name": "启用单消息多工具调用",
 			"description": "启用后，Roo 可以在单条消息中使用多个工具。禁用时，Roo 必须每条消息使用一个工具。启用此功能可以加快交互速度，但可能导致某些模型出现意外行为。"
 		},
 		"ASSISTANT_MESSAGE_PARSER": {
@@ -757,8 +773,8 @@
 			"description": "启用后 Roo 可运行斜杠命令执行工作流程。"
 		},
 		"USE_TOOL_CALLING": {
-			"name": "使用系统提示词工具调用",
-			"description": "启用后，Roo 将使用 API 原生工具调用而不是在系统提示词中包含工具描述。这可以减少令牌使用量并可能提高支持的模型的性能。"
+			"name": "使用标准工具调用协议",
+			"description": "启用后，Roo 将使用 API 原生工具调用而不是在系统提示词中包含工具描述。这可以减少令牌使用量并可能提高支持的模型的性能（使用“系统提示词工具调用”方法生成的对话历史无法与该功能混用，可能导致出错）。"
 		}
 	},
 	"promptCaching": {

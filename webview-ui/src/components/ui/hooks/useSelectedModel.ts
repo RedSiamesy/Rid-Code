@@ -10,6 +10,8 @@ import {
 	cerebrasModels,
 	deepSeekDefaultModelId,
 	deepSeekModels,
+	iFlowDefaultModelId,
+	iFlowModels,
 	modelScopeDefaultModelId,
 	modelScopeModels,
 	moonshotDefaultModelId,
@@ -227,6 +229,11 @@ function getSelectedModel({
 		case "deepseek": {
 			const id = apiConfiguration.apiModelId ?? deepSeekDefaultModelId
 			const info = deepSeekModels[id as keyof typeof deepSeekModels]
+			return { id, info }
+		}
+		case "iflow": {
+			const id = apiConfiguration.apiModelId ?? iFlowDefaultModelId
+			const info = iFlowModels[id as keyof typeof iFlowModels]
 			return { id, info }
 		}
 		case "modelscope": {

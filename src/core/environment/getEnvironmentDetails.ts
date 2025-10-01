@@ -516,8 +516,8 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 import { CodeIndexManager } from "../../services/code-index/manager"
 
 export async function getUserSuggestions(cline: Task): Promise<string|undefined> {
-	if (cline.toolSequence.length >= 5) {
-		cline.toolSequence = cline.toolSequence.slice(-5)
+	if (cline.toolSequence.length >= 6) {
+		cline.toolSequence = cline.toolSequence.slice(-6)
 	}
 
 	const lastTool = cline.toolSequence.length ? cline.toolSequence[cline.toolSequence.length - 1] : undefined
@@ -597,13 +597,18 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 			break
 		case "url_fetch":
 			break
+		case "thinking_tool":
+			break
 		default:
 			break
 	}
 
-	if (cline.toolSequence.length > 4 && !cline.toolSequence.includes("review")) {
-		UserSuggestions.push("- REVIEW: Based on the current contextual information, conduct a thorough and comprehensive re-analysis of the user task to avoid omissions and errors.")
-		cline.toolSequence.push("review")
+	const state = await provider?.getState()
+	const {
+		thinkingToolEnabled,
+	} = state ?? {}
+	if (thinkingToolEnabled && cline.toolSequence.length > 5 && !cline.toolSequence.includes("thinking_tool")) {
+		UserSuggestions.push("- You can use the 'thinking_tool' to analyze tasks and think through your approach, helping you to organize your thoughts and avoid overlooking details.")
 	}
 	return undefined
 	// return UserSuggestions.join("\n") || undefined

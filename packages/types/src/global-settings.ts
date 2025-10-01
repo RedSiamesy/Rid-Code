@@ -102,6 +102,7 @@ export const globalSettingsSchema = z.object({
 	ttsSpeed: z.number().optional(),
 	soundEnabled: z.boolean().optional(),
 	soundVolume: z.number().optional(),
+	notificationHook: z.string().optional(),
 
 	maxOpenTabsContext: z.number().optional(),
 	maxWorkspaceFiles: z.number().optional(),
@@ -121,6 +122,10 @@ export const globalSettingsSchema = z.object({
 	terminalZshP10k: z.boolean().optional(),
 	terminalZdotdir: z.boolean().optional(),
 	terminalCompressProgressBar: z.boolean().optional(),
+
+	// Thinking tool settings
+	thinkingToolEnabled: z.boolean().optional(),
+	thinkingToolApiConfigId: z.string().optional(),
 
 	diagnosticsEnabled: z.boolean().optional(),
 
@@ -193,6 +198,7 @@ export const SECRET_STATE_KEYS = [
 	"chutesApiKey",
 	"litellmApiKey",
 	"deepInfraApiKey",
+	"iflowApiKey",
 	"codeIndexOpenAiKey",
 	"codeIndexQdrantApiKey",
 	"codebaseIndexOpenAiCompatibleApiKey",
@@ -304,7 +310,7 @@ export const EVALS_SETTINGS: RooCodeSettings = {
 	enableCheckpoints: false,
 
 	rateLimitSeconds: 0,
-	maxOpenTabsContext: 20,
+	maxOpenTabsContext: 100,
 	maxWorkspaceFiles: 200,
 	showRooIgnoredFiles: true,
 	maxReadFileLine: -1, // -1 to enable full file reading.

@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import * as path from "path"
 import delay from "delay"
 
 import type { CommandId } from "@roo-code/types"
@@ -7,6 +8,7 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { Package } from "../shared/package"
 import { getCommand } from "../utils/commands"
 import { ClineProvider } from "../core/webview/ClineProvider"
+import { EditorUtils } from "../integrations/editor/EditorUtils"
 import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 
@@ -220,6 +222,35 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		}
 
 		visibleProvider.postMessageToWebview({ type: "acceptInput" })
+	},
+	addFilePathToContext: async (...args: any[]) => {
+		// Handle file path from explorer
+		let filePath: string
+		
+		if (args.length > 0 && args[0] && typeof args[0] === 'object' && args[0].fsPath) {
+			// Called from explorer context menu
+			const uri = args[0] as vscode.Uri
+			const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri)
+			
+			if (!workspaceFolder) {
+				// File is not in a workspace, use absolute path
+				filePath = uri.fsPath
+			} else {
+				// Get relative path from workspace root
+				const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
+				filePath = !relativePath || relativePath.startsWith("..") ? uri.fsPath : relativePath
+			}
+		} else {
+			// Fallback: try to get from active editor
+			const context = EditorUtils.getEditorContext()
+			if (!context) {
+				return
+			}
+			filePath = context.filePath
+		}
+
+		const params = { filePath }
+		await ClineProvider.handleCodeAction("addFilePathToContext", "ADD_FILE_PATH_TO_CONTEXT", params)
 	},
 })
 

@@ -26,6 +26,7 @@ import {
 	vscodeLlmModels,
 	xaiModels,
 	internationalZAiModels,
+	iFlowModels,
 } from "./providers/index.js"
 
 /**
@@ -62,6 +63,7 @@ export const providerNames = [
 	"litellm",
 	"modelscope",
 	"huggingface",
+	"iflow",
 	"cerebras",
 	"sambanova",
 	"zai",
@@ -276,6 +278,11 @@ const modelscopeSchema = apiModelIdProviderModelSchema.extend({
 	modelscopeBaseUrl: z.string().optional(),
 })
 
+const iflowSchema = apiModelIdProviderModelSchema.extend({
+	iflowApiKey: z.string().optional(),
+	iflowBaseUrl: z.string().optional(),
+})
+
 const humanRelaySchema = baseProviderSettingsSchema
 
 const fakeAiSchema = baseProviderSettingsSchema.extend({
@@ -379,6 +386,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	chutesSchema.merge(z.object({ apiProvider: z.literal("chutes") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
 	modelscopeSchema.merge(z.object({ apiProvider: z.literal("modelscope") })),
+	iflowSchema.merge(z.object({ apiProvider: z.literal("iflow") })),
 	cerebrasSchema.merge(z.object({ apiProvider: z.literal("cerebras") })),
 	sambaNovaSchema.merge(z.object({ apiProvider: z.literal("sambanova") })),
 	zaiSchema.merge(z.object({ apiProvider: z.literal("zai") })),
@@ -421,6 +429,7 @@ export const providerSettingsSchema = z.object({
 	...chutesSchema.shape,
 	...litellmSchema.shape,
 	...modelscopeSchema.shape,
+	...iflowSchema.shape,
 	...cerebrasSchema.shape,
 	...sambaNovaSchema.shape,
 	...zaiSchema.shape,
@@ -557,6 +566,7 @@ export const MODELS_BY_PROVIDER: Record<
 	"qwen-code": { id: "qwen-code", label: "Qwen Code", models: Object.keys(qwenCodeModels) },
 	roo: { id: "roo", label: "Roo", models: Object.keys(rooModels) },
 	modelscope: { id: "modelscope", label: "ModelScope", models: Object.keys(modelScopeModels) },
+	iflow: { id: "iflow", label: "iFlow", models: Object.keys(iFlowModels) },
 	sambanova: {
 		id: "sambanova",
 		label: "SambaNova",

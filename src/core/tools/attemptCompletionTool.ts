@@ -28,7 +28,7 @@ export async function attemptCompletionTool(
 	toolDescription: ToolDescription,
 	askFinishSubTaskApproval: AskFinishSubTaskApproval,
 ) {
-	const result: string | undefined = block.params.result
+	let result: string | undefined = block.params.result
 	const command: string | undefined = block.params.command
 
 	// Get the setting for preventing completion with open todos from VSCode configuration
@@ -81,10 +81,20 @@ export async function attemptCompletionTool(
 			return
 		} else {
 			if (!result) {
-				cline.consecutiveMistakeCount++
-				cline.recordToolError("attempt_completion")
-				pushToolResult(await cline.sayAndCreateMissingParamError("attempt_completion", "result"))
-				return
+				const lastApiMessage = cline.apiConversationHistory[cline.apiConversationHistory.length - 2].role === "assistant" ? cline.apiConversationHistory[cline.apiConversationHistory.length - 2] : cline.apiConversationHistory[cline.apiConversationHistory.length - 1]
+
+				if (typeof lastApiMessage.content === "string") {
+					// If the last API message exists, use it as the result
+					result = lastApiMessage.content
+				} else if (lastApiMessage.content[0].type === "text") {
+					result = lastApiMessage.content[0].text
+				} 
+				if (lastApiMessage.role !== "assistant" || !result) {
+					cline.consecutiveMistakeCount++
+					cline.recordToolError("attempt_completion")
+					pushToolResult(await cline.sayAndCreateMissingParamError("attempt_completion", "result"))
+					return
+				}
 			}
 
 			cline.consecutiveMistakeCount = 0

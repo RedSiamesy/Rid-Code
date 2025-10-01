@@ -628,7 +628,7 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 				const say: ClineSayTool = {
 					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
 					path: getReadablePath(cline.cwd, relPath),
-					diff: `# agentEdits\n${agentEdits}\n`,
+					diff: `# agentEdits ${relPath}\n${agentEdits}\n`,
 				}
 	
 				// Send the user feedback

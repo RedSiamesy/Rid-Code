@@ -97,6 +97,7 @@ export interface WebviewMessage {
 		| "ttsEnabled"
 		| "ttsSpeed"
 		| "soundVolume"
+		| "notificationHook"
 		| "diffEnabled"
 		| "enableCheckpoints"
 		| "browserViewportSize"
@@ -112,6 +113,8 @@ export interface WebviewMessage {
 		| "updateMcpTimeout"
 		| "fuzzyMatchThreshold"
 		| "writeDelayMs"
+		| "thinkingToolEnabled"
+		| "thinkingToolApiConfigId"
 		| "useTerminalCommand"
 		| "saveMemory"
 		| "savedMemory"
@@ -228,6 +231,7 @@ export interface WebviewMessage {
 		| "editQueuedMessage"
 		| "dismissUpsell"
 		| "getDismissedUpsells"
+		| "executeNotificationHook"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"

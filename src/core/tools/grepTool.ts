@@ -22,6 +22,7 @@ export async function grepTool(
 	const afterContext: string | undefined = block.params.after_context
 	const beforeContext: string | undefined = block.params.before_context
 	const context: string | undefined = block.params.context
+	const insensitiveCase: string | undefined = block.params.insensitive_case
 
 	const absolutePath = relDirPath ? path.resolve(cline.cwd, relDirPath) : cline.cwd
 	const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
@@ -29,7 +30,7 @@ export async function grepTool(
 	const sharedMessageProps: ClineSayTool = {
 		tool: "searchFiles",
 		path: getReadablePath(cline.cwd, removeClosingTag("path", relDirPath)),
-		regex: removeClosingTag("regex", regex) + (afterContext || beforeContext || context ? `    (${afterContext ? "-A " + afterContext + " " : ""}${beforeContext ? "-B " + beforeContext + " " : ""}${context ? "-C " + context + " " : ""})` : ""),
+		regex: removeClosingTag("regex", regex) + (afterContext || beforeContext || context || outputMode === "content" || insensitiveCase === "true" ? `    ( ${insensitiveCase === "true" ? "-i " : ""}${afterContext ? "-A " + afterContext + " " : ""}${beforeContext ? "-B " + beforeContext + " " : ""}${context ? "-C " + context + " " : ""}${outputMode === "content" ? "with content " : ""})` : ""),
 		filePattern: removeClosingTag("file_pattern", filePattern),
 		isOutsideWorkspace,
 	}
@@ -65,7 +66,7 @@ export async function grepTool(
 			cline.consecutiveMistakeCount = 0
 
 			// Validate and set output mode
-			let validatedOutputMode: OutputMode = "content" // default
+			let validatedOutputMode: OutputMode = "files_with_matches" // default
 			if (outputMode) {
 				const cleanedMode = removeClosingTag("output_mode", outputMode)
 				if (cleanedMode === "content" || cleanedMode === "files_with_matches") {
@@ -77,6 +78,7 @@ export async function grepTool(
 			let validatedAfterContext: number | undefined
 			let validatedBeforeContext: number | undefined
 			let validatedContext: number | undefined
+			let validatedInsensitiveCase: boolean = false
 
 			if (context) {
 				const cleanedContext = removeClosingTag("context", context)
@@ -100,6 +102,11 @@ export async function grepTool(
 						validatedBeforeContext = beforeContextNum
 					}
 				}
+
+				if (insensitiveCase) {
+					const cleanedInsensitiveCase = removeClosingTag("insensitive_case", insensitiveCase)
+					validatedInsensitiveCase = cleanedInsensitiveCase?.toLowerCase() === "true"
+				}
 			}
 
 			const results = await regexSearchFiles(
@@ -112,6 +119,7 @@ export async function grepTool(
 				validatedAfterContext,
 				validatedBeforeContext,
 				validatedContext,
+				validatedInsensitiveCase,
 			)
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ClineSayTool)

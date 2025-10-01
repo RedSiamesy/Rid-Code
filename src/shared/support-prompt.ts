@@ -40,6 +40,7 @@ type SupportPromptType =
 	| "FIX"
 	| "IMPROVE"
 	| "ADD_TO_CONTEXT"
+	| "ADD_FILE_PATH_TO_CONTEXT"
 	| "TERMINAL_ADD_TO_CONTEXT"
 	| "TERMINAL_FIX"
 	| "TERMINAL_EXPLAIN"
@@ -139,6 +140,9 @@ Provide the improved code along with explanations for each enhancement.`,
 \`\`\`
 \${selectedText}
 \`\`\``,
+	},
+	ADD_FILE_PATH_TO_CONTEXT: {
+		template: `\${filePath}`,
 	},
 	TERMINAL_ADD_TO_CONTEXT: {
 		template: `\${userInput}

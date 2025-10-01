@@ -25,9 +25,9 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	PREVENT_FOCUS_DISRUPTION: { enabled: false },
 	IMAGE_GENERATION: { enabled: false },
 	RUN_SLASH_COMMAND: { enabled: false },
-	ALLOWED_MULTI_CALL: { enabled: false },
-	USE_TOOL_CALLING: { enabled: false },
-	USE_NATIVE_PROMPT: { enabled: true },
+	ALLOWED_MULTI_CALL: { enabled: true },
+	USE_TOOL_CALLING: { enabled: true },
+	USE_NATIVE_PROMPT: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

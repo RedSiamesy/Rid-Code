@@ -118,6 +118,7 @@ import { AutoApprovalHandler } from "./AutoApprovalHandler"
 
 
 import { userExecuteCommand } from "../tools/executeCommandTool"
+import { userExecuteThinking } from "../tools/thinkingTool"
 
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
@@ -305,6 +306,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Riddler
 	postprocess = {
 		_execute_command: undefined as string | undefined,
+		_thinking: false,
+		_reasoning: "",
 	}
 	public toolSequence: string[] = [];
 	toolsCalledThisTurn: ApiStreamToolChunk[] = [];
@@ -1917,9 +1920,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				userExecuteCommandResult = await userExecuteCommand(this, cmd)
 			}
 
+			let userExecuteThinkingResult: string | undefined = undefined
+			if (this.postprocess._thinking) {
+				this.postprocess._thinking = false
+				userExecuteThinkingResult = await userExecuteThinking(this, parsedUserContent)
+			}
+			
 			const finalUserContent = [
 				...parsedUserContent, 
 				...(userExecuteCommandResult !== undefined ? [{ type: "text" as const, text: `User called the command in the task above in the local terminal, and the terminal displayed the following results (the results are in the <user_execute_command_result></user_execute_command_result> tag):\n<user_execute_command_result>\n${userExecuteCommandResult}\n</user_execute_command_result>` }] : []),
+				...(userExecuteThinkingResult !== undefined ? [{ type: "text" as const, text: `User initiated a thinking process in the task above, and the following results were produced (the results are in the <thinking_content></thinking_content> tag):\n<thinking_content>\n${userExecuteThinkingResult}\n</thinking_content>` }] : []),
 				...(this.parentTask && includeFileDetails ? [{ type: "text" as const, text: "- IMPORTANT: **SUBTASK RULES** - When you complete your tasks and finally call the \`attempt_completion\` tool for summarization, you MUST describe in more detail all the tasks you completed and the conclusions you reached." }] : []), 
 				{ type: "text" as const, text: environmentDetails },
 			]
@@ -2536,6 +2546,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			browserToolEnabled,
 			maxReadFileLine,
 			apiConfiguration,
+			thinkingToolEnabled,
 		} = state ?? {}
 
 		return await (async () => {
@@ -2563,6 +2574,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 					useAgentRules: vscode.workspace.getConfiguration("roo-cline").get<boolean>("useAgentRules") ?? true,
 					newTaskRequireTodos: false,
+					thinkingToolEnabled: thinkingToolEnabled ?? false,
 				},
 				this.api.getModel().id,
 			)
@@ -2609,6 +2621,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			maxConcurrentFileReads,
 			maxReadFileLine,
 			apiConfiguration,
+			thinkingToolEnabled,
 		} = state ?? {}
 
 		return await (async () => {
@@ -2642,6 +2655,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					newTaskRequireTodos: vscode.workspace
 						.getConfiguration("roo-cline")
 						.get<boolean>("newTaskRequireTodos", false),
+					thinkingToolEnabled: thinkingToolEnabled ?? false,
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -2852,6 +2866,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (cleanConversationHistory.length > 0) {
 			const lastMessage = cleanConversationHistory[cleanConversationHistory.length - 1]
 			if (lastMessage.role === "user" && Array.isArray(lastMessage.content)) {
+				if (this.postprocess._reasoning !== "") {
+					lastMessage.content.push({
+						type: "text",
+						text: `Here is the reasoning analysis of the current task process by the reasoning model, which can provide references for analyzing the current task, taking action, and making decisions:\n<thinking_tool_reasoning>\n${this.postprocess._reasoning}\n</thinking_tool_reasoning>`
+					})
+					this.postprocess._reasoning = ""
+				}
 				if (userSuggestions !== undefined) {
 					lastMessage.content.push({
 						type: "text",
