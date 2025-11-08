@@ -397,10 +397,18 @@ export class RiddlerVectorStore implements IVectorStore {
 		}
 
 		try {
+			// Convert absolute paths to relative paths to match what's stored in upsertPoints
+			// upsertPoints stores the relative filePath, not the absolute path
+			const relativeFilePaths = filePaths.map((filePath) => {
+				const relativePath = path.isAbsolute(filePath) ? path.relative(this.workspacePath, filePath) : filePath
+				// Normalize the relative path
+				return path.normalize(relativePath)
+			})
+
 			// Use the delete_files endpoint to remove specific files from the collection
 			const response = await this.makeRequest("/delete_files", "POST", {
 				collection_name: this.collectionName,
-				file_paths: filePaths
+				file_paths: relativeFilePaths
 			})
 
 			if (response && response.status === "success") {
@@ -408,7 +416,20 @@ export class RiddlerVectorStore implements IVectorStore {
 				console.warn(`[RiddlerVectorStore] Unexpected response when deleting files:`, response)
 			}
 		} catch (error: any) {
-			console.error(`[RiddlerVectorStore] Failed to delete points by file paths:`, error)
+			// Extract more detailed error information
+			const errorMessage = error?.message || String(error)
+			const errorStatus = error?.status || error?.response?.status || error?.statusCode
+			const errorDetails = error?.response?.data || error?.data || ""
+
+			console.error(`[RiddlerVectorStore] Failed to delete points by file paths:`, {
+				error: errorMessage,
+				status: errorStatus,
+				details: errorDetails,
+				collection: this.collectionName,
+				fileCount: filePaths.length,
+				// Include first few file paths for debugging (avoid logging too many)
+				samplePaths: filePaths.slice(0, 3),
+			})
 			throw error
 		}
 	}

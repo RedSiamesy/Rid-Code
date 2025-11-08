@@ -170,7 +170,7 @@ export async function webSearchTool(
 ) {
 	try {
 		const params: WebSearchParams = {
-			query: block.params.query,
+			query: block.params.task,
 		}
 
 		// Handle partial requests

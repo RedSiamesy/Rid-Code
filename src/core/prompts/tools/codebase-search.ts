@@ -67,6 +67,8 @@ If 'query' is not provided, it generates a summary of the specified path.
 const query_description = `
 If given a 'query', follow these guidelines:
 
+Describe the task you are currently processing and the details you need to query in natural language
+
 - **Extract from Code:** If the conversation includes code snippets, extract key identifiers like class names, function names, method names, or variable names. These are often the most crucial elements to search for to understand the code's purpose and functionality.
 - **Infer from Context:** Go beyond the literal words in the conversation.
     - **For Code-related Questions:** Infer potential function names, class names, or design patterns that might exist in the codebase to solve the user's problem.

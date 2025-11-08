@@ -107,6 +107,21 @@ export const modelScopeModels = {
 		outputPrice: 2.2, 
 		description: `Merge GLM-4.5 and Qwen2.5-VL-72B-Instruct to grant the Coder model the ability to understand images. Each conversation requires more request counts.`,
 	},
+	"ZhipuAI/GLM-4.6": {
+		maxTokens: 65_536,
+		contextWindow: 204_800,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0.6, 
+		outputPrice: 2.2, 
+		description: `Compared with GLM-4.5, this generation brings several key improvements:
+
+Longer context window: The context window has been expanded from 128K to 200K tokens, enabling the model to handle more complex agentic tasks.
+Superior coding performance: The model achieves higher scores on code benchmarks and demonstrates better real-world performance in applications such as Claude Code、Cline、Roo Code and Kilo Code, including improvements in generating visually polished front-end pages.
+Advanced reasoning: GLM-4.6 shows a clear improvement in reasoning performance and supports tool use during inference, leading to stronger overall capability.
+More capable agents: GLM-4.6 exhibits stronger performance in tool using and search-based agents, and integrates more effectively within agent frameworks.
+Refined writing: Better aligns with human preferences in style and readability, and performs more naturally in role-playing scenarios.`,
+	},
 	"ZhipuAI/GLM-4.5": {
 		maxTokens: 32_768,
 		contextWindow: 131_072,
