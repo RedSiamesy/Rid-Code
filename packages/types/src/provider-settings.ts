@@ -22,6 +22,7 @@ import {
 	qwenCodeModels,
 	rooModels,
 	sambaNovaModels,
+	siliconFlowModels,
 	vertexModels,
 	vscodeLlmModels,
 	xaiModels,
@@ -62,6 +63,7 @@ export const providerNames = [
 	"chutes",
 	"litellm",
 	"modelscope",
+	"siliconflow",
 	"huggingface",
 	"iflow",
 	"cerebras",
@@ -283,6 +285,11 @@ const iflowSchema = apiModelIdProviderModelSchema.extend({
 	iflowBaseUrl: z.string().optional(),
 })
 
+const siliconFlowSchema = apiModelIdProviderModelSchema.extend({
+	siliconFlowApiKey: z.string().optional(),
+	siliconFlowBaseUrl: z.string().optional(),
+})
+
 const humanRelaySchema = baseProviderSettingsSchema
 
 const fakeAiSchema = baseProviderSettingsSchema.extend({
@@ -386,6 +393,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	chutesSchema.merge(z.object({ apiProvider: z.literal("chutes") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
 	modelscopeSchema.merge(z.object({ apiProvider: z.literal("modelscope") })),
+	siliconFlowSchema.merge(z.object({ apiProvider: z.literal("siliconflow") })),
 	iflowSchema.merge(z.object({ apiProvider: z.literal("iflow") })),
 	cerebrasSchema.merge(z.object({ apiProvider: z.literal("cerebras") })),
 	sambaNovaSchema.merge(z.object({ apiProvider: z.literal("sambanova") })),
@@ -429,6 +437,7 @@ export const providerSettingsSchema = z.object({
 	...chutesSchema.shape,
 	...litellmSchema.shape,
 	...modelscopeSchema.shape,
+	...siliconFlowSchema.shape,
 	...iflowSchema.shape,
 	...cerebrasSchema.shape,
 	...sambaNovaSchema.shape,
@@ -566,6 +575,7 @@ export const MODELS_BY_PROVIDER: Record<
 	"qwen-code": { id: "qwen-code", label: "Qwen Code", models: Object.keys(qwenCodeModels) },
 	roo: { id: "roo", label: "Roo", models: Object.keys(rooModels) },
 	modelscope: { id: "modelscope", label: "ModelScope", models: Object.keys(modelScopeModels) },
+	siliconflow: { id: "siliconflow", label: "SiliconFlow", models: Object.keys(siliconFlowModels) },
 	iflow: { id: "iflow", label: "iFlow", models: Object.keys(iFlowModels) },
 	sambanova: {
 		id: "sambanova",

@@ -226,6 +226,7 @@ export async function searchAndReplaceTool(
 		const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
 		if (!didApprove) {
+			await cline.say("text", "(Rejected)")
 			// Revert changes if diff view was shown
 			if (!isPreventFocusDisruptionEnabled) {
 				await cline.diffViewProvider.revertChanges()

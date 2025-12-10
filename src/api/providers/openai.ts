@@ -230,16 +230,23 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 						hasFirstToken = true
 					}
 
-					yield {
-						type: "reasoning",
-						text: (delta.reasoning_content as string | undefined) || "",
+					if (hasFirstToken) {
+						yield {
+							type: "reasoning",
+							text: (delta.reasoning_content as string | undefined) || "",
+						}
 					}
 				}
 
 				// Handle tool calls
 				if (delta.tool_calls && delta.tool_calls.length > 0) {
 					if (!hasFirstToken) {
-						firstTokenTime = Date.now()
+						// if (delta.tool_calls[0].function?.name && !delta.tool_calls[0].function?.arguments) {
+						// 	firstTokenTime = Date.now()
+						// } else {
+						// 	// 有些模型在没有正文时会一次性攒出完整的tool_calls再传出（相当于非流式），首字延迟不准
+							firstTokenTime = Math.floor((startTime*90+Date.now()*10)/100)
+						// }
 						hasFirstToken = true
 					}
 					for (const toolCall of delta.tool_calls) {

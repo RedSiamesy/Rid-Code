@@ -173,3 +173,74 @@ export async function truncateConversationIfNeeded({
 	// No truncation or condensation needed
 	return { messages, summary: "", cost, prevContextTokens, error }
 }
+
+
+/**
+ * Conditionally truncates the conversation messages if the total token count
+ * exceeds the model's limit, considering the size of incoming content.
+ *
+ * @param {TruncateOptions} options - The options for truncation
+ * @returns {Promise<ApiMessage[]>} The original or truncated conversation messages.
+ */
+export async function IsNeededtruncateConversation({
+	messages,
+	totalTokens,
+	contextWindow,
+	maxTokens,
+	apiHandler,
+	autoCondenseContext,
+	autoCondenseContextPercent,
+	systemPrompt,
+	taskId,
+	customCondensingPrompt,
+	condensingApiHandler,
+	profileThresholds,
+	currentProfileId,
+}: TruncateOptions): Promise<boolean> {
+	let error: string | undefined
+	let cost = 0
+	// Calculate the maximum tokens reserved for response
+	const reservedTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
+
+	// Estimate tokens for the last message (which is always a user message)
+	const lastMessage = messages[messages.length - 1]
+	const lastMessageContent = lastMessage.content
+	const lastMessageTokens = Array.isArray(lastMessageContent)
+		? await estimateTokenCount(lastMessageContent, apiHandler)
+		: await estimateTokenCount([{ type: "text", text: lastMessageContent as string }], apiHandler)
+
+	// Calculate total effective tokens (totalTokens never includes the last message)
+	const prevContextTokens = totalTokens + lastMessageTokens
+
+	// Calculate available tokens for conversation history
+	// Truncate if we're within TOKEN_BUFFER_PERCENTAGE of the context window
+	const allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
+
+	// Determine the effective threshold to use
+	let effectiveThreshold = autoCondenseContextPercent
+	const profileThreshold = profileThresholds[currentProfileId]
+	if (profileThreshold !== undefined) {
+		if (profileThreshold === -1) {
+			// Special case: -1 means inherit from global setting
+			effectiveThreshold = autoCondenseContextPercent
+		} else if (profileThreshold >= MIN_CONDENSE_THRESHOLD && profileThreshold <= MAX_CONDENSE_THRESHOLD) {
+			// Valid custom threshold
+			effectiveThreshold = profileThreshold
+		} else {
+			// Invalid threshold value, fall back to global setting
+			console.warn(
+				`Invalid profile threshold ${profileThreshold} for profile "${currentProfileId}". Using global default of ${autoCondenseContextPercent}%`,
+			)
+			effectiveThreshold = autoCondenseContextPercent
+		}
+	}
+	// If no specific threshold is found for the profile, fall back to global setting
+
+	if (autoCondenseContext) {
+		const contextPercent = (100 * prevContextTokens) / contextWindow
+		if (contextPercent >= effectiveThreshold || prevContextTokens > allowedTokens) {
+			return true
+		}
+	}
+	return false
+}

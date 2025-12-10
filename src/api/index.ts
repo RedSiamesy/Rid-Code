@@ -38,6 +38,7 @@ import {
 	DoubaoHandler,
 	IFlowHandler,
 	ModelScopeHandler,
+	SiliconFlowHandler,
 	ZAiHandler,
 	FireworksHandler,
 	RooHandler,
@@ -114,6 +115,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new OpenAiHandler(options)
 		case "modelscope":
 			return new ModelScopeHandler(options)
+		case "siliconflow":
+			return new SiliconFlowHandler(options)
 		case "ollama":
 			return new NativeOllamaHandler(options)
 		case "lmstudio":

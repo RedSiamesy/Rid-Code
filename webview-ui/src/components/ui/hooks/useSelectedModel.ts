@@ -14,6 +14,8 @@ import {
 	iFlowModels,
 	modelScopeDefaultModelId,
 	modelScopeModels,
+	siliconFlowDefaultModelId,
+	siliconFlowModels,
 	moonshotDefaultModelId,
 	moonshotModels,
 	geminiDefaultModelId,
@@ -241,6 +243,11 @@ function getSelectedModel({
 			const info = modelScopeModels[id as keyof typeof modelScopeModels]
 			return { id, info }
 		}
+		case "siliconflow": {
+			const id = apiConfiguration.apiModelId ?? siliconFlowDefaultModelId
+			const info = siliconFlowModels[id as keyof typeof siliconFlowModels]
+			return { id, info }
+		}
 		case "doubao": {
 			const id = apiConfiguration.apiModelId ?? doubaoDefaultModelId
 			const info = doubaoModels[id as keyof typeof doubaoModels]
@@ -366,7 +373,7 @@ function getSelectedModel({
 		// case "human-relay":
 		// case "fake-ai":
 		default: {
-			provider satisfies "anthropic" | "gemini-cli" | "qwen-code" | "human-relay" | "fake-ai"
+			provider satisfies "anthropic" | "gemini-cli" | "qwen-code" | "human-relay" | "fake-ai" | "siliconflow"
 			const id = apiConfiguration.apiModelId ?? anthropicDefaultModelId
 			const baseInfo = anthropicModels[id as keyof typeof anthropicModels]
 

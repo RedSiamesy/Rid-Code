@@ -29,6 +29,8 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	writeDelayMs: number
 	thinkingToolEnabled?: boolean
 	thinkingToolApiConfigId?: string
+	multiModalToolEnabled?: boolean
+	multiModalToolApiConfigId?: string
 	setCachedStateField: SetCachedStateField<
 		| "autoCondenseContext"
 		| "autoCondenseContextPercent"
@@ -45,6 +47,8 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "writeDelayMs"
 		| "thinkingToolEnabled"
 		| "thinkingToolApiConfigId"
+		| "multiModalToolEnabled"
+		| "multiModalToolApiConfigId"
 	>
 }
 
@@ -66,6 +70,8 @@ export const ContextManagementSettings = ({
 	writeDelayMs,
 	thinkingToolEnabled,
 	thinkingToolApiConfigId,
+	multiModalToolEnabled,
+	multiModalToolApiConfigId,
 	className,
 	...props
 }: ContextManagementSettingsProps) => {
@@ -471,6 +477,55 @@ export const ContextManagementSettings = ({
 									<SelectValue
 										placeholder={
 											t("settings:contextManagement.thinkingTool.modelDescription") ||
+											"Select model for thinking analysis"
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="default">
+										{t("settings:contextManagement.condensingThreshold.defaultProfile") || "Use current model"}
+									</SelectItem>
+									{(listApiConfigMeta || []).map((config) => (
+										<SelectItem key={config.id} value={config.id}>
+											{config.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<div className="text-vscode-descriptionForeground text-sm mt-1">
+								{t("settings:contextManagement.thinkingTool.modelDescription")}
+							</div>
+						</div>
+					</div>
+				)}
+			</Section>
+
+			{/* Thinking Tool Section */}
+			<Section className="pt-2">
+				<VSCodeCheckbox
+					checked={multiModalToolEnabled || false}
+					onChange={(e: any) => setCachedStateField("multiModalToolEnabled", e.target.checked)}
+					data-testid="multi-modal-tool-enabled-checkbox">
+					<span className="font-medium">{"启用图像思维"}</span>
+				</VSCodeCheckbox>
+				{multiModalToolEnabled && (
+					<div className="flex flex-col gap-3 pl-3 border-l-2 border-vscode-button-background">
+						<div className="flex items-center gap-4 font-bold">
+							<Brain size={16} />
+							<div>{t("settings:contextManagement.thinkingTool.name")}</div>
+						</div>
+						<div>
+							<span className="block font-medium mb-1">
+								{"图像思维模型"}
+							</span>
+							<Select
+								value={multiModalToolApiConfigId || "default"}
+								onValueChange={(value) => setCachedStateField("multiModalToolApiConfigId", value)}
+								data-testid="multi-modal-tool-model-select">
+								<SelectTrigger className="w-full">
+									<SelectValue
+										placeholder={
+											t("settings:contextManagement.multiModalTool.modelDescription") ||
 											"Select model for thinking analysis"
 										}
 									/>

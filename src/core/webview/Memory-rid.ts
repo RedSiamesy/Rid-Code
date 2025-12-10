@@ -439,7 +439,7 @@ x. 一系列可以让你成为用户工作伙伴的其他必要信息...
 				}
 			}
 
-			const summary = `记忆已更新:\n${g_str}${p_str}\n\n操作详情: ${operationSummary}`
+			const summary = `记忆已更新:\n${g_str}${p_str}\n操作详情: ${operationSummary}`
 			const contextCondense: ContextCondense = { 
 				summary, 
 				cost, 

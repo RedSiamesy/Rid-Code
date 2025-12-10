@@ -130,9 +130,9 @@ export const ToolExecution = ({
 	const currentError = status?.error
 
 	return (
-		<div className={cn("w-full", className)}>
+		<div className={cn("w-full pl-6 pr-1 pt-1", className)}>
 			{/* Header with tool info and status */}
-            <div className="w-full bg-vscode-editor-background border border-vscode-border rounded-xs p-2">
+            <div className="w-full bg-vscode-editor-background border border-vscode-border rounded-md p-2">
                 <div className="flex flex-row items-center justify-between gap-2 mb-1">
                     <div className="flex flex-row items-center gap-1 flex-wrap">
                         <Wrench size={16} className="text-vscode-descriptionForeground" />

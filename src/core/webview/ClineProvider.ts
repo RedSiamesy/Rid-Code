@@ -1786,6 +1786,8 @@ export class ClineProvider
 			notificationHook,
 			thinkingToolEnabled,
 			thinkingToolApiConfigId,
+			multiModalToolEnabled,
+			multiModalToolApiConfigId,
 		} = await this.getState()
 
 		const telemetryKey = process.env.POSTHOG_API_KEY
@@ -1926,6 +1928,8 @@ export class ClineProvider
 			notificationHook: notificationHook ?? "",
 			thinkingToolEnabled: thinkingToolEnabled ?? false,
 			thinkingToolApiConfigId: thinkingToolApiConfigId,
+			multiModalToolEnabled: multiModalToolEnabled ?? false,
+			multiModalToolApiConfigId: multiModalToolApiConfigId,
 		}
 	}
 
@@ -2158,6 +2162,8 @@ export class ClineProvider
 			})(),
 			thinkingToolEnabled: stateValues.thinkingToolEnabled ?? false,
 			thinkingToolApiConfigId: stateValues.thinkingToolApiConfigId ?? "default",
+			multiModalToolEnabled: stateValues.multiModalToolEnabled ?? false,
+			multiModalToolApiConfigId: stateValues.multiModalToolApiConfigId ?? "default",
 			notificationHook: stateValues.notificationHook ?? "",
 		}
 	}

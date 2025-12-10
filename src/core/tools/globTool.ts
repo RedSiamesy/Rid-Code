@@ -35,6 +35,14 @@ export async function globTool(
 			await cline.ask("tool", partialMessage, block.partial).catch(() => {})
 			return
 		} else {
+			if (!cline.clineMessages || cline.clineMessages.length === 0 
+				|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
+				|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "tool"
+			){
+				const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+				await cline.ask("tool", partialMessage, true).catch(() => {})
+			}
+
 			if (!relDirPath) {
 				cline.consecutiveMistakeCount++
 				cline.recordToolError("grep")

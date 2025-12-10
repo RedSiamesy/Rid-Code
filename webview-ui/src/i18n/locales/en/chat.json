@@ -387,11 +387,11 @@
 		}
 	},
 	"slashCommand": {
-		"wantsToRun": "Roo wants to run a slash command:",
-		"didRun": "Roo ran a slash command:"
+		"wantsToRun": "Roo wants to run a slash command",
+		"didRun": "Roo ran a slash command"
 	},
 	"queuedMessages": {
-		"title": "Queued Messages:",
+		"title": "Queued Messages",
 		"clickToEdit": "Click to edit message"
 	},
 	"contextMenu": {
@@ -399,5 +399,12 @@
 		"problems": "Problems",
 		"terminal": "Terminal",
 		"url": "Paste URL to fetch contents"
+	},
+	"todo": {
+		"partial": "{{completed}} of {{total}} to-dos done",
+		"complete": "{{total}} to-dos done",
+		"updated": "Updated the to-do list",
+		"completed": "Completed",
+		"started": "Started"
 	}
 }

@@ -77,8 +77,8 @@ const TaskHeader = ({
 		<div className="py-2 px-3">
 			<div
 				className={cn(
-					"p-2.5 flex flex-col gap-1.5 relative z-1 border",
-					hasTodos ? "rounded-t-xs border-b-0" : "rounded-xs",
+					"p-2.5 flex flex-col gap-1.5 relative z-1 border ",
+					hasTodos ? "rounded-t-md border-b-0" : "rounded-md",
 					isTaskExpanded
 						? "border-vscode-panel-border text-vscode-foreground"
 						: "border-vscode-panel-border/80 text-vscode-foreground/80",
@@ -122,7 +122,11 @@ const TaskHeader = ({
 						/>
 						{condenseButton}
 						<ShareButton item={currentTaskItem} disabled={buttonsDisabled} />
-						{!!totalCost && <VSCodeBadge>${totalCost.toFixed(2)}</VSCodeBadge>}
+						{!!totalCost && <div
+									className="text-xs text-vscode-dropdown-foreground border-vscode-dropdown-border/50 border px-1.5 py-0.5 rounded-lg"
+									style={{ opacity: totalCost !== null && totalCost !== undefined && totalCost > 0 ? 1 : 0 }}>
+									${Number(totalCost).toFixed(3)}
+								</div>}
 					</div>
 				)}
 				{/* Expanded state: Show task text and images */}

@@ -86,7 +86,7 @@ import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
 import { AssistantMessageParser } from "../assistant-message/AssistantMessageParser"
-import { truncateConversationIfNeeded } from "../sliding-window"
+import { truncateConversationIfNeeded, IsNeededtruncateConversation } from "../sliding-window"
 import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
@@ -119,6 +119,7 @@ import { AutoApprovalHandler } from "./AutoApprovalHandler"
 
 import { userExecuteCommand } from "../tools/executeCommandTool"
 import { userExecuteThinking } from "../tools/thinkingTool"
+import { userExecuteMultiModalThinking } from "../tools/multiModalTool"
 
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
@@ -1895,6 +1896,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeDiagnosticMessages = true,
 				maxDiagnosticMessages = 50,
 				maxReadFileLine = -1,
+				multiModalToolEnabled = false,
 			} = (await this.providerRef.deref()?.getState()) ?? {}
 
 			const parsedUserContent = await processUserContentMentions({
@@ -1925,11 +1927,48 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.postprocess._thinking = false
 				userExecuteThinkingResult = await userExecuteThinking(this, parsedUserContent)
 			}
-			
+
+			const agentContext = getMessagesSinceLastSummary(this.apiConversationHistory)
+			let has_img = false
+			for (const msg of agentContext) {
+				if (Array.isArray(msg.content)) {
+					for (const block of msg.content) {
+						if (block.type === "image") {
+							has_img = true
+							break
+						}
+					}
+				}
+				if (has_img) {
+					break
+				}
+			}
+			let has_task_img = false
+			for (const block of parsedUserContent) {
+				if (block.type === "image") {
+					has_task_img = true
+					break
+				}
+			}
+			let has_task_text = false
+			for (const block of parsedUserContent) {
+				if (block.type === "text" && (block.text.includes("<task>") || block.text.includes("<feedback>"))) {
+					has_task_text = true
+					break
+				}
+			}
+			let userExecuteMultiModalThinkingResult: string | undefined = undefined
+			if ((has_img && has_task_text) || has_task_img) {
+				if (multiModalToolEnabled === true) {
+					userExecuteMultiModalThinkingResult = await userExecuteMultiModalThinking(this, parsedUserContent, has_task_img)
+				}
+			}
+
 			const finalUserContent = [
 				...parsedUserContent, 
 				...(userExecuteCommandResult !== undefined ? [{ type: "text" as const, text: `User called the command in the task above in the local terminal, and the terminal displayed the following results (the results are in the <user_execute_command_result></user_execute_command_result> tag):\n<user_execute_command_result>\n${userExecuteCommandResult}\n</user_execute_command_result>` }] : []),
 				...(userExecuteThinkingResult !== undefined ? [{ type: "text" as const, text: `User initiated a thinking process in the task above, and the following results were produced (the results are in the <thinking_content></thinking_content> tag):\n<thinking_content>\n${userExecuteThinkingResult}\n</thinking_content>` }] : []),
+				...(userExecuteMultiModalThinkingResult !== undefined ? [{ type: "text" as const, text: `Users have used a multimodal analysis agent to describe and analyze multimodal data, which means users have input multimodal information, and these analyses will replace the multimodal information itself as context, helping you process user tasks. The following results were produced (the results are in the <multi_modal_analysis_content></multi_modal_analysis_content> tag):\n<multi_modal_analysis_content>\n${userExecuteMultiModalThinkingResult}\n</multi_modal_analysis_content>` }] : []),
 				...(this.parentTask && includeFileDetails ? [{ type: "text" as const, text: "- IMPORTANT: **SUBTASK RULES** - When you complete your tasks and finally call the \`attempt_completion\` tool for summarization, you MUST describe in more detail all the tasks you completed and the conclusions you reached." }] : []), 
 				{ type: "text" as const, text: environmentDetails },
 			]
@@ -2547,6 +2586,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			maxReadFileLine,
 			apiConfiguration,
 			thinkingToolEnabled,
+			multiModalToolEnabled,
 		} = state ?? {}
 
 		return await (async () => {
@@ -2575,6 +2615,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					useAgentRules: vscode.workspace.getConfiguration("roo-cline").get<boolean>("useAgentRules") ?? true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: thinkingToolEnabled ?? false,
+					multiModalToolEnabled: multiModalToolEnabled ?? false,
 				},
 				this.api.getModel().id,
 			)
@@ -2622,6 +2663,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			maxReadFileLine,
 			apiConfiguration,
 			thinkingToolEnabled,
+			multiModalToolEnabled,
 		} = state ?? {}
 
 		return await (async () => {
@@ -2656,6 +2698,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						.getConfiguration("roo-cline")
 						.get<boolean>("newTaskRequireTodos", false),
 					thinkingToolEnabled: thinkingToolEnabled ?? false,
+					multiModalToolEnabled: multiModalToolEnabled ?? false,
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -2814,6 +2857,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Get the current profile ID using the helper method
 			const currentProfileId = this.getCurrentProfileId(state)
 
+			if (await IsNeededtruncateConversation({
+				messages: this.apiConversationHistory,
+				totalTokens: contextTokens,
+				maxTokens,
+				contextWindow,
+				apiHandler: this.api,
+				autoCondenseContext,
+				autoCondenseContextPercent,
+				systemPrompt,
+				taskId: this.taskId,
+				customCondensingPrompt,
+				condensingApiHandler,
+				profileThresholds,
+				currentProfileId,
+			})) {
+				await this.say(
+				"condense_context",
+				undefined /* text */,
+				undefined /* images */,
+				true /* partial */,
+				undefined /* checkpoint */,
+				undefined /* progressStatus */,
+				{ isNonInteractive: true } /* options */,
+				undefined,
+			)
+			}
+			
 			const truncateResult = await truncateConversationIfNeeded({
 				messages: this.apiConversationHistory,
 				totalTokens: contextTokens,
@@ -2833,11 +2903,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.overwriteApiConversationHistory(truncateResult.messages)
 			}
 			if (truncateResult.error) {
-				await this.say("condense_context_error", truncateResult.error)
+				// await this.say("condense_context_error", truncateResult.error)
+				await this.say(
+					"condense_context",
+					truncateResult.error /* text */,
+					undefined /* images */,
+					false /* partial */,
+					undefined /* checkpoint */,
+					undefined /* progressStatus */,
+					{ isNonInteractive: true } /* options */,
+					undefined,
+				)
 			} else if (truncateResult.summary) {
 				// A condense operation occurred; for the next GPT‑5 API call we should NOT
 				// send previous_response_id so the request reflects the fresh condensed context.
 				this.skipPrevResponseIdOnce = true
+
+				await this.say(
+					"condense_context",
+					undefined /* text */,
+					undefined /* images */,
+					false /* partial */,
+					undefined /* checkpoint */,
+					undefined /* progressStatus */,
+					{ isNonInteractive: true } /* options */,
+					undefined,
+				)
 
 				const { summary, cost, prevContextTokens, newContextTokens = 0 } = truncateResult
 				const contextCondense: ContextCondense = { summary, cost, newContextTokens, prevContextTokens }

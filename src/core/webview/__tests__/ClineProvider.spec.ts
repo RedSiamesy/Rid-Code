@@ -559,6 +559,8 @@ describe("ClineProvider", () => {
 			featureRoomoteControlEnabled: false,
 			thinkingToolEnabled: false, 
 			thinkingToolApiConfigId: "default",
+			multiModalToolEnabled: false,
+			multiModalToolApiConfigId: "default",
 			notificationHook: "",
 		}
 

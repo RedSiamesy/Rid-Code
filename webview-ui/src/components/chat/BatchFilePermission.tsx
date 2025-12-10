@@ -2,7 +2,8 @@ import { memo } from "react"
 
 import { ToolUseBlock, ToolUseBlockHeader } from "../common/ToolUseBlock"
 import { vscode } from "@src/utils/vscode"
-import { removeLeadingNonAlphanumeric } from "@src/utils/removeLeadingNonAlphanumeric"
+import { formatPathTooltip } from "@src/utils/formatPathTooltip"
+import { PathTooltip } from "../ui/PathTooltip"
 
 interface FilePermissionItem {
 	path: string
@@ -27,20 +28,31 @@ export const BatchFilePermission = memo(({ files = [], onPermissionResponse, ts 
 	return (
 		<div className="pt-[5px]">
 			{/* Individual files */}
-			<div className="flex flex-col gap-0 border border-border rounded-md p-1">
+			<div className="bg-vscode-editor-background flex flex-col gap-0  rounded-md p-1 ml-6 mr-1">
 				{files.map((file) => {
 					return (
 						<div key={`${file.path}-${ts}`} className="flex items-center gap-2">
 							<ToolUseBlock className="flex-1">
 								<ToolUseBlockHeader
+									className="group"
 									onClick={() => vscode.postMessage({ type: "openFile", text: file.content })}>
 									{file.path?.startsWith(".") && <span>.</span>}
-									<span className="whitespace-nowrap overflow-hidden text-ellipsis text-left mr-2 rtl">
-										{removeLeadingNonAlphanumeric(file.path ?? "") + "\u200E"}
-										{file.lineSnippet && ` ${file.lineSnippet}`}
-									</span>
+									<PathTooltip
+										content={formatPathTooltip(
+											file.path,
+											file.lineSnippet ? ` ${file.lineSnippet}` : undefined,
+										)}>
+										<span className="whitespace-nowrap overflow-hidden text-ellipsis text-left mr-2 rtl">
+											{formatPathTooltip(
+												file.path,
+												file.lineSnippet ? ` ${file.lineSnippet}` : undefined,
+											)}
+										</span>
+									</PathTooltip>
 									<div className="flex-grow"></div>
-									<span className="codicon codicon-link-external text-[13.5px] my-[1px]" />
+									<span
+										className={`codicon codicon-link-external w-4 shrink-0 codicon codicon-link-external opacity-0 group-hover:opacity-100 transition-opacity`}
+									/>
 								</ToolUseBlockHeader>
 							</ToolUseBlock>
 						</div>

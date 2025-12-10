@@ -115,6 +115,8 @@ export interface WebviewMessage {
 		| "writeDelayMs"
 		| "thinkingToolEnabled"
 		| "thinkingToolApiConfigId"
+		| "multiModalToolEnabled"
+		| "multiModalToolApiConfigId"
 		| "useTerminalCommand"
 		| "saveMemory"
 		| "savedMemory"

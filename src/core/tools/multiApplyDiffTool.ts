@@ -15,6 +15,7 @@ import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { parseXmlForDiff } from "../../utils/xml"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { applyDiffToolLegacy } from "./applyDiffTool"
+import { computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
 
 interface DiffOperation {
 	path: string
@@ -282,31 +283,70 @@ Original error: ${errorMessage}`
 				(opResult) => cline.rooProtectedController?.isWriteProtected(opResult.path) || false,
 			)
 
-			// Prepare batch diff data
-			const batchDiffs = operationsToApprove.map((opResult) => {
+			// Stream batch diffs progressively for better UX
+			const batchDiffs: Array<{
+				path: string
+				changeCount: number
+				key: string
+				content: string
+				diffStats?: { added: number; removed: number }
+				diffs?: Array<{ content: string; startLine?: number }>
+			}> = []
+
+			for (const opResult of operationsToApprove) {
 				const readablePath = getReadablePath(cline.cwd, opResult.path)
 				const changeCount = opResult.diffItems?.length || 0
 				const changeText = changeCount === 1 ? "1 change" : `${changeCount} changes`
 
-				return {
+				let unified = ""
+				try {
+					const original = await fs.readFile(opResult.absolutePath!, "utf-8")
+					const processed = !cline.api.getModel().id.includes("claude")
+						? (opResult.diffItems || []).map((item) => ({
+								...item,
+								content: item.content ? unescapeHtmlEntities(item.content) : item.content,
+							}))
+						: opResult.diffItems || []
+
+					const applyRes =
+						(await cline.diffStrategy?.applyDiff(original, processed)) ?? ({ success: false } as any)
+					const newContent = applyRes.success && applyRes.content ? applyRes.content : original
+					unified = formatResponse.createPrettyPatch(opResult.path, original, newContent)
+				} catch {
+					unified = ""
+				}
+
+				const unifiedSanitized = sanitizeUnifiedDiff(unified)
+				const stats = computeDiffStats(unifiedSanitized) || undefined
+				batchDiffs.push({
 					path: readablePath,
 					changeCount,
 					key: `${readablePath} (${changeText})`,
-					content: opResult.path, // Full relative path
+					content: unifiedSanitized,
+					diffStats: stats,
 					diffs: opResult.diffItems?.map((item) => ({
 						content: item.content,
 						startLine: item.startLine,
 					})),
-				}
-			})
+				})
 
+				// Send a partial update after each file preview is ready
+				const partialMessage = JSON.stringify({
+					tool: "appliedDiff",
+					batchDiffs,
+					isProtected: hasProtectedFiles,
+				} satisfies ClineSayTool)
+				await cline.ask("tool", partialMessage, true).catch(() => {})
+			}
+
+			// Final approval message (non-partial)
 			const completeMessage = JSON.stringify({
 				tool: "appliedDiff",
 				batchDiffs,
 				isProtected: hasProtectedFiles,
 			} satisfies ClineSayTool)
 
-			const { response, text, images } = await cline.ask("tool", completeMessage, hasProtectedFiles)
+			const { response, text, images } = await cline.ask("tool", completeMessage, false)
 
 			// Process batch response
 			if (response === "yesButtonClicked") {
@@ -417,7 +457,8 @@ Original error: ${errorMessage}`
 			const fileExists = opResult.fileExists!
 
 			try {
-				let originalContent: string = await fs.readFile(absolutePath, "utf-8")
+				let originalContent: string | null = await fs.readFile(absolutePath, "utf-8")
+				let beforeContent: string | null = originalContent
 				let successCount = 0
 				let formattedError = ""
 
@@ -436,7 +477,7 @@ Original error: ${errorMessage}`
 				}
 
 				// Release the original content from memory as it's no longer needed
-				// originalContent = null
+				originalContent = null
 
 				if (!diffResult.success) {
 					cline.consecutiveMistakeCount++
@@ -463,7 +504,7 @@ Error: ${failPart.error}
 Suggested fixes:
 1. Verify the search content exactly matches the file content (including whitespace and case)
 2. Check for correct indentation and line endings
-3. Use <read_file> to see the current file content
+3. Use the read_file tool to verify the file's current contents
 4. Consider breaking complex changes into smaller diffs
 5. Ensure start_line parameter matches the actual content location
 ${errorDetails ? `\nDetailed error information:\n${errorDetails}\n` : ""}
@@ -476,7 +517,7 @@ Unable to apply diffs to file: ${absolutePath}
 Error: ${diffResult.error}
 
 Recovery suggestions:
-1. Use <read_file> to examine the current file content
+1. Use the read_file tool to verify the file's current contents
 2. Verify the diff format matches the expected search/replace pattern
 3. Check that the search content exactly matches what's in the file
 4. Consider using line numbers with start_line parameter
@@ -540,9 +581,13 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 				if (operationsToApprove.length === 1) {
 					// Prepare common data for single file operation
 					const diffContents = diffItems.map((item) => item.content).join("\n\n")
+					const unifiedPatchRaw = formatResponse.createPrettyPatch(relPath, beforeContent!, originalContent!)
+					const unifiedPatch = sanitizeUnifiedDiff(unifiedPatchRaw)
 					const operationMessage = JSON.stringify({
 						...sharedMessageProps,
 						diff: diffContents,
+						content: unifiedPatch,
+						diffStats: computeDiffStats(unifiedPatch) || undefined,
 					} satisfies ClineSayTool)
 
 					let toolProgressStatus
@@ -574,6 +619,7 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 					didApprove = await askApproval("tool", operationMessage, toolProgressStatus, isWriteProtected)
 
 					if (!didApprove) {
+						await cline.say("text", "(Rejected)")
 						// Revert changes if diff view was shown
 						if (!isPreventFocusDisruptionEnabled) {
 							await cline.diffViewProvider.revertChanges()
@@ -620,20 +666,6 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 						await cline.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
 					}
 				}
-
-				
-				let newContent: string | null = await fs.readFile(absolutePath, "utf-8")
-				
-				const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent ?? "", newContent ?? undefined)
-				const say: ClineSayTool = {
-					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
-					path: getReadablePath(cline.cwd, relPath),
-					diff: `# agentEdits ${relPath}\n${agentEdits}\n`,
-				}
-	
-				// Send the user feedback
-				await cline.say("user_feedback_diff", JSON.stringify(say))
-				
 
 				// Track file edit operation
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)

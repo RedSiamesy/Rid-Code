@@ -13,7 +13,7 @@ import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
 import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { Task } from "../../core/task/Task"
 import { DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
-
+import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../../core/diff/stats"
 import { DecorationController } from "./DecorationController"
 
 export const DIFF_VIEW_URI_SCHEME = "cline-diff"
@@ -310,11 +310,13 @@ export class DiffViewProvider {
 
 		// Only send user_feedback_diff if userEdits exists
 		if (this.userEdits) {
+			const diffstate = computeDiffStats(sanitizeUnifiedDiff(this.userEdits)) || undefined
 			// Create say object for UI feedback
 			const say: ClineSayTool = {
 				tool: isNewFile ? "newFileCreated" : "editedExistingFile",
 				path: getReadablePath(cwd, this.relPath),
 				diff: this.userEdits,
+				diffStats: diffstate,
 			}
 
 			// Send the user feedback

@@ -1187,7 +1187,7 @@ const ModesView = ({ onDone }: ModesViewProps) => {
 				<div className="pb-4 border-b border-vscode-input-border">
 					<div className="flex gap-2 mb-4">
 						<Button
-							variant="default"
+							variant="primary"
 							onClick={() => {
 								const currentMode = getCurrentMode()
 								if (currentMode) {
@@ -1224,7 +1224,7 @@ const ModesView = ({ onDone }: ModesViewProps) => {
 						{/* Export button - visible when any mode is selected */}
 						{getCurrentMode() && (
 							<Button
-								variant="default"
+								variant="primary"
 								onClick={() => {
 									const currentMode = getCurrentMode()
 									if (currentMode?.slug && !isExporting) {
@@ -1244,7 +1244,7 @@ const ModesView = ({ onDone }: ModesViewProps) => {
 						)}
 						{/* Import button - always visible */}
 						<Button
-							variant="default"
+							variant="primary"
 							onClick={() => setShowImportDialog(true)}
 							disabled={isImporting}
 							title={t("prompts:modes.importMode")}
@@ -1564,7 +1564,7 @@ const ModesView = ({ onDone }: ModesViewProps) => {
 							<Button variant="secondary" onClick={() => setIsCreateModeDialogOpen(false)}>
 								{t("prompts:createModeDialog.buttons.cancel")}
 							</Button>
-							<Button variant="default" onClick={handleCreateMode}>
+							<Button variant="primary" onClick={handleCreateMode}>
 								{t("prompts:createModeDialog.buttons.create")}
 							</Button>
 						</div>
@@ -1641,7 +1641,7 @@ const ModesView = ({ onDone }: ModesViewProps) => {
 								{t("prompts:createModeDialog.buttons.cancel")}
 							</Button>
 							<Button
-								variant="default"
+								variant="primary"
 								onClick={() => {
 									if (!isImporting) {
 										const selectedLevel = (

@@ -7,4 +7,5 @@ export interface SystemPromptSettings {
 	useAgentRules: boolean
 	newTaskRequireTodos: boolean
 	thinkingToolEnabled: boolean
+	multiModalToolEnabled: boolean
 }

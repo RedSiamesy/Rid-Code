@@ -7,6 +7,7 @@ import {
 	claudeCodeModels,
 	deepSeekModels,
 	modelScopeModels,
+	siliconFlowModels,
 	iFlowModels,
 	moonshotModels,
 	geminiModels,
@@ -32,6 +33,7 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 	cerebras: cerebrasModels,
 	deepseek: deepSeekModels,
 	modelscope: modelScopeModels,
+	siliconflow: siliconFlowModels,
 	iflow: iFlowModels,
 	moonshot: moonshotModels,
 	gemini: geminiModels,
@@ -94,6 +96,7 @@ export const PROVIDERS = [
 	{ value: "deepseek", label: "DeepSeek" },
 	{ value: "iflow", label: "iFlow" },
 	{ value: "modelscope", label: "ModelScope" },
+	{ value: "siliconflow", label: "SiliconFlow" },
 	{ value: "zai", label: "Z AI" },
 	{ value: "openai", label: "OpenAI Compatible" },
 ].sort((a, b) => a.label.localeCompare(b.label))

@@ -37,7 +37,7 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
 import RooHero from "@src/components/welcome/RooHero"
 import RooTips from "@src/components/welcome/RooTips"
-import { StandardTooltip } from "@src/components/ui"
+import { StandardTooltip, Button } from "@src/components/ui"
 import { useAutoApprovalState } from "@src/hooks/useAutoApprovalState"
 import { useAutoApprovalToggles } from "@src/hooks/useAutoApprovalToggles"
 import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog"
@@ -50,7 +50,7 @@ import Announcement from "./Announcement"
 import BrowserSessionRow from "./BrowserSessionRow"
 import ChatRow from "./ChatRow"
 import { ChatTextArea } from "./ChatTextArea"
-import TaskHeader from "./TaskHeader"
+import TaskHeader from "./TaskHeader_new"
 import SystemPromptWarning from "./SystemPromptWarning"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
@@ -124,6 +124,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		cloudIsAuthenticated,
 		notificationHook,
 		messageQueue = [],
+		multiModalToolEnabled,
 	} = useExtensionState()
 
 	const messagesRef = useRef(messages)
@@ -820,7 +821,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const selectImages = useCallback(() => vscode.postMessage({ type: "selectImages" }), [])
 
-	const shouldDisableImages = !model?.supportsImages || selectedImages.length >= MAX_IMAGES_PER_MESSAGE
+	const shouldDisableImages = !(model?.supportsImages || multiModalToolEnabled) || selectedImages.length >= MAX_IMAGES_PER_MESSAGE
 
 	const handleMessage = useCallback(
 		(e: MessageEvent) => {
@@ -1883,21 +1884,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				</>
 			) : (
 				<div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 relative">
-					{/* Moved Task Bar Header Here */}
-					{tasks.length !== 0 && (
-						<div className="flex text-vscode-descriptionForeground w-full mx-auto px-5 pt-3">
-							<div className="flex items-center gap-1 cursor-pointer" onClick={toggleExpanded}>
-								{tasks.length < 10 && (
-									<span className={`font-medium text-xs `}>{t("history:recentTasks")}</span>
-								)}
-								<span
-									className={`codicon  ${isExpanded ? "codicon-eye" : "codicon-eye-closed"} scale-90`}
-								/>
-							</div>
-						</div>
-					)}
-					<div
-						className={` w-full flex flex-col gap-4 m-auto ${isExpanded && tasks.length > 0 ? "mt-0" : ""} px-3.5 min-[370px]:px-10 pt-5 transition-all duration-300`}>
+					<div className={`w-full flex flex-col gap-4 m-auto px-3.5 min-[370px]:px-10 transition-all duration-300 justify-center h-full min-[400px]:px-6`}>
 						{/* Version indicator in top-right corner - only on welcome screen */}
 						<VersionIndicator
 							onClick={() => setShowAnnouncementModal(true)}
@@ -1965,15 +1952,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							}`}>
 							{showScrollToBottom ? (
 								<StandardTooltip content={t("chat:scrollToBottom")}>
-									<VSCodeButton
-										appearance="secondary"
+									<Button
+										variant="secondary"
 										className="flex-[2]"
 										onClick={() => {
 											scrollToBottomSmooth()
 											disableAutoScrollRef.current = false
 										}}>
 										<span className="codicon codicon-chevron-down"></span>
-									</VSCodeButton>
+									</Button>
 								</StandardTooltip>
 							) : (
 								<>
@@ -2000,13 +1987,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 																				? t("chat:proceedWhileRunning.tooltip")
 																				: undefined
 											}>
-											<VSCodeButton
-												appearance="primary"
+											<Button
+												variant="primary"
 												disabled={!enableButtons}
 												className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
 												onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
 												{primaryButtonText}
-											</VSCodeButton>
+											</Button>
 										</StandardTooltip>
 									)}
 									{(secondaryButtonText || isStreaming) && (
@@ -2022,13 +2009,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 																? t("chat:terminate.tooltip")
 																: undefined
 											}>
-											<VSCodeButton
-												appearance="secondary"
+											<Button
+												variant="secondary"
 												disabled={!enableButtons && !(isStreaming && !didClickCancel)}
 												className={isStreaming ? "flex-[2] ml-0" : "flex-1 ml-[6px]"}
 												onClick={() => handleSecondaryButtonClick(inputValue, selectedImages)}>
 												{isStreaming ? t("chat:cancel.title") : secondaryButtonText}
-											</VSCodeButton>
+											</Button>
 										</StandardTooltip>
 									)}
 								</>

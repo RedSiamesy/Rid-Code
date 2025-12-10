@@ -604,12 +604,12 @@ export async function getUserSuggestions(cline: Task): Promise<string|undefined>
 	}
 
 	const state = await provider?.getState()
-	const {
-		thinkingToolEnabled,
-	} = state ?? {}
-	if (thinkingToolEnabled && cline.toolSequence.length > 5 && !cline.toolSequence.includes("thinking_tool")) {
-		UserSuggestions.push("- You can use the 'thinking_tool' to analyze tasks and think through your approach, helping you to organize your thoughts and avoid overlooking details.")
-	}
+	// const {
+	// 	thinkingToolEnabled,
+	// } = state ?? {}
+	// if (thinkingToolEnabled && cline.toolSequence.length > 5 && !cline.toolSequence.includes("thinking_tool")) {
+	// 	UserSuggestions.push("- You can use the 'thinking_tool' to analyze tasks and think through your approach, helping you to organize your thoughts and avoid overlooking details.")
+	// }
 	return undefined
 	// return UserSuggestions.join("\n") || undefined
 }

@@ -127,6 +127,9 @@ export const globalSettingsSchema = z.object({
 	thinkingToolEnabled: z.boolean().optional(),
 	thinkingToolApiConfigId: z.string().optional(),
 
+	multiModalToolEnabled: z.boolean().optional(),
+	multiModalToolApiConfigId: z.string().optional(),
+
 	diagnosticsEnabled: z.boolean().optional(),
 
 	rateLimitSeconds: z.number().optional(),
@@ -189,6 +192,7 @@ export const SECRET_STATE_KEYS = [
 	"deepSeekApiKey",
 	"doubaoApiKey",
 	"modelscopeApiKey",
+	"siliconFlowApiKey",
 	"moonshotApiKey",
 	"mistralApiKey",
 	"unboundApiKey",

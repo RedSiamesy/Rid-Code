@@ -338,6 +338,8 @@ export type ExtensionState = Pick<
 	notificationHook: string
 	thinkingToolEnabled: boolean
 	thinkingToolApiConfigId: string
+	multiModalToolEnabled: boolean
+	multiModalToolApiConfigId: string
 	marketplaceItems?: MarketplaceItem[]
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 	profileThresholds: Record<string, number>
@@ -380,6 +382,7 @@ export interface ClineSayTool {
 	path?: string
 	diff?: string
 	content?: string
+	diffStats?: { added: number; removed: number }
 	regex?: string
 	filePattern?: string
 	mode?: string
@@ -407,6 +410,7 @@ export interface ClineSayTool {
 		changeCount: number
 		key: string
 		content: string
+		diffStats?: { added: number; removed: number }
 		diffs?: Array<{
 			content: string
 			startLine?: number

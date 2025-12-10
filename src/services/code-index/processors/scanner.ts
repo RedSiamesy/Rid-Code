@@ -1,6 +1,8 @@
 import { listFiles } from "../../glob/list-files"
 import { Ignore } from "ignore"
 import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { expandIncludeFilePatterns } from "../../../core/ignore/RooIncludeController"
+import * as fs from "fs"
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
@@ -95,6 +97,10 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 		// Filter paths using .rooignore
 		allowedPaths = cbignoreController.filterPaths(allowedPaths)
+		// const absolutePath = path.resolve(directoryPath, ".codebaseextra")
+		// if (fs.existsSync(absolutePath)) {
+		// 	allowedPaths = allowedPaths.concat(await expandIncludeFilePatterns(absolutePath))
+		// }
 
 		// Filter by supported extensions, ignore patterns, and excluded directories
 		let supportedPaths = allowedPaths.filter((filePath) => {

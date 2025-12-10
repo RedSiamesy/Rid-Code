@@ -45,6 +45,9 @@ import {
 import { useRooPortal } from "@src/components/ui/hooks/useRooPortal"
 import { useEscapeKey } from "@src/hooks/useEscapeKey"
 
+import { formatPathTooltip } from "@src/utils/formatPathTooltip"
+import { PathTooltip } from "../ui/PathTooltip"
+
 // Default URLs for providers
 const DEFAULT_QDRANT_URL = "http://localhost:6333"
 const DEFAULT_OLLAMA_URL = "http://localhost:11434"
@@ -1289,6 +1292,34 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 												}>
 												<span className="codicon codicon-discard" />
 											</VSCodeButton>
+										</div>
+										{/* <div className="flex items-center gap-2 mt-5 group text-sm transition-opacity opacity-40 hover:opacity-100">
+											<StandardTooltip
+												content={"可以将路径加入 .codebaseextra 文件，支持目录和文件路径，格式同.ignore 文件 （点击开启）"}>
+												<div className="flex items-center gap-2">
+													<span className="codicon codicon-info text-sm text-vscode-descriptionForeground cursor-help"/>
+													<label className="text-sm font-medium cursor-pointer" onClick={(e) => {
+															e.stopPropagation()
+															vscode.postMessage({ type: "openFile", text: ".codebaseextra", values: { create: true } })
+														}}>
+															{"需要为 codebase 加入更多外部资料？"}
+													</label>
+												</div>
+											</StandardTooltip>
+										</div> */}
+										<div className="flex items-center gap-2 mt-3 group text-sm transition-opacity opacity-40 hover:opacity-100">
+											<StandardTooltip
+												content={"可以将路径加入 .codebaseignore 文件，支持目录和文件路径，格式同.ignore 文件 （点击开启）"}>
+												<div className="flex items-center gap-2">
+													<span className="codicon codicon-info text-sm text-vscode-descriptionForeground cursor-help"/>
+													<label className="text-sm font-medium cursor-pointer" onClick={(e) => {
+															e.stopPropagation()
+															vscode.postMessage({ type: "openFile", text: ".codebaseignore", values: { create: true } })
+														}}>
+															{"需要为 codebase 单独忽略更多文件？"}
+													</label>
+												</div>
+											</StandardTooltip>
 										</div>
 									</div>
 								</div>

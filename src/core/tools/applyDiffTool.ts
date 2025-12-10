@@ -13,6 +13,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
 
 export async function applyDiffToolLegacy(
 	cline: Task,
@@ -54,20 +55,6 @@ export async function applyDiffToolLegacy(
 
 			return
 		} else {
-			if (!cline.clineMessages || cline.clineMessages.length === 0 
-				|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
-				|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "tool"
-			){
-
-				const icon = "diff-multiple"
-				const searchBlockCount = ((diffContent || "").match(/SEARCH/g) || []).length
-				if (searchBlockCount) {
-					await cline
-						.ask("tool", JSON.stringify(sharedMessageProps), true, { icon, text: `0/${searchBlockCount}` })
-						.catch(() => {})
-				}
-			}
-
 			if (!relPath) {
 				cline.consecutiveMistakeCount++
 				cline.recordToolError("apply_diff")
@@ -154,6 +141,11 @@ export async function applyDiffToolLegacy(
 			cline.consecutiveMistakeCount = 0
 			cline.consecutiveMistakeCountForApplyDiff.delete(relPath)
 
+			// Generate backend-unified diff for display in chat/webview
+			const unifiedPatchRaw = formatResponse.createPrettyPatch(relPath, originalContent, diffResult.content)
+			const unifiedPatch = sanitizeUnifiedDiff(unifiedPatchRaw)
+			const diffStats = computeDiffStats(unifiedPatch) || undefined
+
 			// Check if preventFocusDisruption experiment is enabled
 			const provider = cline.providerRef.deref()
 			const state = await provider?.getState()
@@ -172,6 +164,8 @@ export async function applyDiffToolLegacy(
 				const completeMessage = JSON.stringify({
 					...sharedMessageProps,
 					diff: diffContent,
+					content: unifiedPatch,
+					diffStats,
 					isProtected: isWriteProtected,
 				} satisfies ClineSayTool)
 
@@ -208,6 +202,8 @@ export async function applyDiffToolLegacy(
 				const completeMessage = JSON.stringify({
 					...sharedMessageProps,
 					diff: diffContent,
+					content: unifiedPatch,
+					diffStats,
 					isProtected: isWriteProtected,
 				} satisfies ClineSayTool)
 
@@ -220,6 +216,7 @@ export async function applyDiffToolLegacy(
 				const didApprove = await askApproval("tool", completeMessage, toolProgressStatus, isWriteProtected)
 
 				if (!didApprove) {
+					await cline.say("text", "(Rejected)")
 					await cline.diffViewProvider.revertChanges() // Cline likely handles closing the diff view
 					cline.processQueuedMessages()
 					return
@@ -227,18 +224,6 @@ export async function applyDiffToolLegacy(
 
 				// Call saveChanges to update the DiffViewProvider properties
 				await cline.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
-
-				let newContent: string | undefined = await fs.readFile(absolutePath, "utf-8")
-
-				const agentEdits = formatResponse.createPrettyPatch(absolutePath, originalContent, newContent ?? undefined)
-				const say: ClineSayTool = {
-					tool: (!fileExists) ? "newFileCreated" : "editedExistingFile",
-					path: getReadablePath(cline.cwd, relPath),
-					diff: `# agentEdits ${relPath}\n${agentEdits}\n`,
-				}
-	
-				// Send the user feedback
-				await cline.say("user_feedback_diff", JSON.stringify(say))
 			}
 
 			// Track file edit operation

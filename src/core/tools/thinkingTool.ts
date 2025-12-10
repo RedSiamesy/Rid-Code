@@ -134,7 +134,7 @@ ${review ? review_block : ""}- 当前阶段的工作重心：(如果当前阶段
 	2. 分析bbb的实现方式...(行为)，目的是为了...(这样做的目的)
 	3. ...
 	...
-- 针对当前任务的后续行为和发展方向建议：(如果整个任务已经确认完成，不需要后续动作，可以没有这部分)
+- 针对主agent处理当前任务的后续行为和发展方向建议：(如果整个任务已经确认完成，不需要后续动作，可以没有这部分)
 	1. 后续的可选方案如：
 		a.....;
 		b.....;
@@ -196,6 +196,9 @@ Note: Think and respond in the primary language used in the conversation history
 
 **注意：你没有任何调用工具的能力，不要尝试调用历史对话中所展示的工具完成具体的操作！你的任务是协助主agent对任务进行规划和分析！**
 **IMPORTANT: You have NO tool-calling capabilities. DO NOT attempt to use any tools shown in the conversation history to perform actions. Your sole mission is to identify what the main agent has missed and to provide high-level directional guidance!**
+
+**注意：你需要指导主agent，而不是批判主agent！**
+**IMPORTANT: You need to guide the main agent, not criticize the main agent!**
 
 你的这些指示将应用于 可以调用各种工具的主agent智能体 进行工作。
 The guidance you provide will be used by another agent, one that is capable of calling various tools to execute the work.
@@ -263,7 +266,7 @@ export async function userExecuteThinking(
 		const stream = await performAnalysis(task, apiHandlerToUse, false, feedback)
 		let analysisResult = ""
 		let analysisreasoning = ""
-		await task.say("text", " ")
+		await task.say("text", "User asked me to think deeply.")
 		for await (const chunk of stream) {
 			if (chunk.type === "reasoning") {
 				if (analysisreasoning === "") {
@@ -282,7 +285,9 @@ export async function userExecuteThinking(
 				await task.say("reasoning", analysisreasoning, undefined, true)
 			}
 		}
-		await task.say("text", " ")
+		if (analysisreasoning !== "") {
+			await task.say("text", "Now, let's move on to the problem.")
+		}
 		return "Thinking tool respond:\n"+analysisResult
 
 	} catch (error) {

@@ -30,7 +30,7 @@ import { getWebSearchDescription } from "./web-search"
 import { getUrlFetchDescription } from "./url-fetch"
 import { getRunSlashCommandDescription } from "./run-slash-command"
 import { getGenerateImageDescription } from "./generate-image"
-import { getThinkingToolDescription } from "./thinking-tool"
+// import { getThinkingToolDescription } from "./thinking-tool"
 import { CodeIndexManager } from "../../../services/code-index/manager"
 
 // Map of tool names to their description functions
@@ -67,7 +67,7 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
 	url_fetch: (args) => getUrlFetchDescription(args),
 	run_slash_command: () => getRunSlashCommandDescription(),
 	generate_image: (args) => getGenerateImageDescription(args),
-	thinking_tool: (args) => getThinkingToolDescription(args),
+	// thinking_tool: (args) => getThinkingToolDescription(args),
 }
 
 export function getToolDescriptionsForMode(
@@ -152,9 +152,9 @@ export function getToolDescriptionsForMode(
 	}
 
 	// Conditionally exclude thinking_tool if tool is not enabled
-	if (!settings?.thinkingToolEnabled) {
-		tools.delete("thinking_tool")
-	}
+	// if (!settings?.thinkingToolEnabled) {
+	// 	tools.delete("thinking_tool")
+	// }
 
 	// Tool names in the specified order
 	const toolNames = [
@@ -225,7 +225,7 @@ export {
 	getRunSlashCommandDescription,
 	getGenerateImageDescription,
 	getCodebaseSearchDescription,
-	getThinkingToolDescription,
+	// getThinkingToolDescription,
 }
 
 
@@ -287,7 +287,7 @@ import { getSimpleReadFileOpenAIToolDefinition } from "./simple-read-file"
 import { getRunSlashCommandOpenAIToolDefinition } from "./run-slash-command"
 import { getGenerateImageOpenAIToolDefinition } from "./generate-image"
 import { getFetchInstructionsOpenAIToolDefinition } from "./fetch-instructions"
-import { getThinkingToolOpenAIToolDefinition } from "./thinking-tool"
+// import { getThinkingToolOpenAIToolDefinition } from "./thinking-tool"
 import { getBrowserActionOpenAIToolDefinition } from "./browser-action"
 import { getAskFollowupQuestionOpenAIToolDefinition } from "./ask-followup-question"
 import { getAccessMcpResourceOpenAIToolDefinition } from "./access-mcp-resource"
@@ -332,7 +332,7 @@ const openAIToolDefinitionMap: Record<string, (args: ToolArgs) => any> = {
 	update_todo_list: (args) => getUpdateTodoListOpenAIToolDefinition(args),
 	run_slash_command: () => getRunSlashCommandOpenAIToolDefinition(),
 	generate_image: (args) => getGenerateImageOpenAIToolDefinition(args),
-	thinking_tool: (args) => getThinkingToolOpenAIToolDefinition(args),
+	// thinking_tool: (args) => getThinkingToolOpenAIToolDefinition(args),
 	web_search: (args) => getWebSearchOpenAIToolDefinition(args),
 	url_fetch: (args) => getUrlFetchOpenAIToolDefinition(args),
 }
@@ -424,9 +424,9 @@ export function getOpenAIToolDefinitionsForMode(
 	}
 
 	// Conditionally exclude thinking_tool if tool is not enabled
-	if (!settings?.thinkingToolEnabled) {
-		tools.delete("thinking_tool")
-	}
+	// if (!settings?.thinkingToolEnabled) {
+	// 	tools.delete("thinking_tool")
+	// }
 
 	// Tool names in the specified order
 	const toolNames = [
@@ -504,7 +504,7 @@ export {
 	getBrowserActionOpenAIToolDefinition,
 	getAskFollowupQuestionOpenAIToolDefinition,
 	getAccessMcpResourceOpenAIToolDefinition,
-	getThinkingToolOpenAIToolDefinition,
+	// getThinkingToolOpenAIToolDefinition,
 }
 
 // Export conversion functions

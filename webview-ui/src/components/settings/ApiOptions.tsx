@@ -22,6 +22,7 @@ import {
 	deepSeekDefaultModelId,
 	iFlowDefaultModelId,
 	modelScopeDefaultModelId,
+	siliconFlowDefaultModelId,
 	moonshotDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
@@ -73,6 +74,7 @@ import {
 	DeepSeek,
 	IFlow,
 	ModelScope,
+	SiliconFlow,
 	Doubao,
 	Gemini,
 	Glama,
@@ -330,6 +332,7 @@ const ApiOptions = ({
 				deepseek: { field: "apiModelId", default: deepSeekDefaultModelId },
 				iflow: { field: "apiModelId", default: iFlowDefaultModelId },
 				modelscope: { field: "apiModelId", default: modelScopeDefaultModelId },
+				siliconflow: { field: "apiModelId", default: siliconFlowDefaultModelId },
 				doubao: { field: "apiModelId", default: doubaoDefaultModelId },
 				moonshot: { field: "apiModelId", default: moonshotDefaultModelId },
 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
@@ -573,6 +576,9 @@ const ApiOptions = ({
 			)}
 			{selectedProvider === "modelscope" && (
 				<ModelScope apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+			{selectedProvider === "siliconflow" && (
+				<SiliconFlow apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "deepseek" && (

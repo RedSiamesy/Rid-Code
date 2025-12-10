@@ -153,9 +153,19 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 
 	const { effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled)
 
+	const tooltipText =
+		!effectiveAutoApprovalEnabled || enabledCount === 0
+			? t("chat:autoApprove.tooltipManage")
+			: t("chat:autoApprove.tooltipStatus", {
+					toggles: settingsArray
+						.filter((setting) => toggles[setting.key])
+						.map((setting) => t(setting.labelKey))
+						.join(", "),
+				})
+
 	return (
 		<Popover open={open} onOpenChange={setOpen} data-testid="auto-approve-dropdown-root">
-			<StandardTooltip content={t("chat:autoApprove.tooltip")}>
+			<StandardTooltip content={tooltipText}>
 				<PopoverTrigger
 					disabled={disabled}
 					data-testid="auto-approve-dropdown-trigger"
@@ -163,6 +173,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 						"inline-flex items-center gap-1.5 relative whitespace-nowrap px-1.5 py-1 text-xs",
 						"bg-transparent border border-[rgba(255,255,255,0.08)] rounded-md text-vscode-foreground",
 						"transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder focus-visible:ring-inset",
+						"max-[300px]:shrink-0",
 						disabled
 							? "opacity-50 cursor-not-allowed"
 							: "opacity-90 hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)] cursor-pointer",
@@ -174,12 +185,19 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 						<CheckCheck className="size-3 flex-shrink-0" />
 					)}
 
-					<span className="truncate min-w-0">
+					<span className="hidden min-[300px]:inline truncate min-w-0">
 						{!effectiveAutoApprovalEnabled
 							? t("chat:autoApprove.triggerLabelOff")
 							: enabledCount === totalCount
 								? t("chat:autoApprove.triggerLabelAll")
 								: t("chat:autoApprove.triggerLabel", { count: enabledCount })}
+					</span>
+					<span className="inline min-[300px]:hidden min-w-0">
+						{!effectiveAutoApprovalEnabled
+							? t("chat:autoApprove.triggerLabelOffShort")
+							: enabledCount === totalCount
+								? t("chat:autoApprove.triggerLabelAll")
+								: enabledCount}
 					</span>
 				</PopoverTrigger>
 			</StandardTooltip>
@@ -187,7 +205,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 				align="start"
 				sideOffset={4}
 				container={portalContainer}
-				className="p-0 overflow-hidden min-w-90 max-w-9/10"
+				className="p-0 overflow-hidden w-[min(400px,calc(100vw-2rem))]"
 				onOpenAutoFocus={(e) => e.preventDefault()}>
 				<div className="flex flex-col w-full">
 					{/* Header with description */}
@@ -205,7 +223,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 							{t("chat:autoApprove.description")}
 						</p>
 					</div>
-					<div className="grid grid-cols-2 gap-x-2 gap-y-2 p-3">
+					<div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-x-2 gap-y-2 p-3">
 						{settingsArray.map(({ key, labelKey, descriptionKey, icon }) => {
 							const isEnabled = toggles[key]
 							return (

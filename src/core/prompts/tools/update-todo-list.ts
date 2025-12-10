@@ -100,7 +100,7 @@ Create a TODO list or replace the entire TODO list with an updated checklist ref
 - Remove tasks only if they are no longer relevant or if the user requests deletion.
 
 ## Usage Example:
-${args?.experiments?.useToolCalling? prompt_example : tooluse_example}
+${args?.experiments?.useToolCalling? tooluse_example : prompt_example}
 
 
 ## When to Use This Tool
@@ -309,7 +309,7 @@ export function getUpdateTodoListOpenAIToolDefinition(args?: ToolArgs): OpenAITo
 				properties: {
 					todos: {
 						type: "array",
-						description: "The todo list as an array of strings. Each string should be a todo item with status prefix: [ ] (pending), [x] (completed), or [-] (in progress). ",
+						description: "The todo list as an array of strings. Each to-do item forms one string separately. Each item should be a todo item with status prefix: [ ] (pending), [x] (completed), or [-] (in progress). ",
 						items: {
 							type: "string",
 							description: "A todo item with status prefix, e.g., '[ ] Analyze requirements' or '[x] Design architecture'"

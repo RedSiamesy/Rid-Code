@@ -146,6 +146,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		autoCondenseContextPercent,
 		thinkingToolEnabled,
 		thinkingToolApiConfigId,
+		multiModalToolEnabled,
+		multiModalToolApiConfigId,
 		browserToolEnabled,
 		browserViewportSize,
 		enableCheckpoints,
@@ -332,6 +334,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			vscode.postMessage({ type: "autoCondenseContextPercent", value: autoCondenseContextPercent })
 			vscode.postMessage({ type: "thinkingToolEnabled", bool: thinkingToolEnabled })
 			vscode.postMessage({ type: "thinkingToolApiConfigId", text: thinkingToolApiConfigId ?? "default" })
+			vscode.postMessage({ type: "multiModalToolEnabled", bool: multiModalToolEnabled })
+			vscode.postMessage({ type: "multiModalToolApiConfigId", text: multiModalToolApiConfigId ?? "default" })
 			vscode.postMessage({ type: "notificationHook", text: notificationHook ?? "" })
 			vscode.postMessage({ type: "browserToolEnabled", bool: browserToolEnabled })
 			vscode.postMessage({ type: "soundEnabled", bool: soundEnabled })
@@ -537,7 +541,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 									: t("settings:header.nothingChangedTooltip")
 						}>
 						<Button
-							variant={isSettingValid ? "default" : "secondary"}
+							variant={isSettingValid ? "primary" : "secondary"}
 							className={!isSettingValid ? "!border-vscode-errorForeground" : ""}
 							onClick={handleSubmit}
 							disabled={!isChangeDetected || !isSettingValid}
@@ -742,6 +746,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							writeDelayMs={writeDelayMs}
 							thinkingToolEnabled={thinkingToolEnabled}
 							thinkingToolApiConfigId={thinkingToolApiConfigId}
+							multiModalToolEnabled={multiModalToolEnabled}
+							multiModalToolApiConfigId={multiModalToolApiConfigId}
 							setCachedStateField={setCachedStateField}
 						/>
 					)}

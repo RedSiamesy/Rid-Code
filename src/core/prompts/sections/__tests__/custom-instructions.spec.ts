@@ -542,6 +542,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: true,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -575,6 +576,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: false,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: true,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -637,6 +639,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: true,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -684,6 +687,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: false,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -753,6 +757,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: true,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -806,6 +811,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: false,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -861,6 +867,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: false,
+					multiModalToolEnabled: false,
 				},
 			},
 		)
@@ -908,6 +915,7 @@ describe("addCustomInstructions", () => {
 					useAgentRules: true,
 					newTaskRequireTodos: false,
 					thinkingToolEnabled: false,
+					multiModalToolEnabled: false,
 				},
 			},
 		)

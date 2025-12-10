@@ -26,6 +26,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 		maxReadFileLine,
 		maxConcurrentFileReads,
 		thinkingToolEnabled,
+		multiModalToolEnabled,
 	} = await provider.getState()
 
 	// Check experiment to determine which diff strategy to use
@@ -90,6 +91,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 				.getConfiguration("roo-cline")
 				.get<boolean>("newTaskRequireTodos", false),
 			thinkingToolEnabled: thinkingToolEnabled ?? false,
+			multiModalToolEnabled: multiModalToolEnabled ?? false,
 		},
 	)
 

@@ -599,7 +599,7 @@ export const webviewMessageHandler = async (
 		case "askResponse":
 			if (message.text?.startsWith("think") || message.text?.startsWith("ultrathink")) {
 				const currentCline = provider.getCurrentTask()
-				if (currentCline) {
+				if (currentCline !== undefined) {
 					currentCline.postprocess._thinking = true
 				}
 			}
@@ -619,6 +619,14 @@ export const webviewMessageHandler = async (
 			break
 		case "thinkingToolApiConfigId":
 			await updateGlobalState("thinkingToolApiConfigId", message.text)
+			await provider.postStateToWebview()
+			break
+		case "multiModalToolEnabled":
+			await updateGlobalState("multiModalToolEnabled", message.bool)
+			await provider.postStateToWebview()
+			break
+		case "multiModalToolApiConfigId":
+			await updateGlobalState("multiModalToolApiConfigId", message.text)
 			await provider.postStateToWebview()
 			break
 		case "terminalOperation":

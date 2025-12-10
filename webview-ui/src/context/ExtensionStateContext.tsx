@@ -150,8 +150,12 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAutoCondenseContextPercent: (value: number) => void
 	thinkingToolEnabled: boolean
 	setThinkingToolEnabled: (value: boolean) => void
+	multiModalToolEnabled: boolean
+	setMultiModalToolEnabled: (value: boolean) => void
 	thinkingToolApiConfigId: string
 	setThinkingToolApiConfigId: (value: string) => void
+	multiModalToolApiConfigId: string
+	setMultiModalToolApiConfigId: (value: string) => void
 	routerModels?: RouterModels
 	alwaysAllowUpdateTodoList?: boolean
 	setAlwaysAllowUpdateTodoList: (value: boolean) => void
@@ -254,6 +258,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		autoCondenseContextPercent: 100,
 		thinkingToolEnabled: false,
 		thinkingToolApiConfigId: "",
+		multiModalToolEnabled: false,
+		multiModalToolApiConfigId: "",
 		profileThresholds: {},
 		codebaseIndexConfig: {
 			codebaseIndexEnabled: true,
@@ -533,6 +539,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setState((prevState) => ({ ...prevState, autoCondenseContextPercent: value })),
 		setThinkingToolEnabled: (value) => setState((prevState) => ({ ...prevState, thinkingToolEnabled: value })),
 		setThinkingToolApiConfigId: (value) => setState((prevState) => ({ ...prevState, thinkingToolApiConfigId: value })),
+		setMultiModalToolEnabled: (value) => setState((prevState) => ({ ...prevState, multiModalToolEnabled: value })),
+		setMultiModalToolApiConfigId: (value) => setState((prevState) => ({ ...prevState, multiModalToolApiConfigId: value })),
 		setCondensingApiConfigId: (value) => setState((prevState) => ({ ...prevState, condensingApiConfigId: value })),
 		setCustomCondensingPrompt: (value) =>
 			setState((prevState) => ({ ...prevState, customCondensingPrompt: value })),
