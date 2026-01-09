@@ -1,6 +1,7 @@
 import { Fzf } from "fzf"
 
 import type { ModeConfig } from "@roo-code/types"
+import type { SkillMetadata } from "@roo/skills"
 import type { Command } from "@roo/ExtensionMessage"
 
 import { mentionRegex } from "@roo/context-mentions"
@@ -108,6 +109,7 @@ export enum ContextMenuOptionType {
 	NoResults = "noResults",
 	Mode = "mode", // Add mode type
 	Command = "command", // Add command type
+	Skill = "skill",
 	SectionHeader = "sectionHeader", // Add section header type
 }
 
@@ -129,6 +131,7 @@ export function getContextMenuOptions(
 	dynamicSearchResults: SearchResult[] = [],
 	modes?: ModeConfig[],
 	commands?: Command[],
+	skills?: SkillMetadata[],
 ): ContextMenuQueryItem[] {
 	// Handle slash commands for modes and commands
 	// Only process as slash command if the query itself starts with "/" (meaning we're typing a slash command)
@@ -215,6 +218,46 @@ export function getContextMenuOptions(
 		return results.length > 0 ? results : [{ type: ContextMenuOptionType.NoResults }]
 	}
 
+	if (query.startsWith("$")) {
+		const skillQuery = query.slice(1)
+		const results: ContextMenuQueryItem[] = []
+
+		if (skills?.length) {
+			const searchableSkills = skills.map((skill) => ({
+				original: skill,
+				searchStr: `${skill.name} ${skill.description}`,
+			}))
+
+			const fzf = new Fzf(searchableSkills, {
+				selector: (item) => item.searchStr,
+			})
+
+			const matchingSkills = skillQuery
+				? fzf.find(skillQuery).map((result) => ({
+						type: ContextMenuOptionType.Skill,
+						value: result.item.original.name,
+						slashCommand: `$${result.item.original.name}`,
+						description: result.item.original.description,
+					}))
+				: skills.map((skill) => ({
+						type: ContextMenuOptionType.Skill,
+						value: skill.name,
+						slashCommand: `$${skill.name}`,
+						description: skill.description,
+					}))
+
+			if (matchingSkills.length > 0) {
+				results.push({
+					type: ContextMenuOptionType.SectionHeader,
+					label: "Skills",
+				})
+				results.push(...matchingSkills)
+			}
+		}
+
+		return results.length > 0 ? results : [{ type: ContextMenuOptionType.NoResults }]
+	}
+
 	const workingChanges: ContextMenuQueryItem = {
 		type: ContextMenuOptionType.Git,
 		value: "git-changes",
@@ -228,7 +271,6 @@ export function getContextMenuOptions(
 			const files = queryItems
 				.filter(
 					(item) =>
-						// item.type === ContextMenuOptionType.OpenedFile,
 						item.type === ContextMenuOptionType.File || item.type === ContextMenuOptionType.OpenedFile,
 				)
 				.map((item) => ({
@@ -250,20 +292,10 @@ export function getContextMenuOptions(
 			return commits.length > 0 ? [workingChanges, ...commits] : [workingChanges]
 		}
 
-		// return [
-		// 	{ type: ContextMenuOptionType.Problems },
-		// 	{ type: ContextMenuOptionType.Terminal },
-		// 	{ type: ContextMenuOptionType.URL },
-		// 	{ type: ContextMenuOptionType.Folder },
-		// 	{ type: ContextMenuOptionType.File },
-		// 	{ type: ContextMenuOptionType.Git },
-		// ]
 		return [
-			// { type: ContextMenuOptionType.URL },
 			{ type: ContextMenuOptionType.Git },
 			{ type: ContextMenuOptionType.Problems },
 			{ type: ContextMenuOptionType.Terminal },
-			// { type: ContextMenuOptionType.Folder },
 			{ type: ContextMenuOptionType.File },
 		]
 	}
@@ -379,6 +411,11 @@ export function shouldShowContextMenu(text: string, position: number): boolean {
 
 	// Check if we're in a slash command context (at the beginning and no space yet)
 	if (text.startsWith("/") && !text.includes(" ") && position <= text.length) {
+		return true
+	}
+
+	// Check if we're in a skill context (at the beginning and no space yet)
+	if (text.startsWith("$") && !text.includes(" ") && position <= text.length) {
 		return true
 	}
 

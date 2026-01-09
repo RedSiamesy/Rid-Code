@@ -1,4 +1,4 @@
-import { ToolArgs, OpenAIToolDefinition } from "./types"
+import { ToolArgs } from "./types"
 
 export function getGrepDescription(args: ToolArgs): string {
 	return `## grep
@@ -62,68 +62,4 @@ Example: Requesting to search for 'ERROR:' with 10 lines before and after each m
 <context>10</context>
 </grep>
 `
-}
-
-
-const description = `
-A powerful search tool built on ripgrep
-
-Usage:
-
-- ALWAYS use Grep for search tasks. NEVER invoke \`grep\` or \`rg\` as a Bash command. The Grep tool has been optimized for correct permissions and access.
-- Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
-- Filter files with glob parameter (e.g., "*.js", "**/*.tsx")
-- Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default)
-- Use 'new_task' tool with 'ask' mode for open-ended searches requiring multiple rounds
-- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use \`interface\\{\\}\` to find \`interface{}\` in Go code)
-`
-
-export function getGrepOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {
-	return {
-		type: "function",
-		function: {
-			name: "grep",
-			description,
-			parameters: {
-				type: "object",
-				properties: {
-					path: {
-						type: "string",
-						description: `The path of the directory to search in (relative to the current workspace directory ${args.cwd}). This directory will be recursively searched.`
-					},
-					regex: {
-						type: "string",
-						description: "The regular expression pattern to search for. Uses Rust regex syntax."
-					},
-					file_pattern: {
-						type: "string",
-						description: "Glob pattern to filter files (e.g., '*.ts' for TypeScript files, '*.{ts,js,json}' for multiple extensions). If not provided, searches all files."
-					},
-					output_mode: {
-						type: "string",
-						enum: ["content", "files_with_matches"],
-						description: "Output mode: \"content\" shows matching lines (supports -A/-B/-C context with \"after_context\"/\"before_context\"/\"context\"), \"files_with_matches\" shows file paths. Defaults to \"files_with_matches\"."
-					},
-					after_context: {
-						type: "string",
-						description: "String of an integer representing Number of lines to show after each match (rg -A). Requires output_mode: \"content\", ignored otherwise."
-					},
-					before_context: {
-						type: "string",
-						description: "String of an integer representing Number of lines to show before each match (rg -B). Requires output_mode: \"content\", ignored otherwise."
-					},
-					context: {
-						type: "string",
-						description: "String of an integer representing Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\", ignored otherwise."
-					},
-					insensitive_case: {
-						type: "string",
-						enum: ["true", "false"],
-						description: "Case insensitive search (rg -i). Defaults to \"false\" (case-sensitive)."
-					}
-				},
-				required: ["path", "regex"]
-			}
-		}
-	}
 }

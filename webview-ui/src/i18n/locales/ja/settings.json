@@ -22,6 +22,8 @@
 	},
 	"sections": {
 		"providers": "プロバイダー",
+		"modes": "モード",
+		"mcp": "MCPサーバー",
 		"autoApprove": "自動承認",
 		"browser": "コンピューターアクセス",
 		"checkpoints": "チェックポイント",
@@ -30,9 +32,30 @@
 		"terminal": "ターミナル",
 		"slashCommands": "スラッシュコマンド",
 		"prompts": "プロンプト",
+		"ui": "UI",
 		"experimental": "実験的",
 		"language": "言語",
 		"about": "Roo Codeについて"
+	},
+	"about": {
+		"bugReport": {
+			"label": "バグを見つけましたか？",
+			"link": "GitHubで報告"
+		},
+		"featureRequest": {
+			"label": "アイデアがありますか？",
+			"link": "共有してください"
+		},
+		"securityIssue": {
+			"label": "脆弱性を発見しましたか？",
+			"link": "開示プロセスに従ってください"
+		},
+		"contact": {
+			"label": "お問い合わせが必要ですか？メールを送信"
+		},
+		"community": "ヒントが欲しいですか、または他のRoo Codeユーザーと交流したいですか？<redditLink>reddit.com/r/RooCode</redditLink>または<discordLink>discord.gg/roocode</discordLink>に参加してください",
+		"contactAndCommunity": "お問い合わせとコミュニティ",
+		"manageSettings": "設定を管理"
 	},
 	"slashCommands": {
 		"description": "スラッシュコマンドを管理して、カスタムワークフローやアクションを素早く実行します。<DocsLink>詳細はこちら</DocsLink>"
@@ -54,6 +77,17 @@
 		"vercelAiGatewayProvider": "Vercel AI Gateway",
 		"vercelAiGatewayApiKeyLabel": "APIキー",
 		"vercelAiGatewayApiKeyPlaceholder": "Vercel AI GatewayのAPIキーを入力してください",
+		"bedrockProvider": "Amazon Bedrock",
+		"bedrockRegionLabel": "AWS リージョン",
+		"bedrockRegionPlaceholder": "us-east-1",
+		"bedrockProfileLabel": "AWS プロファイル",
+		"bedrockProfilePlaceholder": "default",
+		"bedrockProfileDescription": "~/.aws/credentials の AWS プロファイル名（必須）。",
+		"openRouterProvider": "OpenRouter",
+		"openRouterApiKeyLabel": "OpenRouter APIキー",
+		"openRouterApiKeyPlaceholder": "OpenRouter APIキーを入力してください",
+		"openRouterProviderRoutingLabel": "OpenRouterプロバイダールーティング",
+		"openRouterProviderRoutingDescription": "OpenRouterは、埋め込みモデルに最適な利用可能なプロバイダーにリクエストをルーティングします。デフォルトでは、稼働時間を最大化するために、リクエストはトッププロバイダー間で負荷分散されます。ただし、このモデルに使用する特定のプロバイダーを選択することもできます。",
 		"mistralProvider": "Mistral",
 		"mistralApiKeyLabel": "APIキー:",
 		"mistralApiKeyPlaceholder": "Mistral APIキーを入力してください",
@@ -121,10 +155,14 @@
 			"geminiApiKeyRequired": "Gemini APIキーが必要です",
 			"mistralApiKeyRequired": "Mistral APIキーが必要です",
 			"vercelAiGatewayApiKeyRequired": "Vercel AI Gateway APIキーが必要です",
+			"bedrockRegionRequired": "AWS リージョンは必須です",
+			"bedrockProfileRequired": "AWS プロファイルは必須です",
 			"ollamaBaseUrlRequired": "OllamaのベースURLが必要です",
 			"baseUrlRequired": "ベースURLが必要です",
-			"modelDimensionMinValue": "モデルの次元は0より大きくなければなりません"
+			"modelDimensionMinValue": "モデルの次元は0より大きくなければなりません",
+			"openRouterApiKeyRequired": "OpenRouter APIキーが必要です"
 		},
+		"optional": "オプション",
 		"advancedConfigLabel": "詳細設定",
 		"searchMinScoreLabel": "検索スコアのしきい値",
 		"searchMinScoreDescription": "検索結果に必要な最小類似度スコア（0.0-1.0）。値を低くするとより多くの結果が返されますが、関連性が低くなる可能性があります。値を高くすると返される結果は少なくなりますが、より関連性が高くなります。",
@@ -134,6 +172,7 @@
 		"resetToDefault": "デフォルトにリセット"
 	},
 	"autoApprove": {
+		"toggleShortcut": "<SettingsLink>IDEの環境設定</SettingsLink>で、この設定のグローバルショートカットを設定できます。",
 		"description": "Rooが承認なしで自動的に操作を実行できるようにします。AIを完全に信頼し、関連するセキュリティリスクを理解している場合にのみ、これらの設定を有効にしてください。",
 		"enabled": "自動承認が有効",
 		"toggleAriaLabel": "自動承認の切り替え",
@@ -162,11 +201,6 @@
 		"browser": {
 			"label": "ブラウザ",
 			"description": "承認なしで自動的にブラウザアクションを実行 — 注意：コンピューター使用をサポートするモデルを使用している場合のみ適用されます"
-		},
-		"retry": {
-			"label": "再試行",
-			"description": "サーバーがエラーレスポンスを返した場合、自動的に失敗したAPIリクエストを再試行",
-			"delayLabel": "リクエスト再試行前の遅延"
 		},
 		"mcp": {
 			"label": "MCP",
@@ -197,10 +231,6 @@
 			"addButton": "追加",
 			"autoDenied": "プレフィックス `{{prefix}}` を持つコマンドはユーザーによって禁止されています。別のコマンドを実行してこの制限を回避しないでください。"
 		},
-		"updateTodoList": {
-			"label": "Todo",
-			"description": "承認なしで自動的にToDoリストを更新"
-		},
 		"apiRequestLimit": {
 			"title": "最大リクエスト数",
 			"description": "タスクを続行するための承認を求める前に、自動的にこの数のAPIリクエストを行います。",
@@ -220,6 +250,7 @@
 		"configProfile": "設定プロファイル",
 		"description": "異なるAPI設定を保存して、プロバイダーと設定をすばやく切り替えることができます。",
 		"apiProvider": "APIプロバイダー",
+		"apiProviderDocs": "プロバイダードキュメント",
 		"model": "モデル",
 		"nameEmpty": "名前を空にすることはできません",
 		"nameExists": "この名前のプロファイルは既に存在します",
@@ -244,8 +275,6 @@
 		"vercelAiGatewayApiKey": "Vercel AI Gateway APIキー",
 		"getVercelAiGatewayApiKey": "Vercel AI Gateway APIキーを取得",
 		"apiKeyStorageNotice": "APIキーはVSCodeのシークレットストレージに安全に保存されます",
-		"glamaApiKey": "Glama APIキー",
-		"getGlamaApiKey": "Glama APIキーを取得",
 		"useCustomBaseUrl": "カスタムベースURLを使用",
 		"useReasoning": "推論を有効化",
 		"useHostHeader": "カスタムHostヘッダーを使用",
@@ -265,7 +294,6 @@
 		"getRequestyApiKey": "Requesty APIキーを取得",
 		"getRequestyBaseUrl": "ベースURL",
 		"requestyUseCustomBaseUrl": "カスタムベースURLを使用する",
-		"openRouterTransformsText": "プロンプトとメッセージチェーンをコンテキストサイズに圧縮 (<a>OpenRouter Transforms</a>)",
 		"anthropicApiKey": "Anthropic APIキー",
 		"getAnthropicApiKey": "Anthropic APIキーを取得",
 		"anthropicUseAuthToken": "Anthropic APIキーをX-Api-Keyの代わりにAuthorizationヘッダーとして渡す",
@@ -273,6 +301,10 @@
 		"anthropic1MContextBetaDescription": "Claude Sonnet 4のコンテキストウィンドウを100万トークンに拡張します",
 		"awsBedrock1MContextBetaLabel": "1Mコンテキストウィンドウを有効にする（ベータ版）",
 		"awsBedrock1MContextBetaDescription": "Claude Sonnet 4のコンテキストウィンドウを100万トークンに拡張します",
+		"vertex1MContextBetaLabel": "1Mコンテキストウィンドウを有効にする（ベータ版）",
+		"vertex1MContextBetaDescription": "Claude Sonnet 4のコンテキストウィンドウを100万トークンに拡張します",
+		"basetenApiKey": "Baseten APIキー",
+		"getBasetenApiKey": "Baseten APIキーを取得",
 		"cerebrasApiKey": "Cerebras APIキー",
 		"getCerebrasApiKey": "Cerebras APIキーを取得",
 		"chutesApiKey": "Chutes APIキー",
@@ -295,6 +327,9 @@
 		"getZaiApiKey": "Z AI APIキーを取得",
 		"zaiEntrypoint": "Z AI エントリーポイント",
 		"zaiEntrypointDescription": "お住まいの地域に応じて適切な API エントリーポイントを選択してください。中国にお住まいの場合は open.bigmodel.cn を選択してください。それ以外の場合は api.z.ai を選択してください。",
+		"minimaxApiKey": "MiniMax APIキー",
+		"getMiniMaxApiKey": "MiniMax APIキーを取得",
+		"minimaxBaseUrl": "MiniMax エントリーポイント",
 		"geminiApiKey": "Gemini APIキー",
 		"getGroqApiKey": "Groq APIキーを取得",
 		"groqApiKey": "Groq APIキー",
@@ -335,6 +370,15 @@
 		"awsSessionToken": "AWSセッショントークン",
 		"awsRegion": "AWSリージョン",
 		"awsCrossRegion": "クロスリージョン推論を使用",
+		"awsGlobalInference": "グローバル推論を使用する（最適なAWSリージョンを自動選択）",
+		"awsServiceTier": "サービスティア",
+		"awsServiceTierStandard": "Standard",
+		"awsServiceTierStandardDesc": "バランスの取れたパフォーマンスとコスト",
+		"awsServiceTierFlex": "Flex（50%割引）",
+		"awsServiceTierFlexDesc": "低コスト、非クリティカルなタスクのレイテンシが高い",
+		"awsServiceTierPriority": "Priority（75%プレミアム）",
+		"awsServiceTierPriorityDesc": "ミッションクリティカルなアプリケーション向けの最速パフォーマンス",
+		"awsServiceTierNote": "サービスティアは価格とパフォーマンスに影響します。Flexは50%割引でレイテンシが高く、Priorityは25%優れたパフォーマンスで75%のプレミアムです。",
 		"awsBedrockVpc": {
 			"useCustomVpcEndpoint": "カスタムVPCエンドポイントを使用",
 			"vpcEndpointUrlPlaceholder": "VPCエンドポイントURLを入力（任意）",
@@ -344,7 +388,7 @@
 		"enablePromptCachingTitle": "サポートされているモデルのパフォーマンスを向上させ、コストを削減するためにプロンプトキャッシュを有効化します。",
 		"cacheUsageNote": "注意：キャッシュの使用が表示されない場合は、別のモデルを選択してから希望のモデルを再度選択してみてください。",
 		"vscodeLmModel": "言語モデル",
-		"vscodeLmWarning": "注意：これは非常に実験的な統合であり、プロバイダーのサポートは異なります。モデルがサポートされていないというエラーが表示された場合、それはプロバイダー側の問題です。",
+		"vscodeLmWarning": "注意: VS Code Language Model API を通じて利用されるモデルは、プロバイダーによってラップまたは微調整されている場合があります。したがって、一般的なプロバイダーやルーターから同じモデルを直接使用する場合と挙動が異なることがあります。『Language Model』ドロップダウンのモデルを使用するには、まずそのモデルに切り替え、Copilot Chat のプロンプトで『承認』をクリックしてください。そうしないと、400『The requested model is not supported』などのエラーが表示されることがあります。",
 		"geminiParameters": {
 			"urlContext": {
 				"title": "URLコンテキストを有効にする",
@@ -380,6 +424,8 @@
 			"modelId": "モデルID",
 			"apiKey": "Ollama APIキー",
 			"apiKeyHelp": "認証されたOllamaインスタンスやクラウドサービス用のオプションAPIキー。ローカルインストールの場合は空のままにしてください。",
+			"numCtx": "コンテキストウィンドウサイズ (num_ctx)",
+			"numCtxHelp": "モデルのデフォルトのコンテキストウィンドウサイズを上書きします。モデルのModelfile構成を使用するには、空のままにします。最小値は128です。",
 			"description": "Ollamaを使用すると、ローカルコンピューターでモデルを実行できます。始め方については、クイックスタートガイドをご覧ください。",
 			"warning": "注意：Roo Codeは複雑なプロンプトを使用し、Claudeモデルで最適に動作します。能力の低いモデルは期待通りに動作しない場合があります。"
 		},
@@ -387,10 +433,6 @@
 		"getUnboundApiKey": "Unbound APIキーを取得",
 		"unboundRefreshModelsSuccess": "モデルリストが更新されました！最新のモデルから選択できます。",
 		"unboundInvalidApiKey": "無効なAPIキーです。APIキーを確認して、もう一度お試しください。",
-		"humanRelay": {
-			"description": "APIキーは不要ですが、ユーザーはウェブチャットAIに情報をコピー＆ペーストする必要があります。",
-			"instructions": "使用中にダイアログボックスが表示され、現在のメッセージが自動的にクリップボードにコピーされます。これらをウェブ版のAI（ChatGPTやClaudeなど）に貼り付け、AIの返答をダイアログボックスにコピーして確認ボタンをクリックする必要があります。"
-		},
 		"roo": {
 			"authenticatedMessage": "Roo Code Cloudアカウントを通じて安全に認証されています。",
 			"connectButton": "Roo Code Cloudに接続"
@@ -418,7 +460,7 @@
 			},
 			"computerUse": {
 				"label": "コンピューター使用",
-				"description": "このモデルはブラウザとの対話が可能ですか？（例：Claude 3.7 Sonnet）"
+				"description": "このモデルはブラウザとの対話が可能ですか？"
 			},
 			"promptCache": {
 				"label": "プロンプトキャッシュ",
@@ -450,14 +492,16 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "エラーと繰り返しの制限",
-			"description": "「Rooが問題を抱えています」ダイアログを表示するまでの連続エラーまたは繰り返しアクションの数",
+			"description": "「Rooが問題を抱えています」ダイアログを表示するまでの連続エラーまたは繰り返しアクションの数。この安全機構を無効にするには0に設定します（トリガーされません）。",
 			"unlimitedDescription": "無制限のリトライが有効です（自動進行）。ダイアログは表示されません。",
 			"warning": "⚠️ 0に設定すると無制限のリトライが可能になり、API使用量が大幅に増加する可能性があります"
 		},
 		"reasoningEffort": {
 			"label": "モデル推論の労力",
+			"none": "なし",
 			"minimal": "最小 (最速)",
 			"high": "高",
+			"xhigh": "非常に高い",
 			"medium": "中",
 			"low": "低"
 		},
@@ -506,6 +550,10 @@
 		}
 	},
 	"checkpoints": {
+		"timeout": {
+			"label": "チェックポイント初期化タイムアウト（秒）",
+			"description": "チェックポイントサービスの初期化を待つ最大時間。デフォルトは15秒。範囲：10～60秒。"
+		},
 		"enable": {
 			"label": "自動チェックポイントを有効化",
 			"description": "有効にすると、Rooはタスク実行中に自動的にチェックポイントを作成し、変更の確認や以前の状態への復帰を容易にします。 <0>詳細情報</0>"
@@ -602,6 +650,22 @@
 			"label": "最大合計画像サイズ",
 			"mb": "MB",
 			"description": "単一のread_file操作で処理されるすべての画像の累積サイズ制限（MB単位）。複数の画像を読み取る際、各画像のサイズが合計に加算されます。別の画像を含めるとこの制限を超える場合、その画像はスキップされます。"
+		},
+		"includeCurrentTime": {
+			"label": "現在の時刻をコンテキストに含める",
+			"description": "有効にすると、現在の時刻とタイムゾーン情報がシステムプロンプトに含まれます。モデルが時間に関する懸念で動作を停止する場合は無効にしてください。"
+		},
+		"includeCurrentCost": {
+			"label": "現在のコストをコンテキストに含める",
+			"description": "有効にすると、現在のAPI使用コストがシステムプロンプトに含まれます。モデルがコストに関する懸念で動作を停止する場合は無効にしてください。"
+		},
+		"maxGitStatusFiles": {
+			"label": "Gitステータス最大ファイル数",
+			"description": "gitステータスコンテキストに含めるファイルエントリの最大数。無効にするには0に設定します。ブランチ情報とコミットは、> 0の場合に常に表示されます。"
+		},
+		"enableSubfolderRules": {
+			"label": "サブフォルダルールを有効化",
+			"description": "サブディレクトリから.roo/rulesとAGENTS.mdファイルを再帰的に検出してロードします。パッケージごとのルールを持つモノレポに便利です。"
 		}
 	},
 	"terminal": {
@@ -611,64 +675,72 @@
 		},
 		"advanced": {
 			"label": "ターミナル設定：詳細",
-			"description": "以下のオプションは設定を適用するためにターミナルの再起動が必要な場合があります"
+			"description": "これらの設定は、「インラインターミナルを使用」が無効の場合にのみ適用されます。VS Code ターミナルのみに影響し、IDE の再起動が必要になる場合があります。"
 		},
 		"outputLineLimit": {
 			"label": "ターミナル出力制限",
-			"description": "コマンド実行時にターミナル出力に含める最大行数。超過すると中央から行が削除され、tokenを節約します。 <0>詳細情報</0>"
+			"description": "制限内に収めるため最初と最後の行を保持し、中間を削除します。トークンを節約するには下げる；Rooに中間の詳細を与えるには上げる。Rooはコンテンツがスキップされた箇所にプレースホルダーを表示します。<0>詳細情報</0>"
 		},
 		"outputCharacterLimit": {
-			"label": "ターミナルの文字数制限",
-			"description": "コマンド実行時にターミナル出力に含める最大文字数。この制限は、非常に長い行によるメモリ問題を回避するため、行数制限よりも優先されます。超過した場合、出力は切り捨てられます。<0>詳細</0>"
+			"label": "ターミナル文字制限",
+			"description": "出力サイズにハードキャップを適用してメモリ問題を防ぐため、行制限を上書きします。超過した場合、最初と最後を保持し、コンテンツがスキップされた箇所にRooにプレースホルダーを表示します。<0>詳細情報</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "ターミナルシェル統合タイムアウト",
-			"description": "コマンドを実行する前にシェル統合の初期化を待つ最大時間。シェルの起動時間が長いユーザーの場合、ターミナルで「Shell Integration Unavailable」エラーが表示される場合は、この値を増やす必要があるかもしれません。 <0>詳細情報</0>"
+			"description": "コマンドを実行する前�����VS Codeシェル統合を待機する時間。シェルが遅く起動する場合や「シェル統合が利用できません」というエラーが表示される場合は、この値を増やしてください。<0>詳細</0>"
 		},
 		"shellIntegrationDisabled": {
-			"label": "ターミナルシェル統合を無効にする",
-			"description": "ターミナルコマンドが正しく機能しない場合や、「シェル統合が利用できません」というエラーが表示される場合は、これを有効にします。これにより、一部の高度なターミナル機能をバイパスして、コマンドを実行するより簡単な方法が使用されます。 <0>詳細情報</0>"
+			"label": "インラインターミナルを使用（推奨）",
+			"description": "より高速で信頼性の高い実行のため、シェルプロファイル/統合をバイパスしてインラインターミナル（チャット）でコマンドを実行します。無効にすると、Roo はシェルプロファイル、プロンプト、プラグインと共に VS Code ターミナルを使用します。<0>詳細情報</0>"
 		},
 		"commandDelay": {
 			"label": "ターミナルコマンド遅延",
-			"description": "コマンド実行後に追加する遅延時間（ミリ秒）。デフォルト設定の0は遅延を完全に無効にします。これはタイミングの問題があるターミナルでコマンド出力を完全にキャプチャするのに役立ちます。ほとんどのターミナルでは`PROMPT_COMMAND='sleep N'`を設定することで実装され、PowerShellは各コマンドの最後に`start-sleep`を追加します。元々はVSCodeバグ#237208の回避策で、必要ない場合があります。 <0>詳細情報</0>"
+			"description": "VS Codeターミナルがすべての出力をフラッシュできるよう、各コマンド後に短い一時停止を追加します（bash/zsh: PROMPT_COMMAND sleep; PowerShell: start-sleep）。末尾出力が欠落している場合のみ使用；それ以外は0のままにします。<0>詳細情報</0>"
 		},
 		"compressProgressBar": {
-			"label": "プログレスバー出力を圧縮",
-			"description": "有効にすると、キャリッジリターン（\\r）を含むターミナル出力を処理して、実際のターミナルがコンテンツを表示する方法をシミュレートします。これによりプログレスバーの中間状態が削除され、最終状態のみが保持されるため、より関連性の高い情報のためのコンテキスト空間が節約されます。 <0>詳細情報</0>"
+			"label": "プログレスバー出力を圧���������",
+			"description": "プログレスバー/スピナーを折りたたんで、最終状態のみを保持します（トークンを節約します）。<0>詳細情報</0>"
 		},
 		"powershellCounter": {
-			"label": "PowerShellカウンター回避策を有効化",
-			"description": "有効にすると、PowerShellコマンドにカウンターを追加して、コマンドの正しい実行を確保します。これは出力のキャプチャに問題がある可能性のあるPowerShellターミナルで役立ちます。 <0>詳細情報</0>"
+			"label": "PowerShellカウンターの回避策を有効にする",
+			"description": "PowerShellの出力が欠落または重複している場合にこれをオンにします。出力を安定させるために各コマンドに小さなカウンターを追加します。出力がすでに正しい場合はオフのままにします。<0>詳細情報</0>"
 		},
 		"zshClearEolMark": {
-			"label": "ZSH行末マークをクリア",
-			"description": "有効にすると、PROMPT_EOL_MARK=''を設定してZSHの行末マークをクリアします。これにより、'%'などの特殊文字で終わるコマンド出力の解釈に関する問題を防ぎます。 <0>詳細情報</0>"
+			"label": "ZSH EOLマークをクリア",
+			"description": "行末に迷子の%が表示されたり、解析が間違っているように見える場合にこれをオンにします。Zshの行末マーク（%）を省略します。<0>詳細情報</0>"
 		},
 		"zshOhMy": {
-			"label": "Oh My Zsh 統合を有効化",
-			"description": "有効にすると、ITERM_SHELL_INTEGRATION_INSTALLED=Yes を設定して Oh My Zsh シェル統合機能を有効にします。この設定を適用するには、IDEの再起動が必要な場合があります。 <0>詳細情報</0>"
+			"label": "Oh My Zsh統合を有効にする",
+			"description": "Oh My Zshのテーマ/プラグインがシェル統合を期待している場合にこれをオンにします。ITERM_SHELL_INTEGRATION_INSTALLED=Yesを設定します。その変数を設定しないようにするにはオフにします。<0>詳細情報</0>"
 		},
 		"zshP10k": {
-			"label": "Powerlevel10k 統合を有効化",
-			"description": "有効にすると、POWERLEVEL9K_TERM_SHELL_INTEGRATION=true を設定して Powerlevel10k シェル統合機能を有効にします。 <0>詳細情報</0>"
+			"label": "Powerlevel10k統合を有効にする",
+			"description": "Powerlevel10kシェル統合を使用している場合にこれをオンにします。<0>詳細情報</0>"
 		},
 		"zdotdir": {
-			"label": "ZDOTDIR 処理を有効化",
-			"description": "有効にすると、zsh シェル統合を適切に処理するために ZDOTDIR 用の一時ディレクトリを作成します。これにより、zsh の設定を保持しながら VSCode のシェル統合が正しく機能します。 <0>詳細情報</0>"
+			"label": "ZDOTDIR処理を有効にする",
+			"description": "zshシェル統合が失敗したり、ドットファイルと競合したりする場合にこれをオンにします。<0>詳細情報</0>"
 		},
 		"inheritEnv": {
 			"label": "環境変数を継承",
-			"description": "有効にすると、ターミナルは VSCode の親プロセスから環境変数を継承します。ユーザープロファイルで定義されたシェル統合設定などが含まれます。これは VSCode のグローバル設定 `terminal.integrated.inheritEnv` を直接切り替えます。 <0>詳細情報</0>"
+			"description": "親VS Codeプロセスから環境変数を継承するには、これをオンにします。<0>詳細情報</0>"
 		}
 	},
 	"advancedSettings": {
 		"title": "詳細設定"
 	},
+	"toolProtocol": {
+		"label": "ツールコールプロトコル",
+		"description": "Roo が API と通信する方法を選択します。ネイティブはプロバイダーの関数呼び出し API を使用し、XML は XML 形式のツール定義を使用します。",
+		"default": "デフォルト",
+		"xml": "XML",
+		"native": "ネイティブ",
+		"currentDefault": "デフォルト: {{protocol}}"
+	},
 	"advanced": {
 		"diff": {
 			"label": "diff経由の編集を有効化",
-			"description": "有効にすると、Rooはファイルをより迅速に編集でき、切り詰められた全ファイル書き込みを自動的に拒否します。最新のClaude 3.7 Sonnetモデルで最良に機能します。",
+			"description": "有効にすると、Rooはファイルをより迅速に編集でき、切り詰められた全ファイル書き込みを自動的に拒否します。",
 			"strategy": {
 				"label": "Diff戦略",
 				"options": {
@@ -696,10 +768,6 @@
 		"DIFF_STRATEGY_UNIFIED": {
 			"name": "実験的な統合diff戦略を使用する",
 			"description": "実験的な統合diff戦略を有効にします。この戦略はモデルエラーによる再試行の回数を減らす可能性がありますが、予期しない動作や不正確な編集を引き起こす可能性があります。リスクを理解し、すべての変更を注意深く確認する準備がある場合にのみ有効にしてください。"
-		},
-		"SEARCH_AND_REPLACE": {
-			"name": "実験的な検索と置換ツールを使用する",
-			"description": "実験的な検索と置換ツールを有効にし、Rooが1つのリクエストで検索語の複数のインスタンスを置き換えることを可能にします。"
 		},
 		"INSERT_BLOCK": {
 			"name": "実験的なコンテンツ挿入ツールを使用する",
@@ -729,10 +797,6 @@
 			"name": "バックグラウンド編集",
 			"description": "有効にすると、エディターのフォーカス中断を防ぎます。ファイル編集は差分ビューを開いたりフォーカスを奪ったりすることなく、バックグラウンドで行われます。Rooが変更を行っている間も中断されることなく作業を続けることができます。ファイルは診断をキャプチャするためにフォーカスなしで開くか、完全に閉じたままにできます。"
 		},
-		"ALLOWED_MULTI_CALL": {
-			"name": "メッセージごとに複数のツール呼び出しを許可",
-			"description": "有効にすると、Rooは単一のメッセージで複数のツールを使用できます。無効にすると、Rooはメッセージごとに1つのツールを使用する必要があります。これを有効にすることでインタラクションが高速化されますが、一部のモデルでは予期しない動作が発生する可能性があります。"
-		},
 		"ASSISTANT_MESSAGE_PARSER": {
 			"name": "新しいメッセージパーサーを使う",
 			"description": "実験的なストリーミングメッセージパーサーを有効にします。長い回答をより効率的に処理し、遅延を減らします。"
@@ -742,6 +806,8 @@
 			"description": "有効にすると、new_taskツールはtodosパラメータの提供が必須になります。これにより、すべての新しいタスクが明確な目的のリストで開始されることが保証されます。無効（デフォルト）の場合、下位互換性のためにtodosパラメータはオプションのままです。"
 		},
 		"IMAGE_GENERATION": {
+			"providerLabel": "プロバイダー",
+			"providerDescription": "画像生成に使用するプロバイダーを選択",
 			"name": "AI画像生成を有効にする",
 			"description": "有効にすると、RooはOpenRouterの画像生成モデルを使用してテキストプロンプトから画像を生成できます。OpenRouter APIキーの設定が必要です。",
 			"openRouterApiKeyLabel": "OpenRouter APIキー",
@@ -756,9 +822,20 @@
 			"name": "モデル開始スラッシュコマンドを有効にする",
 			"description": "有効にすると、Rooがワークフローを実行するためにあなたのスラッシュコマンドを実行できます。"
 		},
-		"USE_TOOL_CALLING": {
-			"name": "プロンプト説明の代わりにツール呼び出しを使用する",
-			"description": "有効にすると、Rooはシステムプロンプトにツール説明を含める代わりにOpenAI関数呼び出しを使用します。これによりトークン使用量を削減し、対応モデルのパフォーマンスを向上させることができます。"
+		"MULTIPLE_NATIVE_TOOL_CALLS": {
+			"name": "並列ツール呼び出し",
+			"description": "有効にすると、ネイティブプロトコルは単一のアシスタントメッセージターンで複数のツールを実行できます。"
+		},
+		"CUSTOM_TOOLS": {
+			"name": "カスタムツールを有効化",
+			"description": "有効にすると、Rooはプロジェクトの.roo/toolsディレクトリまたはグローバルツール用の~/.roo/toolsからカスタムTypeScript/JavaScriptツールを読み込んで使用できます。注意：これらのツールは自動的に承認されます。",
+			"toolsHeader": "利用可能なカスタムツール",
+			"noTools": "カスタムツールが読み込まれていません。プロジェクトの.roo/toolsディレクトリまたはグローバルツール用の~/.roo/toolsに.tsまたは.jsファイルを追加してください。",
+			"refreshButton": "更新",
+			"refreshing": "更新中...",
+			"refreshSuccess": "ツールが正常に更新されました",
+			"refreshError": "ツールの更新に失敗しました",
+			"toolParameters": "パラメーター"
 		}
 	},
 	"promptCaching": {
@@ -773,8 +850,6 @@
 	"modelInfo": {
 		"supportsImages": "画像をサポート",
 		"noImages": "画像をサポートしていません",
-		"supportsComputerUse": "コンピュータ使用をサポート",
-		"noComputerUse": "コンピュータ使用をサポートしていません",
 		"supportsPromptCache": "プロンプトキャッシュをサポート",
 		"noPromptCache": "プロンプトキャッシュをサポートしていません",
 		"contextWindow": "コンテキストウィンドウ:",
@@ -799,7 +874,8 @@
 		"label": "モデル",
 		"searchPlaceholder": "検索",
 		"noMatchFound": "一致するものが見つかりません",
-		"useCustomModel": "カスタムを使用: {{modelId}}"
+		"useCustomModel": "カスタムを使用: {{modelId}}",
+		"simplifiedExplanation": "詳細なモデル設定は後で調整できます。"
 	},
 	"footer": {
 		"feedback": "質問やフィードバックがある場合は、<githubLink>github.com/RooCodeInc/Roo-Code</githubLink>で問題を開くか、<redditLink>reddit.com/r/RooCode</redditLink>や<discordLink>discord.gg/roocode</discordLink>に参加してください",
@@ -829,6 +905,7 @@
 			"regionMismatch": "警告：ARN内のリージョン（{{arnRegion}}）が選択したリージョン（{{region}}）と一致しません。これによりアクセスの問題が発生する可能性があります。プロバイダーはARNのリージョンを使用します。"
 		},
 		"modelAvailability": "指定されたモデルID（{{modelId}}）は利用できません。別のモデルを選択してください。",
+		"modelDeprecated": "このモデルは利用できなくなりました。別のモデルを選択してください。",
 		"providerNotAllowed": "プロバイダー「{{provider}}」は組織によって許可されていません",
 		"modelNotAllowed": "モデル「{{model}}」はプロバイダー「{{provider}}」に対して組織によって許可されていません",
 		"profileInvalid": "このプロファイルには、組織によって許可されていないプロバイダーまたはモデルが含まれています",
@@ -884,6 +961,16 @@
 			"input": "入力",
 			"output": "出力",
 			"cacheReads": "キャッシュ読み取り"
+		}
+	},
+	"ui": {
+		"collapseThinking": {
+			"label": "デフォルトで思考メッセージを折りたたむ",
+			"description": "有効にすると、操作するまで思考ブロックがデフォルトで折りたたまれます"
+		},
+		"requireCtrlEnterToSend": {
+			"label": "メッセージを送信するには{{primaryMod}}+Enterが必要",
+			"description": "有効にすると、Enterだけでなく{{primaryMod}}+Enterを押してメッセージを送信する必要があります"
 		}
 	}
 }

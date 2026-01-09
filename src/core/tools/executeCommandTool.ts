@@ -9,7 +9,7 @@ import { TelemetryService } from "@roo-code/telemetry"
 
 import { Task } from "../task/Task"
 
-import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag, ToolResponse } from "../../shared/tools"
+import { ToolUse, ToolResponse } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { ExitCodeDetails, RooTerminalCallbacks, RooTerminalProcess } from "../../integrations/terminal/types"
@@ -17,25 +17,30 @@ import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { Package } from "../../shared/package"
 import { t } from "../../i18n"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 class ShellIntegrationError extends Error {}
 
-export async function executeCommandTool(
-	task: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-) {
-	let command: string | undefined = block.params.command
-	const customCwd: string | undefined = block.params.cwd
+interface ExecuteCommandParams {
+	command: string
+	cwd?: string
+}
 
-	try {
-		if (block.partial) {
-			await task.ask("command", removeClosingTag("command", command), block.partial).catch(() => {})
-			return
-		} else {
+export class ExecuteCommandTool extends BaseTool<"execute_command"> {
+	readonly name = "execute_command" as const
+
+	parseLegacy(params: Partial<Record<string, string>>): ExecuteCommandParams {
+		return {
+			command: params.command || "",
+			cwd: params.cwd,
+		}
+	}
+
+	async execute(params: ExecuteCommandParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { command, cwd: customCwd } = params
+		const { handleError, pushToolResult, askApproval, removeClosingTag, toolProtocol } = callbacks
+
+		try {
 			if (!command) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("execute_command")
@@ -47,14 +52,14 @@ export async function executeCommandTool(
 
 			if (ignoredFileAttemptedToAccess) {
 				await task.say("rooignore_error", ignoredFileAttemptedToAccess)
-				pushToolResult(formatResponse.toolError(formatResponse.rooIgnoreError(ignoredFileAttemptedToAccess)))
+				pushToolResult(formatResponse.rooIgnoreError(ignoredFileAttemptedToAccess, toolProtocol))
 				return
 			}
 
 			task.consecutiveMistakeCount = 0
 
-			command = unescapeHtmlEntities(command) // Unescape HTML entities.
-			const didApprove = await askApproval("command", command)
+			const unescapedCommand = unescapeHtmlEntities(command)
+			const didApprove = await askApproval("command", unescapedCommand)
 
 			if (!didApprove) {
 				return
@@ -67,7 +72,7 @@ export async function executeCommandTool(
 			const {
 				terminalOutputLineLimit = 500,
 				terminalOutputCharacterLimit = DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT,
-				terminalShellIntegrationDisabled = false,
+				terminalShellIntegrationDisabled = true,
 			} = providerState ?? {}
 
 			// Get command execution timeout from VSCode configuration (in seconds)
@@ -81,14 +86,16 @@ export async function executeCommandTool(
 				.get<string[]>("commandTimeoutAllowlist", [])
 
 			// Check if command matches any prefix in the allowlist
-			const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) => command!.startsWith(prefix.trim()))
+			const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) =>
+				unescapedCommand.startsWith(prefix.trim()),
+			)
 
 			// Convert seconds to milliseconds for internal use, but skip timeout if command is allowlisted
 			const commandExecutionTimeout = isCommandAllowlisted ? 0 : commandExecutionTimeoutSeconds * 1000
 
 			const options: ExecuteCommandOptions = {
 				executionId,
-				command,
+				command: unescapedCommand,
 				customCwd,
 				terminalShellIntegrationDisabled,
 				terminalOutputLineLimit,
@@ -97,7 +104,7 @@ export async function executeCommandTool(
 			}
 
 			try {
-				const [rejected, result] = await executeCommand(task, options)
+				const [rejected, result] = await executeCommandInTerminal(task, options)
 
 				if (rejected) {
 					task.didRejectTool = true
@@ -109,8 +116,11 @@ export async function executeCommandTool(
 				provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 				await task.say("shell_integration_warning")
 
+				// Invalidate pending ask from first execution to prevent race condition
+				task.supersedePendingAsk()
+
 				if (error instanceof ShellIntegrationError) {
-					const [rejected, result] = await executeCommand(task, {
+					const [rejected, result] = await executeCommandInTerminal(task, {
 						...options,
 						terminalShellIntegrationDisabled: true,
 					})
@@ -126,10 +136,17 @@ export async function executeCommandTool(
 			}
 
 			return
+		} catch (error) {
+			await handleError("executing command", error as Error)
+			return
 		}
-	} catch (error) {
-		await handleError("executing command", error)
-		return
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"execute_command">): Promise<void> {
+		const command = block.params.command
+		await task
+			.ask("command", this.removeClosingTag("command", command, block.partial), block.partial)
+			.catch(() => {})
 	}
 }
 
@@ -143,13 +160,13 @@ export type ExecuteCommandOptions = {
 	commandExecutionTimeout?: number
 }
 
-export async function executeCommand(
+export async function executeCommandInTerminal(
 	task: Task,
 	{
 		executionId,
 		command,
 		customCwd,
-		terminalShellIntegrationDisabled = false,
+		terminalShellIntegrationDisabled = true,
 		terminalOutputLineLimit = 500,
 		terminalOutputCharacterLimit = DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT,
 		commandExecutionTimeout = 0,
@@ -179,6 +196,7 @@ export async function executeCommand(
 	let result: string = ""
 	let exitDetails: ExitCodeDetails | undefined
 	let shellIntegrationError: string | undefined
+	let hasAskedForCommandOutput = false
 
 	const terminalProvider = terminalShellIntegrationDisabled ? "execa" : "vscode"
 	const provider = await task.providerRef.deref()
@@ -195,9 +213,12 @@ export async function executeCommand(
 			const status: CommandExecutionStatus = { executionId, status: "output", output: compressedOutput }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 
-			if (runInBackground) {
+			if (runInBackground || hasAskedForCommandOutput) {
 				return
 			}
+
+			// Mark that we've asked to prevent multiple concurrent asks
+			hasAskedForCommandOutput = true
 
 			try {
 				const { response, text, images } = await task.ask("command_output", "")
@@ -207,7 +228,9 @@ export async function executeCommand(
 					message = { text, images }
 					process.continue()
 				}
-			} catch (_error) {}
+			} catch (_error) {
+				// Silently handle ask errors (e.g., "Current ask promise was ignored")
+			}
 		},
 		onCompleted: (output: string | undefined) => {
 			result = Terminal.compressTerminalOutput(
@@ -220,7 +243,6 @@ export async function executeCommand(
 			completed = true
 		},
 		onShellExecutionStarted: (pid: number | undefined) => {
-			console.log(`[executeCommand] onShellExecutionStarted: ${pid}`)
 			const status: CommandExecutionStatus = { executionId, status: "started", pid, command }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 		},
@@ -272,6 +294,7 @@ export async function executeCommand(
 				const status: CommandExecutionStatus = { executionId, status: "timeout" }
 				provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 				await task.say("error", t("common:errors:command_timeout", { seconds: commandExecutionTimeoutSeconds }))
+				task.didToolFailInCurrentTurn = true
 				task.terminalProcess = undefined
 
 				return [
@@ -363,56 +386,24 @@ export async function executeCommand(
 	}
 }
 
+export const executeCommandTool = new ExecuteCommandTool()
 
-
-
-export async function userExecuteCommand(
-	task: Task,
-	cmd: string,
-): Promise<string> {
+export async function userExecuteCommand(task: Task, command: string): Promise<string> {
 	const handleError = async (action: string, error: Error) => {
-		const errorString = `Error ${action}: ${cmd}`
-
-		await task.say(
-			"error",
-			`Error ${action}:\n${cmd}`,
-		)
-
+		const errorString = `Error ${action}: ${command}`
+		await task.say("error", `Error ${action}:\n${command}`)
 		return errorString
 	}
 
-	const askApproval = async (
-		cmd:string
-	) => {
-		const { response } = await task.ask(
-			"command",
-			cmd,
-			false,
-			undefined,
-			true,
-		)
-
-		if (response !== "yesButtonClicked") {
-			throw new Error("loggic error")
-		}
-
-		return true
-	}
-	
 	try {
-		if (!cmd) {
-			return "Error: command is empty!"
+		if (!command) {
+			return "Error: command is empty."
 		}
 
 		task.consecutiveMistakeCount = 0
 
-		cmd = unescapeHtmlEntities(cmd) // Unescape HTML entities.
-
-		const didApprove = await askApproval(cmd)
-		delay(100)
-		if (!didApprove) {
-			return "Error: command rejected!"
-		}
+		const unescapedCommand = unescapeHtmlEntities(command)
+		await task.ask("command", unescapedCommand, false, undefined, true, { forceAutoApprove: true })
 
 		const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
 		const provider = await task.providerRef.deref()
@@ -421,29 +412,27 @@ export async function userExecuteCommand(
 		const {
 			terminalOutputLineLimit = 500,
 			terminalOutputCharacterLimit = DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT,
-			terminalShellIntegrationDisabled = false,
+			terminalShellIntegrationDisabled = true,
 		} = providerState ?? {}
 
-		// Get command execution timeout from VSCode configuration (in seconds)
 		const commandExecutionTimeoutSeconds = vscode.workspace
 			.getConfiguration(Package.name)
 			.get<number>("commandExecutionTimeout", 0)
 
-		// Get command timeout allowlist from VSCode configuration
 		const commandTimeoutAllowlist = vscode.workspace
 			.getConfiguration(Package.name)
 			.get<string[]>("commandTimeoutAllowlist", [])
 
-		// Check if command matches any prefix in the allowlist
-		const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) => cmd!.startsWith(prefix.trim()))
+		const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) =>
+			unescapedCommand.startsWith(prefix.trim()),
+		)
 
-		// Convert seconds to milliseconds for internal use, but skip timeout if command is allowlisted
 		const commandExecutionTimeout = isCommandAllowlisted ? 0 : commandExecutionTimeoutSeconds * 1000
 
 		const options: ExecuteCommandOptions = {
 			executionId,
-			command:cmd,
-			customCwd:task.cwd,
+			command: unescapedCommand,
+			customCwd: task.cwd,
 			terminalShellIntegrationDisabled,
 			terminalOutputLineLimit,
 			terminalOutputCharacterLimit,
@@ -451,35 +440,36 @@ export async function userExecuteCommand(
 		}
 
 		try {
-			const [rejected, result] = await executeCommand(task, options)
+			const [rejected, result] = await executeCommandInTerminal(task, options)
 
 			if (rejected) {
-				return "Error: command rejected!"
+				return "Error: command rejected."
 			}
 
-			return result as string
+			return String(result)
 		} catch (error: unknown) {
 			const status: CommandExecutionStatus = { executionId, status: "fallback" }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 			await task.say("shell_integration_warning")
 
+			task.supersedePendingAsk()
+
 			if (error instanceof ShellIntegrationError) {
-				const [rejected, result] = await executeCommand(task, {
+				const [rejected, result] = await executeCommandInTerminal(task, {
 					...options,
 					terminalShellIntegrationDisabled: true,
 				})
 
 				if (rejected) {
-					return "Error: command rejected!"
+					return "Error: command rejected."
 				}
 
-				return result as string
-			} else {
-				return(`Command failed to execute in terminal due to a shell integration error.`)
+				return String(result)
 			}
+
+			return "Command failed to execute due to a shell integration error."
 		}
 	} catch (error) {
-		return await handleError("executing command", error)
+		return await handleError("executing command", error as Error)
 	}
 }
-

@@ -10,9 +10,11 @@ import type {
 	MarketplaceItem,
 	TodoItem,
 	CloudUserInfo,
+	CloudOrganizationMembership,
 	OrganizationAllowList,
 	ShareVisibility,
 	QueuedMessage,
+	SerializedCustomToolDefinition,
 } from "@roo-code/types"
 
 import { GitCommit } from "../utils/git"
@@ -20,6 +22,7 @@ import { GitCommit } from "../utils/git"
 import { McpServer } from "./mcp"
 import { Mode } from "./modes"
 import { ModelRecord, RouterModels } from "./api"
+import { SkillMetadata } from "./skills"
 
 // Command interface for frontend/backend communication
 export interface Command {
@@ -72,7 +75,6 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "mcpServers"
 		| "enhancedPrompt"
-		| "savedMemory"
 		| "commitSearchResults"
 		| "listApiConfig"
 		| "routerModels"
@@ -87,14 +89,13 @@ export interface ExtensionMessage {
 		| "autoApprovalEnabled"
 		| "updateCustomMode"
 		| "deleteCustomMode"
+		| "savedMemory"
 		| "exportModeResult"
 		| "importModeResult"
 		| "checkRulesDirectoryResult"
 		| "deleteCustomModeCheck"
 		| "currentCheckpointUpdated"
-		| "showHumanRelayDialog"
-		| "humanRelayResponse"
-		| "humanRelayCancel"
+		| "checkpointInitWarning"
 		| "browserToolEnabled"
 		| "browserConnectionResult"
 		| "remoteBrowserEnabled"
@@ -107,11 +108,12 @@ export interface ExtensionMessage {
 		| "setHistoryPreviewCollapsed"
 		| "commandExecutionStatus"
 		| "mcpExecutionStatus"
-		| "toolExecutionStatus"
 		| "vsCodeSetting"
 		| "authenticatedUser"
+		| "condenseTaskContextStarted"
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
+		| "rooCreditBalance"
 		| "indexingStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
@@ -126,19 +128,30 @@ export interface ExtensionMessage {
 		| "commands"
 		| "insertTextIntoTextarea"
 		| "dismissedUpsells"
+		| "organizationSwitchResult"
+		| "interactionRequired"
+		| "browserSessionUpdate"
+		| "browserSessionNavigate"
+		| "claudeCodeRateLimits"
+		| "skills"
+		| "customToolsResult"
 	text?: string
 	payload?: any // Add a generic payload for now, can refine later
+	// Checkpoint warning message
+	checkpointWarning?: {
+		type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"
+		timeout: number
+	}
 	action?:
 		| "chatButtonClicked"
-		| "mcpButtonClicked"
 		| "settingsButtonClicked"
 		| "historyButtonClicked"
-		| "promptsButtonClicked"
 		| "marketplaceButtonClicked"
 		| "cloudButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"
+		| "toggleAutoApprove"
 	invoke?: "newChat" | "sendMessage" | "primaryButtonClick" | "secondaryButtonClick" | "setChatBoxMessage"
 	state?: ExtensionState
 	images?: string[]
@@ -201,8 +214,14 @@ export interface ExtensionMessage {
 	hasCheckpoint?: boolean
 	context?: string
 	commands?: Command[]
+	skills?: SkillMetadata[]
 	queuedMessages?: QueuedMessage[]
 	list?: string[] // For dismissedUpsells
+	organizationId?: string | null // For organizationSwitchResult
+	browserSessionMessages?: ClineMessage[] // For browser session panel updates
+	isBrowserSessionActive?: boolean // For browser session panel updates
+	stepIndex?: number // For browserSessionNavigate: the target step index to display
+	tools?: SerializedCustomToolDefinition[] // For customToolsResult
 }
 
 export type ExtensionState = Pick<
@@ -210,9 +229,7 @@ export type ExtensionState = Pick<
 	| "currentApiConfigName"
 	| "listApiConfigMeta"
 	| "pinnedApiConfigs"
-	// | "lastShownAnnouncementId"
 	| "customInstructions"
-	// | "taskHistory" // Optional in GlobalSettings, required here.
 	| "dismissedUpsells"
 	| "autoApprovalEnabled"
 	| "alwaysAllowReadOnly"
@@ -220,16 +237,12 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWrite"
 	| "alwaysAllowWriteOutsideWorkspace"
 	| "alwaysAllowWriteProtected"
-	// | "writeDelayMs" // Optional in GlobalSettings, required here.
 	| "alwaysAllowBrowser"
-	| "alwaysApproveResubmit"
-	// | "requestDelaySeconds" // Optional in GlobalSettings, required here.
 	| "alwaysAllowMcp"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"
 	| "alwaysAllowFollowupQuestions"
 	| "alwaysAllowExecute"
-	| "alwaysAllowUpdateTodoList"
 	| "followupAutoApproveTimeoutMs"
 	| "allowedCommands"
 	| "deniedCommands"
@@ -241,17 +254,11 @@ export type ExtensionState = Pick<
 	| "remoteBrowserEnabled"
 	| "cachedChromeHostUrl"
 	| "remoteBrowserHost"
-	// | "enableCheckpoints" // Optional in GlobalSettings, required here.
 	| "ttsEnabled"
 	| "ttsSpeed"
 	| "soundEnabled"
 	| "soundVolume"
-	// | "notificationHook"
-	// | "maxOpenTabsContext" // Optional in GlobalSettings, required here.
-	// | "maxWorkspaceFiles" // Optional in GlobalSettings, required here.
-	// | "showRooIgnoredFiles" // Optional in GlobalSettings, required here.
-	// | "maxReadFileLine" // Optional in GlobalSettings, required here.
-	| "maxConcurrentFileReads" // Optional in GlobalSettings, required here.
+	| "maxConcurrentFileReads"
 	| "terminalOutputLineLimit"
 	| "terminalOutputCharacterLimit"
 	| "terminalShellIntegrationTimeout"
@@ -266,14 +273,8 @@ export type ExtensionState = Pick<
 	| "diagnosticsEnabled"
 	| "diffEnabled"
 	| "fuzzyMatchThreshold"
-	// | "experiments" // Optional in GlobalSettings, required here.
 	| "language"
-	// | "telemetrySetting" // Optional in GlobalSettings, required here.
-	// | "mcpEnabled" // Optional in GlobalSettings, required here.
-	// | "enableMcpServerCreation" // Optional in GlobalSettings, required here.
-	// | "mode" // Optional in GlobalSettings, required here.
 	| "modeApiConfigs"
-	// | "customModes" // Optional in GlobalSettings, required here.
 	| "customModePrompts"
 	| "customSupportPrompts"
 	| "enhancementApiConfigId"
@@ -284,8 +285,15 @@ export type ExtensionState = Pick<
 	| "profileThresholds"
 	| "includeDiagnosticMessages"
 	| "maxDiagnosticMessages"
+	| "imageGenerationProvider"
 	| "openRouterImageGenerationSelectedModel"
 	| "includeTaskHistoryInEnhance"
+	| "reasoningBlockCollapsed"
+	| "enterBehavior"
+	| "includeCurrentTime"
+	| "includeCurrentCost"
+	| "maxGitStatusFiles"
+	| "requestDelaySeconds"
 > & {
 	version: string
 	clineMessages: ClineMessage[]
@@ -298,12 +306,13 @@ export type ExtensionState = Pick<
 	taskHistory: HistoryItem[]
 
 	writeDelayMs: number
-	requestDelaySeconds: number
 
 	enableCheckpoints: boolean
+	checkpointTimeout: number // Timeout for checkpoint initialization in seconds (default: 15)
 	maxOpenTabsContext: number // Maximum number of VSCode open tabs to include in context (0-500)
 	maxWorkspaceFiles: number // Maximum number of files to include in current working directory details (0-500)
 	showRooIgnoredFiles: boolean // Whether to show .rooignore'd files in listings
+	enableSubfolderRules: boolean // Whether to load rules from subdirectories
 	maxReadFileLine: number // Maximum number of lines to read from a file before truncating
 	maxImageFileSize: number // Maximum size of image files to process in MB
 	maxTotalImageSize: number // Maximum total size for all images in a single read operation in MB
@@ -328,24 +337,23 @@ export type ExtensionState = Pick<
 
 	cloudUserInfo: CloudUserInfo | null
 	cloudIsAuthenticated: boolean
+	cloudAuthSkipModel?: boolean // Flag indicating auth completed without model selection (user should pick 3rd-party provider)
 	cloudApiUrl?: string
+	cloudOrganizations?: CloudOrganizationMembership[]
 	sharingEnabled: boolean
+	publicSharingEnabled: boolean
 	organizationAllowList: OrganizationAllowList
 	organizationSettingsVersion?: number
 
+	isBrowserSessionActive: boolean // Actual browser session state
+
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
-	notificationHook: string
-	thinkingToolEnabled: boolean
-	thinkingToolApiConfigId: string
-	multiModalToolEnabled: boolean
-	multiModalToolApiConfigId: string
 	marketplaceItems?: MarketplaceItem[]
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 	profileThresholds: Record<string, number>
 	hasOpenedModeSelector: boolean
 	openRouterImageApiKey?: string
-	openRouterUseMiddleOutTransform?: boolean
 	messageQueue?: QueuedMessage[]
 	lastShownAnnouncementId?: string
 	apiModelId?: string
@@ -355,6 +363,8 @@ export type ExtensionState = Pick<
 	remoteControlEnabled: boolean
 	taskSyncEnabled: boolean
 	featureRoomoteControlEnabled: boolean
+	claudeCodeIsAuthenticated?: boolean
+	debug?: boolean
 }
 
 export interface ClineSayTool {
@@ -367,21 +377,18 @@ export interface ClineSayTool {
 		| "fetchInstructions"
 		| "listFilesTopLevel"
 		| "listFilesRecursive"
-		| "listCodeDefinitionNames"
 		| "searchFiles"
-		| "webSearch"
-		| "urlFetch"
 		| "switchMode"
 		| "newTask"
 		| "finishTask"
-		| "searchAndReplace"
-		| "insertContent"
 		| "generateImage"
 		| "imageGenerated"
 		| "runSlashCommand"
+		| "updateTodoList"
 	path?: string
 	diff?: string
 	content?: string
+	// Unified diff statistics computed by the extension
 	diffStats?: { added: number; removed: number }
 	regex?: string
 	filePattern?: string
@@ -390,12 +397,6 @@ export interface ClineSayTool {
 	isOutsideWorkspace?: boolean
 	isProtected?: boolean
 	additionalFileCount?: number // Number of additional files in the same read_file request
-	search?: string
-	replace?: string
-	useRegex?: boolean
-	ignoreCase?: boolean
-	startLine?: number
-	endLine?: number
 	lineNumber?: number
 	query?: string
 	batchFiles?: Array<{
@@ -410,6 +411,7 @@ export interface ClineSayTool {
 		changeCount: number
 		key: string
 		content: string
+		// Per-file unified diff statistics computed by the extension
 		diffStats?: { added: number; removed: number }
 		diffs?: Array<{
 			content: string
@@ -431,10 +433,12 @@ export const browserActions = [
 	"click",
 	"hover",
 	"type",
+	"press",
 	"scroll_down",
 	"scroll_up",
 	"resize",
 	"close",
+	"screenshot",
 ] as const
 
 export type BrowserAction = (typeof browserActions)[number]
@@ -444,6 +448,7 @@ export interface ClineSayBrowserAction {
 	coordinate?: string
 	size?: string
 	text?: string
+	executedCoordinate?: string
 }
 
 export type BrowserActionResult = {
@@ -451,6 +456,8 @@ export type BrowserActionResult = {
 	logs?: string
 	currentUrl?: string
 	currentMousePosition?: string
+	viewportWidth?: number
+	viewportHeight?: number
 }
 
 export interface ClineAskUseMcpServer {
@@ -462,28 +469,18 @@ export interface ClineAskUseMcpServer {
 	response?: string
 }
 
-export interface ClineAskWebSearch {
-	query: string
-	response?: string
-}
-
-export interface ClineAskUrlFetch {
-	url: string
-	response?: string
-}
-
 export interface ClineApiReqInfo {
 	request?: string
 	tokensIn?: number
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
+	tps?: number
+	latency?: number
 	cost?: number
 	cancelReason?: ClineApiReqCancelReason
 	streamingFailedMessage?: string
 	apiProtocol?: "anthropic" | "openai"
-	tps?: number
-	latency?: number // optional latency in milliseconds
 }
 
 export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled"

@@ -1,14 +1,16 @@
 import * as vscode from "vscode"
 import { OpenAiEmbedder } from "./embedders/openai"
-import { RiddlerEmbedder } from "./embedders/embedding-riddler"
 import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
+import { RiddlerEmbedder } from "./embedders/riddler"
 import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
 import { GeminiEmbedder } from "./embedders/gemini"
 import { MistralEmbedder } from "./embedders/mistral"
 import { VercelAiGatewayEmbedder } from "./embedders/vercel-ai-gateway"
+import { BedrockEmbedder } from "./embedders/bedrock"
+import { OpenRouterEmbedder } from "./embedders/openrouter"
 import { EmbedderProvider, getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
-import { RiddlerVectorStore } from "./vector-store/client-riddler"
+import { RiddlerVectorStore } from "./vector-store/riddler-client"
 import { codeParser, DirectoryScanner, FileWatcher, riddlerCodeParser } from "./processors"
 import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
 import { CodeIndexConfigManager } from "./config-manager"
@@ -51,13 +53,17 @@ export class CodeIndexServiceFactory {
 			})
 		} else if (provider === "ollama") {
 			if (!config.ollamaOptions?.ollamaBaseUrl) {
-				throw new Error(`创建 Codebase-Service 缺少URL配置`)
+				throw new Error(t("embeddings:serviceFactory.ollamaConfigMissing"))
+			}
+			return new CodeIndexOllamaEmbedder({
+				...config.ollamaOptions,
+				ollamaModelId: config.modelId,
+			})
+		} else if (provider === "riddler") {
+			if (!config.riddlerOptions?.baseUrl) {
+				throw new Error("Codebase-Service URL is required.")
 			}
 			return new RiddlerEmbedder()
-			// return new CodeIndexOllamaEmbedder({
-			// 	...config.ollamaOptions,
-			// 	ollamaModelId: config.modelId,
-			// })
 		} else if (provider === "openai-compatible") {
 			if (!config.openAiCompatibleOptions?.baseUrl || !config.openAiCompatibleOptions?.apiKey) {
 				throw new Error(t("embeddings:serviceFactory.openAiCompatibleConfigMissing"))
@@ -82,6 +88,22 @@ export class CodeIndexServiceFactory {
 				throw new Error(t("embeddings:serviceFactory.vercelAiGatewayConfigMissing"))
 			}
 			return new VercelAiGatewayEmbedder(config.vercelAiGatewayOptions.apiKey, config.modelId)
+		} else if (provider === "bedrock") {
+			// Only region is required for Bedrock (profile is optional)
+			if (!config.bedrockOptions?.region) {
+				throw new Error(t("embeddings:serviceFactory.bedrockConfigMissing"))
+			}
+			return new BedrockEmbedder(config.bedrockOptions.region, config.bedrockOptions.profile, config.modelId)
+		} else if (provider === "openrouter") {
+			if (!config.openRouterOptions?.apiKey) {
+				throw new Error(t("embeddings:serviceFactory.openRouterConfigMissing"))
+			}
+			return new OpenRouterEmbedder(
+				config.openRouterOptions.apiKey,
+				config.modelId,
+				undefined, // maxItemTokens
+				config.openRouterOptions.specificProvider,
+			)
 		}
 
 		throw new Error(
@@ -124,11 +146,11 @@ export class CodeIndexServiceFactory {
 		// Use the embedding model ID from config, not the chat model IDs
 		const modelId = config.modelId ?? defaultModel
 
-		if (provider === "ollama") {
-			if (!config.ollamaOptions?.ollamaBaseUrl) {
-				throw new Error(`创建 Codebase-Service 缺少URL配置`)
+		if (provider === "riddler") {
+			if (!config.riddlerOptions?.baseUrl) {
+				throw new Error("Codebase-Service URL is required.")
 			}
-			return new RiddlerVectorStore(this.workspacePath, config.ollamaOptions?.ollamaBaseUrl, 1024, config.qdrantApiKey)
+			return new RiddlerVectorStore(this.workspacePath, config.riddlerOptions.baseUrl, 1024, config.qdrantApiKey)
 		}
 
 		let vectorSize: number | undefined
@@ -167,7 +189,6 @@ export class CodeIndexServiceFactory {
 		vectorStore: IVectorStore,
 		parser: ICodeParser,
 		ignoreInstance: Ignore,
-		rooIgnoreController?: RooIgnoreController,
 	): DirectoryScanner {
 		// Get the configurable batch size from VSCode settings
 		let batchSize: number
@@ -182,7 +203,7 @@ export class CodeIndexServiceFactory {
 		if (embedder instanceof RiddlerEmbedder) {
 			batchSize = 1
 		}
-		return new DirectoryScanner(embedder, vectorStore, parser, this.cacheManager, ignoreInstance, rooIgnoreController, batchSize)
+		return new DirectoryScanner(embedder, vectorStore, parser, this.cacheManager, ignoreInstance, batchSize)
 	}
 
 	/**
@@ -193,7 +214,7 @@ export class CodeIndexServiceFactory {
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
-		codeParser: ICodeParser,
+		parser: ICodeParser,
 		ignoreInstance: Ignore,
 		rooIgnoreController?: RooIgnoreController,
 	): IFileWatcher {
@@ -214,7 +235,7 @@ export class CodeIndexServiceFactory {
 			this.workspacePath,
 			context,
 			cacheManager,
-			codeParser,
+			parser,
 			embedder,
 			vectorStore,
 			ignoreInstance,
@@ -242,13 +263,11 @@ export class CodeIndexServiceFactory {
 		if (!this.configManager.isFeatureConfigured) {
 			throw new Error(t("embeddings:serviceFactory.codeIndexingNotConfigured"))
 		}
-		const config = this.configManager.getConfig()
-		const provider = config.embedderProvider as EmbedderProvider
 
 		const embedder = this.createEmbedder()
 		const vectorStore = this.createVectorStore()
-		const parser = provider !== "ollama" ? codeParser : riddlerCodeParser
-		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance, rooIgnoreController)
+		const parser = embedder instanceof RiddlerEmbedder ? riddlerCodeParser : codeParser
+		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance)
 		const fileWatcher = this.createFileWatcher(
 			context,
 			embedder,

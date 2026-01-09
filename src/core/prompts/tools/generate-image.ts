@@ -1,4 +1,4 @@
-import { ToolArgs, OpenAIToolDefinition } from "./types"
+import { ToolArgs } from "./types"
 
 export function getGenerateImageDescription(args: ToolArgs): string {
 	return `## generate_image
@@ -33,32 +33,4 @@ Example: Upscaling and enhancing an image
 <path>images/enhanced-photo.png</path>
 <image>images/low-res-photo.jpg</image>
 </generate_image>`
-}
-
-export function getGenerateImageOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition {
-	return {
-		type: "function",
-		function: {
-			name: "generate_image",
-			description: "Request to generate or edit an image using AI models through OpenRouter API. This tool can create new images from text prompts or modify existing images based on your instructions.",
-			parameters: {
-				type: "object",
-				properties: {
-					prompt: {
-						type: "string",
-						description: "The text prompt describing what to generate or how to edit the image"
-					},
-					path: {
-						type: "string",
-						description: `The file path where the generated/edited image should be saved (relative to the current workspace directory ${args.cwd}). The tool will automatically add the appropriate image extension if not provided.`
-					},
-					image: {
-						type: "string",
-						description: `The file path to an input image to edit or transform (relative to the current workspace directory ${args.cwd}). Supported formats: PNG, JPG, JPEG, GIF, WEBP.`
-					}
-				},
-				required: ["prompt", "path"]
-			}
-		}
-	}
 }

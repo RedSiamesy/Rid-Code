@@ -20,7 +20,6 @@ import {
 	BatchProcessingSummary,
 	ICodeParser,
 } from "../interfaces"
-// import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
 import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
@@ -116,6 +115,7 @@ export class FileWatcher implements IFileWatcher {
 			`**/*{${scannerExtensions.map((e) => e.substring(1)).join(",")}}`,
 		)
 		this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern)
+		await this.cbIgnoreController.initialize()
 
 		// Register event handlers
 		this.fileWatcher.onDidCreate(this.handleFileCreated.bind(this))
@@ -523,14 +523,15 @@ export class FileWatcher implements IFileWatcher {
 
 			// Check if file should be ignored
 			const relativeFilePath = generateRelativeFilePath(filePath, this.workspacePath)
-			if (!this.cbIgnoreController.validateAccess(filePath) ||
+			if (
+				!this.cbIgnoreController.validateAccess(filePath) ||
 				!this.ignoreController.validateAccess(filePath) ||
 				(this.ignoreInstance && this.ignoreInstance.ignores(relativeFilePath))
 			) {
 				return {
 					path: filePath,
 					status: "skipped" as const,
-					reason: "File is ignored by .rooignore or .gitignore",
+					reason: "File is ignored by .codebaseignore, .rooignore, or .gitignore",
 				}
 			}
 

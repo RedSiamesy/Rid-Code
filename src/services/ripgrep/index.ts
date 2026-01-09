@@ -6,8 +6,7 @@ import * as vscode from "vscode"
 
 import { RooIgnoreController } from "../../core/ignore/RooIgnoreController"
 import { fileExistsAtPath } from "../../utils/fs"
-
-// Output mode enum
+// Output mode for ripgrep results.
 export type OutputMode = "content" | "files_with_matches"
 /*
 This file provides functionality to perform regex searches on files using ripgrep.
@@ -31,8 +30,6 @@ The search results include:
 
 Usage example:
 const results = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
-// Or with files_with_matches mode (uses -l flag, returns plain text file paths):
-const filesOnly = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts', undefined, 'files_with_matches');
 
 rel/path/to/app.ts
 │----
@@ -101,7 +98,7 @@ export async function getBinPath(vscodeAppRoot: string): Promise<string | undefi
 	)
 }
 
-async function execRipgrep(bin: string, args: string[], mode:string, linePerRes?: number): Promise<string> {
+async function execRipgrep(bin: string, args: string[], mode: OutputMode, linePerRes?: number): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const rgProcess = childProcess.spawn(bin, args)
 		// cross-platform alternative to head, which is ripgrep author's recommendation for limiting output.
@@ -112,7 +109,7 @@ async function execRipgrep(bin: string, args: string[], mode:string, linePerRes?
 
 		let output = ""
 		let lineCount = 0
-		const maxLines = MAX_RESULTS * (mode === "content" ? (linePerRes ?? 3) : 1) // limiting ripgrep output with max lines since there's no other way to limit results. it's okay that we're outputting as json, since we're parsing it line by line and ignore anything that's not part of a match. This assumes each result is at most 5 lines.
+		const maxLines = MAX_RESULTS * (mode === "content" ? (linePerRes ?? 3) : 1)
 
 		rl.on("line", (line) => {
 			if (lineCount < maxLines) {
@@ -160,30 +157,31 @@ export async function regexSearchFiles(
 		throw new Error("Could not find ripgrep binary")
 	}
 
-	// Adjust args based on output mode
 	let args: string[]
 	if (outputMode === "files_with_matches") {
-		args = ["-l", "-e", regex, "--glob", filePattern || "*", directoryPath]
+		args = ["-l", "-e", regex]
+		if (filePattern) {
+			args.push("--glob", filePattern)
+		}
 		if (insensitiveCase) {
 			args.unshift("-i")
 		}
+		args.push("--no-messages", directoryPath)
 	} else {
-		// Build args for content mode with context control
-		args = ["--json", "-e", regex, "--glob", filePattern || "*"]
+		args = ["--json", "-e", regex]
+		if (filePattern) {
+			args.push("--glob", filePattern)
+		}
 
-		// Add context parameters
 		if (context !== undefined) {
-			// If context is provided, it overrides afterContext and beforeContext
 			args.push("--context", context.toString())
 		} else {
-			// Add after context if provided (default to 1 if neither context nor afterContext is provided)
 			if (afterContext !== undefined) {
 				args.push("--after-context", afterContext.toString())
 			} else {
 				args.push("--after-context", "1")
 			}
-			
-			// Add before context if provided (default to 1 if neither context nor beforeContext is provided)
+
 			if (beforeContext !== undefined) {
 				args.push("--before-context", beforeContext.toString())
 			} else {
@@ -191,17 +189,21 @@ export async function regexSearchFiles(
 			}
 		}
 
-		// Add case insensitive flag if provided
 		if (insensitiveCase) {
 			args.unshift("-i")
 		}
 
-		args.push(directoryPath)
+		args.push("--no-messages", directoryPath)
 	}
 
 	let output: string
 	try {
-		output = await execRipgrep(rgPath, args, outputMode, context ? context * 2 + 1 : (afterContext ?? 1) + (beforeContext ?? 1) + 1)
+		output = await execRipgrep(
+			rgPath,
+			args,
+			outputMode,
+			context !== undefined ? context * 2 + 1 : (afterContext ?? 1) + (beforeContext ?? 1) + 1,
+		)
 	} catch (error) {
 		console.error("Error executing ripgrep:", error)
 		return "No results found"
@@ -210,20 +212,17 @@ export async function regexSearchFiles(
 	const results: SearchFileResult[] = []
 	let currentFile: SearchFileResult | null = null
 
-	// Handle files_with_matches mode differently - ripgrep with -l outputs plain text file paths
 	if (outputMode === "files_with_matches") {
-		// Parse plain text output (one file path per line)
 		output.split("\n").forEach((line) => {
 			const trimmedLine = line.trim()
 			if (trimmedLine) {
 				results.push({
 					file: trimmedLine,
-					searchResults: [], // Empty for files_with_matches mode
+					searchResults: [],
 				})
 			}
 		})
 	} else {
-		// Original content mode logic - parse JSON output
 		output.split("\n").forEach((line) => {
 			if (line) {
 				try {
@@ -283,18 +282,16 @@ export async function regexSearchFiles(
 }
 
 function formatResults(fileResults: SearchFileResult[], cwd: string, outputMode: OutputMode = "content"): string {
-	// Handle files_with_matches mode
 	if (outputMode === "files_with_matches") {
 		let output = ""
 		const totalFiles = fileResults.length
-		
+
 		if (totalFiles >= MAX_RESULTS) {
-			output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ files with matches. **You should use a more specific search, or switch to multiple SMALLER DIRECTORY SCOPES to searching separately. Do not give up on the search, as it may lead to the loss of relevant contextual information.**\n\n`
+			output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ files with matches. Use a more specific search if necessary.\n\n`
 		} else {
-			output += `Found ${totalFiles === 1 ? "1 file" : `${totalFiles.toLocaleString()} files`} with matches${totalFiles === 0 ? ". You should try switching the search scope or changing the search content." : ''}.\n\n`
+			output += `Found ${totalFiles === 1 ? "1 file" : `${totalFiles.toLocaleString()} files`} with matches.\n\n`
 		}
 
-		// List files only
 		fileResults.slice(0, MAX_RESULTS).forEach((file) => {
 			const relativeFilePath = path.relative(cwd, file.file)
 			output += `${relativeFilePath.toPosix()}\n`
@@ -303,15 +300,14 @@ function formatResults(fileResults: SearchFileResult[], cwd: string, outputMode:
 		return output.trim()
 	}
 
-	// Original content mode logic
 	const groupedResults: { [key: string]: SearchResult[] } = {}
 
 	let totalResults = fileResults.reduce((sum, file) => sum + file.searchResults.length, 0)
 	let output = ""
 	if (totalResults >= MAX_RESULTS) {
-		output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ results. **You should use a more specific search, or switch to multiple SMALLER DIRECTORY SCOPES to searching separately. Do not give up on the search, as it may lead to the loss of relevant contextual information.**\n\n`
+		output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ results. Use a more specific search if necessary.\n\n`
 	} else {
-		output += `Found ${totalResults === 1 ? "1 result" : `${totalResults.toLocaleString()} results${totalResults === 0 ? ". You should try switching the search scope or changing the search content." : ''}`}.\n\n`
+		output += `Found ${totalResults === 1 ? "1 result" : `${totalResults.toLocaleString()} results`}.\n\n`
 	}
 
 	// Group results by file name

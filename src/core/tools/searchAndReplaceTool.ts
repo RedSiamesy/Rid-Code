@@ -1,275 +1,309 @@
-// Core Node.js imports
-import path from "path"
 import fs from "fs/promises"
-import delay from "delay"
+import path from "path"
 
-// Internal imports
+import { getReadablePath } from "../../utils/path"
+import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { Task } from "../task/Task"
-import { AskApproval, HandleError, PushToolResult, RemoveClosingTag, ToolUse } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
 import { ClineSayTool } from "../../shared/ExtensionMessage"
-import { getReadablePath } from "../../utils/path"
-import { fileExistsAtPath } from "../../utils/fs"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
+import { fileExistsAtPath } from "../../utils/fs"
 import { DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ToolUse } from "../../shared/tools"
 
-/**
- * Tool for performing search and replace operations on files
- * Supports regex and case-sensitive/insensitive matching
- */
-
-/**
- * Validates required parameters for search and replace operation
- */
-async function validateParams(
-	cline: Task,
-	relPath: string | undefined,
-	search: string | undefined,
-	replace: string | undefined,
-	pushToolResult: PushToolResult,
-): Promise<boolean> {
-	if (!relPath) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("search_and_replace")
-		pushToolResult(await cline.sayAndCreateMissingParamError("search_and_replace", "path"))
-		return false
-	}
-
-	if (!search) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("search_and_replace")
-		pushToolResult(await cline.sayAndCreateMissingParamError("search_and_replace", "search"))
-		return false
-	}
-
-	if (replace === undefined) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("search_and_replace")
-		pushToolResult(await cline.sayAndCreateMissingParamError("search_and_replace", "replace"))
-		return false
-	}
-
-	return true
+interface SearchReplaceOperation {
+	search: string
+	replace: string
 }
 
-/**
- * Performs search and replace operations on a file
- * @param cline - Cline instance
- * @param block - Tool use parameters
- * @param askApproval - Function to request user approval
- * @param handleError - Function to handle errors
- * @param pushToolResult - Function to push tool results
- * @param removeClosingTag - Function to remove closing tags
- */
-export async function searchAndReplaceTool(
-	cline: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-): Promise<void> {
-	// Extract and validate parameters
-	const relPath: string | undefined = block.params.path
-	const search: string | undefined = block.params.search
-	const replace: string | undefined = block.params.replace
-	const useRegex: boolean = block.params.use_regex === "true"
-	const ignoreCase: boolean = block.params.ignore_case === "true"
-	const startLine: number | undefined = block.params.start_line ? parseInt(block.params.start_line, 10) : undefined
-	const endLine: number | undefined = block.params.end_line ? parseInt(block.params.end_line, 10) : undefined
+interface SearchAndReplaceParams {
+	path: string
+	operations: SearchReplaceOperation[]
+}
 
-	try {
-		// Handle partial tool use
-		if (block.partial) {
-			const partialMessageProps = {
-				tool: "searchAndReplace" as const,
-				path: getReadablePath(cline.cwd, removeClosingTag("path", relPath)),
-				search: removeClosingTag("search", search),
-				replace: removeClosingTag("replace", replace),
-				useRegex: block.params.use_regex === "true",
-				ignoreCase: block.params.ignore_case === "true",
-				startLine,
-				endLine,
+export class SearchAndReplaceTool extends BaseTool<"search_and_replace"> {
+	readonly name = "search_and_replace" as const
+
+	parseLegacy(params: Partial<Record<string, string>>): SearchAndReplaceParams {
+		// Parse operations from JSON string if provided
+		let operations: SearchReplaceOperation[] = []
+		if (params.operations) {
+			try {
+				operations = JSON.parse(params.operations)
+			} catch {
+				operations = []
 			}
-			await cline.ask("tool", JSON.stringify(partialMessageProps), block.partial).catch(() => {})
+		}
+
+		return {
+			path: params.path || "",
+			operations,
+		}
+	}
+
+	async execute(params: SearchAndReplaceParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { path: relPath, operations } = params
+		const { askApproval, handleError, pushToolResult, toolProtocol } = callbacks
+
+		try {
+			// Validate required parameters
+			if (!relPath) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("search_and_replace")
+				pushToolResult(await task.sayAndCreateMissingParamError("search_and_replace", "path"))
+				return
+			}
+
+			if (!operations || !Array.isArray(operations) || operations.length === 0) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("search_and_replace")
+				pushToolResult(
+					formatResponse.toolError(
+						"Missing or empty 'operations' parameter. At least one search/replace operation is required.",
+					),
+				)
+				return
+			}
+
+			// Validate each operation has search and replace fields
+			for (let i = 0; i < operations.length; i++) {
+				const op = operations[i]
+				if (!op.search) {
+					task.consecutiveMistakeCount++
+					task.recordToolError("search_and_replace")
+					pushToolResult(formatResponse.toolError(`Operation ${i + 1} is missing the 'search' field.`))
+					return
+				}
+				if (op.replace === undefined) {
+					task.consecutiveMistakeCount++
+					task.recordToolError("search_and_replace")
+					pushToolResult(formatResponse.toolError(`Operation ${i + 1} is missing the 'replace' field.`))
+					return
+				}
+			}
+
+			const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+
+			if (!accessAllowed) {
+				await task.say("rooignore_error", relPath)
+				pushToolResult(formatResponse.rooIgnoreError(relPath, toolProtocol))
+				return
+			}
+
+			// Check if file is write-protected
+			const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+
+			const absolutePath = path.resolve(task.cwd, relPath)
+
+			const fileExists = await fileExistsAtPath(absolutePath)
+			if (!fileExists) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("search_and_replace")
+				const errorMessage = `File not found: ${relPath}. Cannot perform search and replace on a non-existent file.`
+				await task.say("error", errorMessage)
+				pushToolResult(formatResponse.toolError(errorMessage))
+				return
+			}
+
+			let fileContent: string
+			try {
+				fileContent = await fs.readFile(absolutePath, "utf8")
+				// Normalize line endings to LF for consistent matching
+				fileContent = fileContent.replace(/\r\n/g, "\n")
+			} catch (error) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("search_and_replace")
+				const errorMessage = `Failed to read file '${relPath}'. Please verify file permissions and try again.`
+				await task.say("error", errorMessage)
+				pushToolResult(formatResponse.toolError(errorMessage))
+				return
+			}
+
+			// Apply all operations sequentially
+			let newContent = fileContent
+			const errors: string[] = []
+
+			for (let i = 0; i < operations.length; i++) {
+				// Normalize line endings in search/replace strings to match file content
+				const search = operations[i].search.replace(/\r\n/g, "\n")
+				const replace = operations[i].replace.replace(/\r\n/g, "\n")
+				const searchPattern = new RegExp(escapeRegExp(search), "g")
+
+				const matchCount = newContent.match(searchPattern)?.length ?? 0
+				if (matchCount === 0) {
+					errors.push(`Operation ${i + 1}: No match found for search text.`)
+					continue
+				}
+
+				if (matchCount > 1) {
+					errors.push(
+						`Operation ${i + 1}: Found ${matchCount} matches. Please provide more context to make a unique match.`,
+					)
+					continue
+				}
+
+				// Apply the replacement
+				newContent = newContent.replace(searchPattern, replace)
+			}
+
+			// If all operations failed, return error
+			if (errors.length === operations.length) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("search_and_replace", "no_match")
+				pushToolResult(formatResponse.toolError(`All operations failed:\n${errors.join("\n")}`))
+				return
+			}
+
+			// Check if any changes were made
+			if (newContent === fileContent) {
+				pushToolResult(`No changes needed for '${relPath}'`)
+				return
+			}
+
+			task.consecutiveMistakeCount = 0
+
+			// Initialize diff view
+			task.diffViewProvider.editType = "modify"
+			task.diffViewProvider.originalContent = fileContent
+
+			// Generate and validate diff
+			const diff = formatResponse.createPrettyPatch(relPath, fileContent, newContent)
+			if (!diff) {
+				pushToolResult(`No changes needed for '${relPath}'`)
+				await task.diffViewProvider.reset()
+				return
+			}
+
+			// Check if preventFocusDisruption experiment is enabled
+			const provider = task.providerRef.deref()
+			const state = await provider?.getState()
+			const diagnosticsEnabled = state?.diagnosticsEnabled ?? true
+			const writeDelayMs = state?.writeDelayMs ?? DEFAULT_WRITE_DELAY_MS
+			const isPreventFocusDisruptionEnabled = experiments.isEnabled(
+				state?.experiments ?? {},
+				EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION,
+			)
+
+			const sanitizedDiff = sanitizeUnifiedDiff(diff)
+			const diffStats = computeDiffStats(sanitizedDiff) || undefined
+			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "appliedDiff",
+				path: getReadablePath(task.cwd, relPath),
+				diff: sanitizedDiff,
+				isOutsideWorkspace,
+			}
+
+			// Include any partial errors in the message
+			let resultMessage = ""
+			if (errors.length > 0) {
+				resultMessage = `Some operations failed:\n${errors.join("\n")}\n\n`
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: sanitizedDiff,
+				isProtected: isWriteProtected,
+				diffStats,
+			} satisfies ClineSayTool)
+
+			// Show diff view if focus disruption prevention is disabled
+			if (!isPreventFocusDisruptionEnabled) {
+				await task.diffViewProvider.open(relPath)
+				await task.diffViewProvider.update(newContent, true)
+				task.diffViewProvider.scrollToFirstDiff()
+			}
+
+			const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
+
+			if (!didApprove) {
+				// Revert changes if diff view was shown
+				if (!isPreventFocusDisruptionEnabled) {
+					await task.diffViewProvider.revertChanges()
+				}
+				pushToolResult("Changes were rejected by the user.")
+				await task.diffViewProvider.reset()
+				return
+			}
+
+			// Save the changes
+			if (isPreventFocusDisruptionEnabled) {
+				// Direct file write without diff view or opening the file
+				await task.diffViewProvider.saveDirectly(relPath, newContent, false, diagnosticsEnabled, writeDelayMs)
+			} else {
+				// Call saveChanges to update the DiffViewProvider properties
+				await task.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
+			}
+
+			// Track file edit operation
+			if (relPath) {
+				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+			}
+
+			task.didEditFile = true
+
+			// Get the formatted response message
+			const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, false)
+
+			// Add error info if some operations failed
+			if (errors.length > 0) {
+				pushToolResult(`${resultMessage}${message}`)
+			} else {
+				pushToolResult(message)
+			}
+
+			// Record successful tool usage and cleanup
+			task.recordToolUsage("search_and_replace")
+			await task.diffViewProvider.reset()
+			this.resetPartialState()
+
+			// Process any queued messages after file edit completes
+			task.processQueuedMessages()
+		} catch (error) {
+			await handleError("search and replace", error as Error)
+			await task.diffViewProvider.reset()
+			this.resetPartialState()
+		}
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"search_and_replace">): Promise<void> {
+		const relPath: string | undefined = block.params.path
+
+		// Wait for path to stabilize before showing UI (prevents truncated paths)
+		if (!this.hasPathStabilized(relPath)) {
 			return
 		}
 
-		// Validate required parameters
-		if (!(await validateParams(cline, relPath, search, replace, pushToolResult))) {
-			return
+		const operationsStr: string | undefined = block.params.operations
+
+		let operationsPreview: string | undefined
+		if (operationsStr) {
+			try {
+				const ops = JSON.parse(operationsStr)
+				if (Array.isArray(ops) && ops.length > 0) {
+					operationsPreview = `${ops.length} operation(s)`
+				}
+			} catch {
+				operationsPreview = "parsing..."
+			}
 		}
 
-		// At this point we know relPath, search and replace are defined
-		const validRelPath = relPath as string
-		const validSearch = search as string
-		const validReplace = replace as string
+		// relPath is guaranteed non-null after hasPathStabilized
+		const absolutePath = path.resolve(task.cwd, relPath!)
+		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
 		const sharedMessageProps: ClineSayTool = {
-			tool: "searchAndReplace",
-			path: getReadablePath(cline.cwd, validRelPath),
-			search: validSearch,
-			replace: validReplace,
-			useRegex: useRegex,
-			ignoreCase: ignoreCase,
-			startLine: startLine,
-			endLine: endLine,
+			tool: "appliedDiff",
+			path: getReadablePath(task.cwd, relPath!),
+			diff: operationsPreview,
+			isOutsideWorkspace,
 		}
 
-		const accessAllowed = cline.rooIgnoreController?.validateAccess(validRelPath)
-
-		if (!accessAllowed) {
-			await cline.say("rooignore_error", validRelPath)
-			pushToolResult(formatResponse.toolError(formatResponse.rooIgnoreError(validRelPath)))
-			return
-		}
-
-		// Check if file is write-protected
-		const isWriteProtected = cline.rooProtectedController?.isWriteProtected(validRelPath) || false
-
-		const absolutePath = path.resolve(cline.cwd, validRelPath)
-		const fileExists = await fileExistsAtPath(absolutePath)
-
-		if (!fileExists) {
-			cline.consecutiveMistakeCount++
-			cline.recordToolError("search_and_replace")
-			const formattedError = formatResponse.toolError(
-				`File does not exist at path: ${absolutePath}\nThe specified file could not be found. Please verify the file path and try again.`,
-			)
-			await cline.say("error", formattedError)
-			pushToolResult(formattedError)
-			return
-		}
-
-		// Reset consecutive mistakes since all validations passed
-		cline.consecutiveMistakeCount = 0
-
-		// Read and process file content
-		let fileContent: string
-		try {
-			fileContent = await fs.readFile(absolutePath, "utf-8")
-		} catch (error) {
-			cline.consecutiveMistakeCount++
-			cline.recordToolError("search_and_replace")
-			const errorMessage = `Error reading file: ${absolutePath}\nFailed to read the file content: ${
-				error instanceof Error ? error.message : String(error)
-			}\nPlease verify file permissions and try again.`
-			const formattedError = formatResponse.toolError(errorMessage)
-			await cline.say("error", formattedError)
-			pushToolResult(formattedError)
-			return
-		}
-
-		// Create search pattern and perform replacement
-		const flags = ignoreCase ? "gi" : "g"
-		const searchPattern = useRegex ? new RegExp(validSearch, flags) : new RegExp(escapeRegExp(validSearch), flags)
-
-		let newContent: string
-		if (startLine !== undefined || endLine !== undefined) {
-			// Handle line-specific replacement
-			const lines = fileContent.split("\n")
-			const start = Math.max((startLine ?? 1) - 1, 0)
-			const end = Math.min((endLine ?? lines.length) - 1, lines.length - 1)
-
-			// Get content before and after target section
-			const beforeLines = lines.slice(0, start)
-			const afterLines = lines.slice(end + 1)
-
-			// Get and modify target section
-			const targetContent = lines.slice(start, end + 1).join("\n")
-			const modifiedContent = targetContent.replace(searchPattern, validReplace)
-			const modifiedLines = modifiedContent.split("\n")
-
-			// Reconstruct full content
-			newContent = [...beforeLines, ...modifiedLines, ...afterLines].join("\n")
-		} else {
-			// Global replacement
-			newContent = fileContent.replace(searchPattern, validReplace)
-		}
-
-		// Initialize diff view
-		cline.diffViewProvider.editType = "modify"
-		cline.diffViewProvider.originalContent = fileContent
-
-		// Generate and validate diff
-		const diff = formatResponse.createPrettyPatch(validRelPath, fileContent, newContent)
-		if (!diff) {
-			pushToolResult(`No changes needed for '${relPath}'`)
-			await cline.diffViewProvider.reset()
-			return
-		}
-
-		// Check if preventFocusDisruption experiment is enabled
-		const provider = cline.providerRef.deref()
-		const state = await provider?.getState()
-		const diagnosticsEnabled = state?.diagnosticsEnabled ?? true
-		const writeDelayMs = state?.writeDelayMs ?? DEFAULT_WRITE_DELAY_MS
-		const isPreventFocusDisruptionEnabled = experiments.isEnabled(
-			state?.experiments ?? {},
-			EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION,
-		)
-
-		const completeMessage = JSON.stringify({
-			...sharedMessageProps,
-			diff,
-			isProtected: isWriteProtected,
-		} satisfies ClineSayTool)
-
-		// Show diff view if focus disruption prevention is disabled
-		if (!isPreventFocusDisruptionEnabled) {
-			await cline.diffViewProvider.open(validRelPath)
-			await cline.diffViewProvider.update(newContent, true)
-			cline.diffViewProvider.scrollToFirstDiff()
-		}
-
-		const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
-
-		if (!didApprove) {
-			await cline.say("text", "(Rejected)")
-			// Revert changes if diff view was shown
-			if (!isPreventFocusDisruptionEnabled) {
-				await cline.diffViewProvider.revertChanges()
-			}
-			pushToolResult("Changes were rejected by the user.")
-			await cline.diffViewProvider.reset()
-			return
-		}
-
-		// Save the changes
-		if (isPreventFocusDisruptionEnabled) {
-			// Direct file write without diff view or opening the file
-			await cline.diffViewProvider.saveDirectly(validRelPath, newContent, false, diagnosticsEnabled, writeDelayMs)
-		} else {
-			// Call saveChanges to update the DiffViewProvider properties
-			await cline.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
-		}
-
-		// Track file edit operation
-		if (relPath) {
-			await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
-		}
-
-		cline.didEditFile = true
-
-		// Get the formatted response message
-		const message = await cline.diffViewProvider.pushToolWriteResult(
-			cline,
-			cline.cwd,
-			false, // Always false for search_and_replace
-		)
-
-		pushToolResult(message)
-
-		// Record successful tool usage and cleanup
-		cline.recordToolUsage("search_and_replace")
-		await cline.diffViewProvider.reset()
-
-		// Process any queued messages after file edit completes
-		cline.processQueuedMessages()
-	} catch (error) {
-		handleError("search and replace", error)
-		await cline.diffViewProvider.reset()
+		await task.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})
 	}
 }
 
@@ -281,3 +315,5 @@ export async function searchAndReplaceTool(
 function escapeRegExp(input: string): string {
 	return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
+
+export const searchAndReplaceTool = new SearchAndReplaceTool()

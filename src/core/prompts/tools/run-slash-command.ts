@@ -1,5 +1,3 @@
-import { OpenAIToolDefinition } from "./types"
-
 /**
  * Generates the run_slash_command tool description.
  */
@@ -31,28 +29,4 @@ Examples:
 </run_slash_command>
 
 The command content will be returned for you to execute or follow as instructions.`
-}
-
-export function getRunSlashCommandOpenAIToolDefinition(): OpenAIToolDefinition {
-	return {
-		type: "function",
-		function: {
-			name: "run_slash_command",
-			description: "Execute a slash command to get specific instructions or content. Slash commands are predefined templates that provide detailed guidance for common tasks.",
-			parameters: {
-				type: "object",
-				properties: {
-					command: {
-						type: "string",
-						description: "The name of the slash command to execute (e.g., 'init', 'test', 'deploy')"
-					},
-					args: {
-						type: "string",
-						description: "Additional arguments or context to pass to the command"
-					}
-				},
-				required: ["command"]
-			}
-		}
-	}
 }

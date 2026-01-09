@@ -1,7 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
 
-import { TelemetryService } from "@roo-code/telemetry"
-
 import { t } from "../../i18n"
 import { ApiHandler } from "../../api"
 import { ApiMessage } from "../task-persistence/apiMessages"
@@ -10,22 +8,8 @@ import { getMessagesSinceLastSummary } from "../condense"
 
 import { Task } from "../task/Task"
 
-export type SubTaskResponse = {
-	messages: ApiMessage[] // The messages after summarization
-	summary: string // The summary text; empty string for no summary
-	cost: number // The cost of the summarization operation
-	inputTokens?: number,
-	outputTokens?: number,
-	cacheWriteTokens?: number,
-	cacheReadTokens?: number,
-	newContextTokens?: number // The number of tokens in the context for the next API request
-	error?: string // Populated iff the operation fails: error message shown to the user on failure (see Task.ts)
-}
-
-
-
 export const SUMMARY_PROMPT = `
-Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
+Your task is to create a detailed summary of the conversation of the child task so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
 
 Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. In your analysis process:
@@ -42,8 +26,9 @@ Before providing your final summary, wrap your analysis in <analysis> tags to or
   - Errors that you ran into and how you fixed them
   - Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
 2. Double-check for technical accuracy and completeness, addressing each required element thoroughly.
+3. Ignore the the conversation of the parent task and only look at the child task.
 
-Your summary should include the following sections:
+Your summary should include the following sections (If the conversation contains relevant content):
 
 1. Primary Request and Intent: Capture all of the user's explicit requests and intents in detail
 2. Key Technical Concepts: List all important technical concepts, technologies, and frameworks discussed.
@@ -63,112 +48,69 @@ Here's an example of how your output should be structured:
 </analysis>
 
 <summary>
-1. Primary Request and Intent:
-   [Detailed description]
-
-2. Key Technical Concepts:
-   - [Concept 1]
-   - [Concept 2]
-   - [...]
-
-3. Files and Code Sections:
-   - [File Name 1]
-      - [Summary of why this file is important]
-      - [Summary of the changes made to this file, if any]
-      - [Important Code Snippet]
-   - [File Name 2]
-      - [Important Code Snippet]
-   - [...]
-
-4. Errors and fixes:
-    - [Detailed description of error 1]:
-      - [How you fixed the error]
-      - [User feedback on the error if any]
-    - [...]
-
-5. Problem Solving:
-   [Description of solved problems and ongoing troubleshooting]
-
-6. All user messages: 
-    - [Detailed non tool use user message]
-    - [...]
-
-7. Current Work:
-   [Precise description of current work]
-
-8. Optional Next Step:
-   [Optional Next step to take]
-
+[Your summary, may include (If the conversation contains relevant content):
+	Primary Request and Intent, Key Technical Concepts, Files and Code Sections, Errors and fixes, Problem Solving, All user messages, Current Work]
 </summary>
 </example>
 
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response. 
+
+NOTE: **Ignore the parent task and only look at the child task.**
+NOTE: **If the conversation of child task does not involve the content in the template, it can be ignored (The corresponding block is not output directly in the summary).**
+NOTE: **If the conversation of child task content is just simple chatting, or there is less valuable content, you can optionally ignore the above template (The corresponding block is not output directly in the summary), i.e., conduct a detailed summary for complex tasks, and a simple summary for simple tasks. The length of the summary should not be longer than the original conversation content.**
 `
 
-/**
- * Summarizes the conversation messages using an LLM call
- *
- * @param {ApiMessage[]} messages - The conversation messages
- * @param {ApiHandler} apiHandler - The API handler to use for token counting (fallback if condensingApiHandler not provided)
- * @param {string} systemPrompt - The system prompt for API requests (fallback if customCondensingPrompt not provided)
- * @param {string} taskId - The task ID for the conversation, used for telemetry
- * @param {number} prevContextTokens - The number of tokens currently in the context, used to ensure we don't grow the context
- * @param {boolean} isAutomaticTrigger - Whether the summarization is triggered automatically
- * @param {string} customCondensingPrompt - Optional custom prompt to use for condensing
- * @param {ApiHandler} condensingApiHandler - Optional specific API handler to use for condensing
- * @returns {SubTaskResponse} - The result of the summarization operation (see above)
- */
+export type SubTaskSummaryResponse = {
+	summary: string
+	cost: number
+	error?: string
+}
+
+const stripTrailingToolUse = (messages: ApiMessage[]): ApiMessage[] => {
+	if (messages.length === 0) {
+		return messages
+	}
+
+	const last = messages[messages.length - 1]
+	if (last.role !== "assistant" || typeof last.content === "string") {
+		return messages
+	}
+
+	const hasToolUse = last.content.some((block) => block.type === "tool_use")
+	if (!hasToolUse) {
+		return messages
+	}
+
+	return messages.slice(0, -1)
+}
+
 export async function summarizeSubTask(
-	cline: Task,
+	task: Task,
 	messages: ApiMessage[],
 	apiHandler: ApiHandler,
-	systemPrompt: string,
-	taskId: string,
-	prevContextTokens: number,
-	isAutomaticTrigger?: boolean,
-	customCondensingPrompt?: string,
 	condensingApiHandler?: ApiHandler,
-): Promise<SubTaskResponse> {
-	TelemetryService.instance.captureContextCondensed(
-		taskId,
-		isAutomaticTrigger ?? false,
-		!!customCondensingPrompt?.trim(),
-		!!condensingApiHandler,
-	)
+): Promise<SubTaskSummaryResponse> {
+	const response: SubTaskSummaryResponse = { summary: "", cost: 0 }
+	const promptToUse = SUMMARY_PROMPT
 
-	const response: SubTaskResponse = { messages, cost: 0, summary: "", inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0 }
-	const messagesToSummarize = getMessagesSinceLastSummary(messages)
+	const safeMessages = stripTrailingToolUse(messages)
+	const messagesToSummarize = getMessagesSinceLastSummary(safeMessages)
 
-	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
-	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
-	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
-	
 	const finalRequestMessage: Anthropic.MessageParam = {
 		role: "user",
-		content: [{text: promptToUse, type: "text"}, { text: "Summarize the conversation so far, as described in the prompt instructions." , type: "text" }],
+		content: "Summarize the conversation so far, as described in the prompt instructions.",
 	}
 
 	const requestMessages = maybeRemoveImageBlocks([...messagesToSummarize, finalRequestMessage], apiHandler).map(
 		({ role, content }) => ({ role, content }),
 	)
 
-	// Use condensing API handler if provided, otherwise use main API handler
 	let handlerToUse = condensingApiHandler || apiHandler
 
-	// Check if the chosen handler supports the required functionality
 	if (!handlerToUse || typeof handlerToUse.createMessage !== "function") {
-		console.warn(
-			"Chosen API handler for condensing does not support message creation or is invalid, falling back to main apiHandler.",
-		)
+		handlerToUse = apiHandler
 
-		handlerToUse = apiHandler // Fallback to the main, presumably valid, apiHandler
-
-		// Ensure the main apiHandler itself is valid before this point or add another check.
 		if (!handlerToUse || typeof handlerToUse.createMessage !== "function") {
-			// This case should ideally not happen if main apiHandler is always valid.
-			// Consider throwing an error or returning a specific error response.
-			console.error("Main API handler is also invalid for condensing. Cannot proceed.")
-			// Return an appropriate error structure for SubTaskResponse
 			const error = t("common:errors.condense_handler_invalid")
 			return { ...response, error }
 		}
@@ -178,10 +120,6 @@ export async function summarizeSubTask(
 
 	let summary = ""
 	let cost = 0
-	let outputTokens = 0
-	let inputTokens = 0
-	let cacheWriteTokens = 0
-	let cacheReadTokens = 0
 
 	// 开启等待动画任务
 	let isStreamActive = true
@@ -190,11 +128,10 @@ export async function summarizeSubTask(
 		while (isStreamActive) {
 			dotCount = (dotCount % 3) + 1
 			const dots = ".".repeat(dotCount)
-			await cline.say("subtask_result", dots, undefined, true)
+			await task.say("subtask_result", dots, undefined, true)
 			await new Promise(resolve => setTimeout(resolve, 500)) // 每500ms更新一次
 		}
 	}
-	
 	// 启动等待动画
 	const animationPromise = waitingAnimation()
 
@@ -206,52 +143,17 @@ export async function summarizeSubTask(
 		}
 		if (chunk.type === "text") {
 			summary += chunk.text
-			await cline.say("subtask_result", `## Summary \n${summary}`, undefined, true)
+			await task.say("subtask_result", `## Summary \n${summary}`, undefined, true)
 		} else if (chunk.type === "usage") {
-			// Record final usage chunk only
 			cost = chunk.totalCost ?? 0
-			inputTokens = chunk.inputTokens ?? 0
-			cacheWriteTokens = chunk.cacheWriteTokens ?? 0
-			cacheReadTokens = chunk.cacheReadTokens ?? 0
-			outputTokens = chunk.outputTokens ?? 0
 		}
 	}
 
-	// 确保等待动画已停止
-	isStreamActive = false
-
 	summary = summary.trim()
-	// await cline.say("subtask_result", `## SummarizeSubTask \n${summary}`)
 	if (summary.length === 0) {
 		const error = t("common:errors.condense_failed")
 		return { ...response, cost, error }
 	}
 
-	const summaryMessage: ApiMessage = {
-		role: "assistant",
-		content: summary,
-		ts: Date.now(),
-		isSummary: true,
-	}
-
-	const newMessages = [summaryMessage]
-
-	// Count the tokens in the context for the next API request
-	// We only estimate the tokens in summaryMesage if outputTokens is 0, otherwise we use outputTokens
-	const systemPromptMessage: ApiMessage = { role: "user", content: systemPrompt }
-
-	const contextMessages = outputTokens
-		? [systemPromptMessage]
-		: [systemPromptMessage, summaryMessage]
-
-	const contextBlocks = contextMessages.flatMap((message) =>
-		typeof message.content === "string" ? [{ text: message.content, type: "text" as const }] : message.content,
-	)
-
-	const newContextTokens = outputTokens + (await apiHandler.countTokens(contextBlocks))
-	// if (newContextTokens >= prevContextTokens) {
-	// 	const error = t("common:errors.condense_context_grew")
-	// 	return { ...response, cost, error }
-	// }
-	return { messages: newMessages, summary, cost, newContextTokens, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens }
+	return { summary, cost }
 }

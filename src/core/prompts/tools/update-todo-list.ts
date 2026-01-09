@@ -1,7 +1,39 @@
-import { ToolArgs, OpenAIToolDefinition } from "./types"
+import { ToolArgs } from "./types"
 
+/**
+ * Get the description for the update_todo_list tool.
+ */
+export function getUpdateTodoListDescription(args?: ToolArgs): string {
+	return `## update_todo_list
 
-const prompt_example = `<update_todo_list>
+**Description:**
+Replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
+
+**Checklist Format:**
+- Use a single-level markdown checklist (no nesting or subtasks).
+- List todos in the intended execution order.
+- Status options:
+	 - [ ] Task description (pending)
+	 - [x] Task description (completed)
+	 - [-] Task description (in progress)
+
+**Status Rules:**
+- [ ] = pending (not started)
+- [x] = completed (fully finished, no unresolved issues)
+- [-] = in_progress (currently being worked on)
+
+**Core Principles:**
+- Before updating, always confirm which todos have been completed since the last update.
+- You may update multiple statuses in a single update (e.g., mark the previous as completed and the next as in progress).
+- When a new actionable item is discovered during a long or complex task, add it to the todo list immediately.
+- Do not remove any unfinished todos unless explicitly instructed.
+- Always retain all unfinished tasks, updating their status as needed.
+- Only mark a task as completed when it is fully accomplished (no partials, no unresolved dependencies).
+- If a task is blocked, keep it as in_progress and add a new todo describing what needs to be resolved.
+- Remove tasks only if they are no longer relevant or if the user requests deletion.
+
+**Usage Example:**
+<update_todo_list>
 <todos>
 [x] Analyze requirements
 [x] Design architecture
@@ -19,91 +51,11 @@ const prompt_example = `<update_todo_list>
 [x] Implement core logic
 [-] Write tests
 [ ] Update documentation
-</todos>
-</update_todo_list>
-
-*Add a todo "Add performance benchmarks":*
-<update_todo_list>
-<todos>
-[x] Analyze requirements
-[x] Design architecture
-[x] Implement core logic
-[-] Write tests
-[ ] Update documentation
 [ ] Add performance benchmarks
 </todos>
 </update_todo_list>
-`
 
-const tooluse_example = `{
-    "todos": [
-        "[x] Analyze requirements",
-        "[x] Design architecture",
-        "[-] Implement core logic",
-        "[ ] Write tests",
-        "[ ] Update documentation"
-    ]
-}
-
-*After completing "Implement core logic" and starting "Write tests":*
-{
-    "todos": [
-        "[x] Analyze requirements",
-        "[x] Design architecture",
-        "[x] Implement core logic",
-        "[-] Write tests",
-        "[ ] Update documentation"
-    ]
-}
-
-*Add a todo "Add performance benchmarks":*
-{
-    "todos": [
-        "[x] Analyze requirements",
-        "[x] Design architecture",
-        "[x] Implement core logic",
-        "[-] Write tests",
-        "[ ] Update documentation",
-        "[ ] Add performance benchmarks"
-    ]
-}
-`
-
-function get_description(args?: ToolArgs) {
-   return `
-Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
-It also helps the user understand the progress of the task and overall progress of their requests.
-
-Create a TODO list or replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; if the task list is already included, the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
-
-## Checklist Format: 
-- Use a single-level markdown checklist (no nesting or subtasks).
-- List todos in the intended execution order.
-- Status options:
-    - [ ] Task description (pending)
-    - [x] Task description (completed)
-    - [-] Task description (in progress)
-
-## Status Rules: 
-[ ] = pending (not started)
-[x] = completed (fully finished, no unresolved issues)
-[-] = in progress (currently being worked on)
-
-## Core Principles:
-- Before updating, always confirm which todos have been completed since the last update.
-- You may update multiple statuses in a single update (e.g., mark the previous as completed and the next as in progress).
-- When a new actionable item is discovered during a long or complex task, add it to the todo list immediately.
-- Do not remove any unfinished todos unless explicitly instructed.
-- Always retain all unfinished tasks, updating their status as needed.
-- Only mark a task as completed when it is fully accomplished (no partials, no unresolved dependencies).
-- If a task is blocked, keep it as in progress and add a new todo describing what needs to be resolved.
-- Remove tasks only if they are no longer relevant or if the user requests deletion.
-
-## Usage Example:
-${args?.experiments?.useToolCalling? tooluse_example : prompt_example}
-
-
-## When to Use This Tool
+**When to Use This Tool**
 Use this tool proactively in these scenarios:
 
 1. Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
@@ -114,7 +66,7 @@ Use this tool proactively in these scenarios:
 6. When you start working on a task - Mark it as in_progress BEFORE beginning work. Ideally you should only have one todo as in_progress at a time
 7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
 
-## When NOT to Use This Tool
+**When NOT to Use This Tool**
 
 Skip using this tool when:
 1. There is only a single, straightforward task
@@ -124,7 +76,7 @@ Skip using this tool when:
 
 NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
 
-## Examples of When to Use the Todo List
+**Examples of When to Use the Todo List**
 
 <example>
 User: I want to add a dark mode toggle to the application settings. Make sure you run the tests and build when you're done!
@@ -194,7 +146,7 @@ The assistant used the todo list because:
 </reasoning>
 </example>
 
-## Examples of When NOT to Use the Todo List
+**Examples of When NOT to Use the Todo List**
 
 <example>
 User: How do I print 'Hello World' in Python?
@@ -245,7 +197,7 @@ The assistant did not use the todo list because this is a single command executi
 </reasoning>
 </example>
 
-## Task States and Management
+**Task States and Management**
 
 1. **Task States**: Use these states to track progress:
    - [ ] (pending): Task not yet started
@@ -282,42 +234,6 @@ The assistant did not use the todo list because this is a single command executi
      - activeForm: \"Fixing authentication bug\"
 
 When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
+
 `
-}
-
-/**
- * Get the description for the update_todo_list tool.
- */
-export function getUpdateTodoListDescription(args?: ToolArgs): string {
-	return `## update_todo_list
-
-Description:
-${get_description(args)}
-`
-}
-
-
-
-export function getUpdateTodoListOpenAIToolDefinition(args?: ToolArgs): OpenAIToolDefinition {
-	return {
-		type: "function",
-		function: {
-			name: "update_todo_list",
-			description:get_description(args),
-			parameters: {
-				type: "object",
-				properties: {
-					todos: {
-						type: "array",
-						description: "The todo list as an array of strings. Each to-do item forms one string separately. Each item should be a todo item with status prefix: [ ] (pending), [x] (completed), or [-] (in progress). ",
-						items: {
-							type: "string",
-							description: "A todo item with status prefix, e.g., '[ ] Analyze requirements' or '[x] Design architecture'"
-						}
-					}
-				},
-				required: ["todos"]
-			}
-		}
-	}
 }

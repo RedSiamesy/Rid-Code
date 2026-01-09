@@ -3,7 +3,7 @@ export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 export class RooIgnoreController {
 	rooIgnoreContent: string | undefined = undefined
 
-	constructor(_cwd: string) {
+	constructor(_cwd: string, _ignorePath?: string) {
 		// No-op constructor
 	}
 

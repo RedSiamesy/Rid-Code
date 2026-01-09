@@ -21,6 +21,5 @@ export const DIRS_TO_IGNORE = [
 	"pkg",
 	"Pods",
 	".git",
-	".svn",
 	".*",
 ]

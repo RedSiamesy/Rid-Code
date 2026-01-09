@@ -146,7 +146,6 @@ const UpdateTodoListToolBlock: React.FC<UpdateTodoListToolBlockProps> = ({
 
 	if (userEdited) {
 		return (
-			// <ToolUseBlock className="cursor-default hover:bg-vscode-editor-background"></ToolUseBlock>
 			<ToolUseBlock>
 				<ToolUseBlockHeader>
 					<div className="flex items-center w-full" style={{ width: "100%" }}>

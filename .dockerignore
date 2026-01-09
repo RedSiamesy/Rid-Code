@@ -61,7 +61,6 @@ __tests__
 # Ignore development config files
 .eslintrc*
 .prettierrc*
-jest.config*
 
 # Ignore most directories except what we need for the build
 apps/
@@ -77,15 +76,18 @@ src/node_modules
 !pnpm-workspace.yaml
 !scripts/bootstrap.mjs
 !apps/web-evals/
+!apps/cli/
 !src/
 !webview-ui/
 !packages/evals/.docker/entrypoints/runner.sh
 !packages/build/
-!packages/cloud/
 !packages/config-eslint/
 !packages/config-typescript/
+!packages/core/
 !packages/evals/
 !packages/ipc/
 !packages/telemetry/
 !packages/types/
+!packages/vscode-shim/
+!packages/cloud/
 !locales/

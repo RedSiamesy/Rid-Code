@@ -3,7 +3,7 @@ import { useEvent } from "react-use"
 import DynamicTextArea from "react-textarea-autosize"
 import { VolumeX, Image, WandSparkles, SendHorizontal, MessageSquareX } from "lucide-react"
 
-import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@roo/context-mentions"
+import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, skillRegexGlobal, unescapeSpaces } from "@roo/context-mentions"
 import { WebviewMessage } from "@roo/WebviewMessage"
 import { Mode, getAllModes } from "@roo/modes"
 import { ExtensionMessage } from "@roo/ExtensionMessage"
@@ -31,7 +31,7 @@ import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
 import { usePromptHistory } from "./hooks/usePromptHistory"
-import { useColorGradient } from "../../hooks/useColorGradient"
+import { CloudAccountSwitcher } from "../cloud/CloudAccountSwitcher"
 
 interface ChatTextAreaProps {
 	inputValue: string
@@ -53,6 +53,9 @@ interface ChatTextAreaProps {
 	onCancel?: () => void
 	isSavingMemory: boolean
 	setIsSavingMemory: (value: boolean) => void
+	// Browser session status
+	isBrowserSessionActive?: boolean
+	showBrowserDockToggle?: boolean
 }
 
 export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -73,8 +76,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			modeShortcutText,
 			isEditMode = false,
 			onCancel,
-			isSavingMemory,
 			setIsSavingMemory,
+			isBrowserSessionActive = false,
+			showBrowserDockToggle = false,
 		},
 		ref,
 	) => {
@@ -92,6 +96,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			taskHistory,
 			clineMessages,
 			commands,
+			skills,
+			cloudUserInfo,
+			enterBehavior,
 		} = useExtensionState()
 
 		// Find the ID and display text for the currently selected API configuration.
@@ -219,18 +226,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [isCommandMode, setIsCommandMode] = useState(false)
 		const [isMemoryMode, setIsMemoryMode] = useState(false)
 
-		
-		// 使用颜色渐变Hook来实现think状态的自动颜色变化效果
-		const isThinkMode = inputValue.startsWith("think") || inputValue.startsWith("ultrathink")
-		const thinkGradientColor = useColorGradient(
-			"#efa244ff",
-			isFocused && isThinkMode,
-			100, // 100ms更新一次颜色，变化更快
-			[40, 80], // 饱和度范围 0-100
-			[45, 70] // 亮度范围 0-100
-		)
-		// const thinkGradientColor = "#efa244ff"
-
 		// Use custom hook for prompt history navigation
 		const { handleHistoryNavigation, resetHistoryNavigation, resetOnInputChange } = usePromptHistory({
 			clineMessages,
@@ -263,11 +258,26 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		}, [inputValue, setInputValue, t])
 
 		const allModes = useMemo(() => getAllModes(customModes), [customModes])
+		const availableSkills = useMemo(
+			() => skills.filter((skill) => !skill.mode || skill.mode === mode),
+			[skills, mode],
+		)
 
 		// Memoized check for whether the input has content (text or images)
 		const hasInputContent = useMemo(() => {
 			return inputValue.trim().length > 0 || selectedImages.length > 0
 		}, [inputValue, selectedImages])
+
+		// Compute the key combination text for the send button tooltip based on enterBehavior
+		const sendKeyCombination = useMemo(() => {
+			if (enterBehavior === "newline") {
+				// When Enter = newline, Ctrl/Cmd+Enter sends
+				const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
+				return isMac ? "⌘+Enter" : "Ctrl+Enter"
+			}
+			// Default: Enter sends
+			return "Enter"
+		}, [enterBehavior])
 
 		const queryItems = useMemo(() => {
 			return [
@@ -324,11 +334,11 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return
 				}
 
-				if (type === ContextMenuOptionType.Command && value) {
-					// Handle command selection.
-					setSelectedMenuIndex(-1)
-					setInputValue("")
-					setShowContextMenu(false)
+			if (type === ContextMenuOptionType.Command && value) {
+				// Handle command selection.
+				setSelectedMenuIndex(-1)
+				setInputValue("")
+				setShowContextMenu(false)
 
 					// Insert the command mention into the textarea
 					const commandMention = `/${value}`
@@ -342,8 +352,26 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							textAreaRef.current.focus()
 						}
 					}, 0)
-					return
-				}
+				return
+			}
+
+			if (type === ContextMenuOptionType.Skill && value) {
+				setSelectedMenuIndex(-1)
+				setInputValue("")
+				setShowContextMenu(false)
+
+				const skillMention = `$${value}`
+				setInputValue(skillMention + " ")
+				setCursorPosition(skillMention.length + 1)
+				setIntendedCursorPosition(skillMention.length + 1)
+
+				setTimeout(() => {
+					if (textAreaRef.current) {
+						textAreaRef.current.focus()
+					}
+				}, 0)
+				return
+			}
 
 				if (
 					type === ContextMenuOptionType.File ||
@@ -407,33 +435,30 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		)
 
 		const handleSend = useCallback(() => {
+			resetHistoryNavigation()
+
 			if (isCommandMode) {
 				onSend()
 				vscode.postMessage({ type: "useTerminalCommand" as const, text: inputValue })
 			} else if (isMemoryMode) {
 				const trimmedInput = inputValue.trim()
-				if (trimmedInput) {
-					setIsSavingMemory(true)
-					vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
-				} else {
-					setIsSavingMemory(true)
-					vscode.postMessage({ type: "saveMemory" as const, text: "" })
-				}
+				setIsSavingMemory(true)
+				vscode.postMessage({ type: "saveMemory" as const, text: trimmedInput })
 				setInputValue("")
 			} else {
-				resetHistoryNavigation()
 				onSend()
 			}
+
 			setIsCommandMode(false)
 			setIsMemoryMode(false)
 		}, [
 			onSend,
 			isCommandMode,
-			setIsCommandMode,
 			isMemoryMode,
-			setIsMemoryMode,
 			inputValue,
 			setInputValue,
+			setIsSavingMemory,
+			resetHistoryNavigation,
 		])
 
 		const handleKeyDown = useCallback(
@@ -456,6 +481,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								fileSearchResults,
 								allModes,
 								commands,
+								availableSkills,
 							)
 							const optionsLength = options.length
 
@@ -494,6 +520,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							fileSearchResults,
 							allModes,
 							commands,
+							availableSkills,
 						)[selectedMenuIndex]
 						if (
 							selectedOption &&
@@ -507,21 +534,18 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					}
 				}
 
-				// Handle command mode with "!" key
-				if (event.key === "~"  && !isCommandMode && !isMemoryMode && inputValue === "") {
+				if (event.key === "~" && !isCommandMode && !isMemoryMode && inputValue === "") {
 					event.preventDefault()
 					setIsCommandMode(true)
 					return
 				}
-				
-				// Handle command mode with "!" key
-				if (event.key === "#"  && !isMemoryMode && !isCommandMode && inputValue === "") {
+
+				if (event.key === "#" && !isMemoryMode && !isCommandMode && inputValue === "") {
 					event.preventDefault()
 					setIsMemoryMode(true)
 					return
 				}
 
-				// Handle ESC key in command mode
 				if (event.key === "Escape" && (isCommandMode || isMemoryMode)) {
 					event.preventDefault()
 					if (inputValue === "") {
@@ -540,11 +564,22 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return
 				}
 
-				if (event.key === "Enter" && !event.shiftKey && !isComposing) {
-					event.preventDefault()
-
-					// Always call onSend - let ChatView handle queueing when disabled
-					handleSend()
+				// Handle Enter key based on enterBehavior setting
+				if (event.key === "Enter" && !isComposing) {
+					if (enterBehavior === "newline") {
+						// New behavior: Enter = newline, Shift+Enter or Ctrl+Enter = send
+						if (event.shiftKey || event.ctrlKey || event.metaKey) {
+							event.preventDefault()
+							handleSend()
+						}
+						// Otherwise, let Enter create newline (don't preventDefault)
+					} else {
+						// Default behavior: Enter = send, Shift+Enter = newline
+						if (!event.shiftKey) {
+							event.preventDefault()
+							handleSend()
+						}
+					}
 				}
 
 				if (event.key === "Backspace" && !isComposing) {
@@ -591,7 +626,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					}
 				}
 			},
-			[
+			[ 
 				handleSend,
 				showContextMenu,
 				searchQuery,
@@ -599,6 +634,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				handleMentionSelect,
 				selectedType,
 				inputValue,
+				isCommandMode,
+				isMemoryMode,
 				cursorPosition,
 				setInputValue,
 				justDeletedSpaceAfterMention,
@@ -606,12 +643,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				allModes,
 				fileSearchResults,
 				handleHistoryNavigation,
-				resetHistoryNavigation,
 				commands,
-				isCommandMode,
-				setIsCommandMode,
-				isMemoryMode,
-				setIsMemoryMode
+				availableSkills,
+				enterBehavior,
 			],
 		)
 
@@ -648,6 +682,12 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						setSelectedMenuIndex(1) // Section header is at 0, first command is at 1
 						// Request commands fresh each time slash menu is shown
 						vscode.postMessage({ type: "requestCommands" })
+					} else if (newValue.startsWith("$") && !newValue.includes(" ")) {
+						const query = newValue
+						setSearchQuery(query)
+						// Set to first selectable item (skip section headers)
+						setSelectedMenuIndex(1)
+						vscode.postMessage({ type: "requestSkills" })
 					} else {
 						// Existing @ mention handling.
 						const lastAtIndex = newValue.lastIndexOf("@", newCursorPosition - 1)
@@ -799,6 +839,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			const isValidCommand = (commandName: string): boolean => {
 				return commands?.some((cmd) => cmd.name === commandName) || false
 			}
+			const isValidSkill = (skillName: string): boolean => {
+				return availableSkills?.some((skill) => skill.name === skillName) || false
+			}
 
 			// Process the text to highlight mentions and valid commands
 			let processedText = text
@@ -825,11 +868,24 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				return match // Return unhighlighted if command is not valid
 			})
 
+			processedText = processedText.replace(skillRegexGlobal, (match, skillName) => {
+				if (isValidSkill(skillName)) {
+					const startsWithSpace = match.startsWith(" ")
+					const skillPart = `$${skillName}`
+
+					if (startsWithSpace) {
+						return ` <mark class="mention-context-textarea-highlight">${skillPart}</mark>`
+					}
+					return `<mark class="mention-context-textarea-highlight">${skillPart}</mark>`
+				}
+				return match
+			})
+
 			highlightLayerRef.current.innerHTML = processedText
 
 			highlightLayerRef.current.scrollTop = textAreaRef.current.scrollTop
 			highlightLayerRef.current.scrollLeft = textAreaRef.current.scrollLeft
-		}, [commands])
+		}, [availableSkills, commands])
 
 		useLayoutEffect(() => {
 			updateHighlights()
@@ -968,6 +1024,12 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		})
 
 		const placeholderBottomText = `\n(${t("chat:addContext")}${shouldDisableImages ? `, ${t("chat:dragFiles")}` : `, ${t("chat:dragFilesImages")}`})`
+		const focusBorderColor = isCommandMode ? "#ef4444" : isMemoryMode ? "#00a5b1" : undefined
+		const modePlaceholderText = isCommandMode
+			? "Enter a terminal command"
+			: isMemoryMode
+				? "What should I remember?"
+				: placeholderText
 
 		// Common mode selector handler
 		const handleModeChange = useCallback(
@@ -1043,6 +1105,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									loading={searchLoading}
 									dynamicSearchResults={fileSearchResults}
 									commands={commands}
+									skills={availableSkills}
 								/>
 							</div>
 						)}
@@ -1055,7 +1118,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								"flex-col-reverse",
 								"min-h-0",
 								"overflow-hidden",
-								"rounded",
+								"rounded-lg",
 							)}>
 							<div
 								ref={highlightLayerRef}
@@ -1071,13 +1134,24 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									"font-vscode-font-family",
 									"text-vscode-editor-font-size",
 									"leading-vscode-editor-line-height",
+									isFocused
+										? "border border-vscode-focusBorder outline outline-vscode-focusBorder"
+										: isDraggingOver
+											? "border-2 border-dashed border-vscode-focusBorder"
+											: "border border-transparent",
+									"pl-2",
 									"py-2",
-									"px-[9px]",
+									isEditMode ? "pr-20" : "pr-9",
 									"z-10",
 									"forced-color-adjust-none",
+									"rounded-lg",
+									"transition-colors duration-150 ease-in-out",
 								)}
 								style={{
 									color: "transparent",
+									...(isFocused && focusBorderColor
+										? { borderColor: focusBorderColor, outlineColor: focusBorderColor }
+										: null),
 								}}
 							/>
 							<DynamicTextArea
@@ -1116,7 +1190,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 									onHeightChange?.(height)
 								}}
-								placeholder={isCommandMode?"What is your Command?": isMemoryMode? "Tell me what you want me to record?": placeholderText}
+								placeholder={modePlaceholderText}
 								minRows={3}
 								maxRows={15}
 								autoFocus={true}
@@ -1129,14 +1203,14 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									"cursor-text",
 									"py-2 pl-2",
 									isFocused
-										? "border outline"
+										? "border border-vscode-focusBorder outline outline-vscode-focusBorder"
 										: isDraggingOver
 											? "border-2 border-dashed border-vscode-focusBorder"
 											: "border border-transparent",
 									isDraggingOver
 										? "bg-[color-mix(in_srgb,var(--vscode-input-background)_95%,var(--vscode-focusBorder))]"
 										: "bg-vscode-input-background",
-									"transition-background-color duration-150 ease-in-out",
+									"transition-colors duration-150 ease-in-out",
 									"will-change-background-color",
 									"min-h-[94px]",
 									"box-border",
@@ -1151,10 +1225,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									"scrollbar-hide",
 								)}
 								style={{
-									...(isFocused && {
-										borderColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff': isThinkMode ? thinkGradientColor : 'var(--vscode-focusBorder)',
-										outlineColor: isCommandMode ? '#ef4444' : isMemoryMode ? '#00a5b1ff': isThinkMode ? thinkGradientColor : 'var(--vscode-focusBorder)',
-									}),
+									...(isFocused && focusBorderColor
+										? { borderColor: focusBorderColor, outlineColor: focusBorderColor }
+										: null),
 								}}
 								onScroll={() => updateHighlights()}
 							/>
@@ -1229,11 +1302,12 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										</button>
 									</StandardTooltip>
 								)}
-								<StandardTooltip content={t("chat:sendMessage")}>
+								<StandardTooltip
+									content={t("chat:pressToSend", { keyCombination: sendKeyCombination })}>
 									<button
-										aria-label={t("chat:sendMessage")}
+										aria-label={t("chat:pressToSend", { keyCombination: sendKeyCombination })}
 										disabled={false}
-										onClick={onSend}
+										onClick={handleSend}
 										className={cn(
 											"relative inline-flex items-center justify-center",
 											"bg-transparent border-none p-1.5",
@@ -1261,7 +1335,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										isEditMode ? "pr-20" : "pr-9",
 									)}
 									style={{
-										bottom: "0.25rem",
+										bottom: "0.75rem",
 										color: "color-mix(in oklab, var(--vscode-input-foreground) 50%, transparent)",
 										userSelect: "none",
 										pointerEvents: "none",
@@ -1309,7 +1383,11 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						/>
 						<AutoApproveDropdown triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink" />
 					</div>
-					<div className="flex flex-shrink-0 items-center gap-0.5 pr-2">
+					<div
+						className={cn(
+							"flex flex-shrink-0 items-center gap-0.5 h-5 leading-none",
+							!isEditMode && cloudUserInfo ? "" : "pr-2",
+						)}>
 						{isTtsPlaying && (
 							<StandardTooltip content={t("chat:stopTts")}>
 								<button
@@ -1331,6 +1409,13 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</StandardTooltip>
 						)}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
+						{!isEditMode && cloudUserInfo && <CloudAccountSwitcher />}
+						{/* keep props referenced after moving browser button */}
+						<div
+							className="hidden"
+							data-browser-session-active={isBrowserSessionActive}
+							data-show-browser-dock-toggle={showBrowserDockToggle}
+						/>
 					</div>
 				</div>
 			</div>

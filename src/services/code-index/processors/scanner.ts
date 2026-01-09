@@ -1,8 +1,6 @@
 import { listFiles } from "../../glob/list-files"
 import { Ignore } from "ignore"
 import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
-import { expandIncludeFilePatterns } from "../../../core/ignore/RooIncludeController"
-import * as fs from "fs"
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
@@ -32,9 +30,7 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
 import { Package } from "../../../shared/package"
-
-import { RiddlerEmbedder } from "../embedders/embedding-riddler"
-
+import { RiddlerEmbedder } from "../embedders/riddler"
 
 export class DirectoryScanner implements IDirectoryScanner {
 	private readonly batchSegmentThreshold: number
@@ -45,7 +41,6 @@ export class DirectoryScanner implements IDirectoryScanner {
 		private readonly codeParser: ICodeParser,
 		private readonly cacheManager: CacheManager,
 		private readonly ignoreInstance: Ignore,
-		private readonly ignoreController?: RooIgnoreController,
 		batchSegmentThreshold?: number,
 	) {
 		// Get the configurable batch size from VSCode settings, fallback to default
@@ -83,24 +78,21 @@ export class DirectoryScanner implements IDirectoryScanner {
 		const scanWorkspace = getWorkspacePathForContext(directoryPath)
 
 		// Get all files recursively (handles .gitignore automatically)
-		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT_CODE_INDEX + 1000)
+		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT_CODE_INDEX)
 
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
 
-		let allowedPaths = this.ignoreController ? this.ignoreController.filterPaths(filePaths) : filePaths
+		// Initialize RooIgnoreController instances for .rooignore and .codebaseignore
+		const ignoreController = new RooIgnoreController(directoryPath)
+		const cbIgnoreController = new RooIgnoreController(directoryPath, ".codebaseignore")
 
-		// Initialize RooIgnoreController if not provided
-		const cbignoreController = new RooIgnoreController(directoryPath, ".codebaseignore")
+		await ignoreController.initialize()
+		await cbIgnoreController.initialize()
 
-		await cbignoreController.initialize()
-
-		// Filter paths using .rooignore
-		allowedPaths = cbignoreController.filterPaths(allowedPaths)
-		// const absolutePath = path.resolve(directoryPath, ".codebaseextra")
-		// if (fs.existsSync(absolutePath)) {
-		// 	allowedPaths = allowedPaths.concat(await expandIncludeFilePatterns(absolutePath))
-		// }
+		// Filter paths using .rooignore and .codebaseignore
+		let allowedPaths = ignoreController.filterPaths(filePaths)
+		allowedPaths = cbIgnoreController.filterPaths(allowedPaths)
 
 		// Filter by supported extensions, ignore patterns, and excluded directories
 		let supportedPaths = allowedPaths.filter((filePath) => {
@@ -115,13 +107,13 @@ export class DirectoryScanner implements IDirectoryScanner {
 			return scannerExtensions.includes(ext) && !this.ignoreInstance.ignores(relativeFilePath)
 		})
 
-		const real_limit = this.embedder instanceof RiddlerEmbedder ? 800 : MAX_LIST_FILES_LIMIT_CODE_INDEX
+		const isRiddler = this.embedder instanceof RiddlerEmbedder
+		const realLimit = isRiddler ? 800 : MAX_LIST_FILES_LIMIT_CODE_INDEX
 
-		// Sort files by most recent activity (modified, created, or accessed time)
-		// This ensures recently active files are prioritized for indexing
-		const sortedPaths = await this.sortFilesByRecentActivity(supportedPaths)
-
-		supportedPaths = sortedPaths.slice(0, real_limit)
+		if (isRiddler) {
+			const sortedPaths = await this.sortFilesByRecentActivity(supportedPaths)
+			supportedPaths = sortedPaths.slice(0, realLimit)
+		}
 
 		// Initialize tracking variables
 		const processedFiles = new Set<string>()
@@ -497,9 +489,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 	}
 
 	/**
-	 * Sort files by most recent activity (modified, created, or accessed time)
-	 * @param filePaths Array of file paths to sort
-	 * @returns Promise<string[]> Sorted array with most recently active files first
+	 * Sort files by most recent activity to prioritize indexing.
 	 */
 	private async sortFilesByRecentActivity(filePaths: string[]): Promise<string[]> {
 		interface FileWithTime {
@@ -507,43 +497,22 @@ export class DirectoryScanner implements IDirectoryScanner {
 			mostRecentTime: number
 		}
 
-		const filesWithTimes: FileWithTime[] = []
-
-		// Get file stats for all files with concurrency control
-		const statLimiter = pLimit(50) // Limit concurrent stat operations
+		const statLimiter = pLimit(50)
 		const statPromises = filePaths.map((filePath) =>
 			statLimiter(async () => {
 				try {
 					const stats = await stat(filePath)
-					
-					// Get the most recent time from modification, creation, and access times
-					const mostRecentTime = Math.max(
-						stats.mtimeMs, // Modified time
-						stats.birthtimeMs, // Creation time
-						stats.atimeMs // Access time
-					)
-
-					return {
-						path: filePath,
-						mostRecentTime
-					}
+					const mostRecentTime = Math.max(stats.mtimeMs, stats.birthtimeMs, stats.atimeMs)
+					return { path: filePath, mostRecentTime }
 				} catch (error) {
-					// If we can't stat the file, give it a very old timestamp so it goes to the end
 					console.warn(`Failed to stat file ${filePath}:`, error)
-					return {
-						path: filePath,
-						mostRecentTime: 0
-					}
+					return { path: filePath, mostRecentTime: 0 }
 				}
-			})
+			}),
 		)
 
-		const results = await Promise.all(statPromises)
-		filesWithTimes.push(...results)
-
-		// Sort by most recent time (descending - newest first)
+		const filesWithTimes: FileWithTime[] = await Promise.all(statPromises)
 		filesWithTimes.sort((a, b) => b.mostRecentTime - a.mostRecentTime)
-
-		return filesWithTimes.map(file => file.path)
+		return filesWithTimes.map((file) => file.path)
 	}
 }

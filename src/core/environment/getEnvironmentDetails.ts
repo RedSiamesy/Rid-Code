@@ -5,19 +5,20 @@ import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 import delay from "delay"
 
-import type { ExperimentId, TodoItem, ToolName } from "@roo-code/types"
+import type { ExperimentId } from "@roo-code/types"
 import { DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT } from "@roo-code/types"
 
+import { resolveToolProtocol } from "../../utils/resolveToolProtocol"
 import { EXPERIMENT_IDS, experiments as Experiments } from "../../shared/experiments"
 import { formatLanguage } from "../../shared/language"
-import { defaultModeSlug, getFullModeDetails, getModeBySlug, isToolAllowedForMode } from "../../shared/modes"
+import { defaultModeSlug, getFullModeDetails } from "../../shared/modes"
 import { getApiMetrics } from "../../shared/getApiMetrics"
 import { listFiles } from "../../services/glob/list-files"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
-
+import { getGitStatus } from "../../utils/git"
 import { EditorUtils } from "../../integrations/editor/EditorUtils"
 import { readLines } from "../../integrations/misc/read-lines"
 import { addLineNumbers } from "../../integrations/misc/extract-text"
@@ -25,167 +26,30 @@ import { addLineNumbers } from "../../integrations/misc/extract-text"
 import { Task } from "../task/Task"
 import { formatReminderSection } from "./reminder"
 
-import { getWorkspacePath } from "../../utils/path"
-import { fileExistsAtPath } from "../../utils/fs"
-import fs from "fs/promises"
-import { ApiMessage } from "../task-persistence/apiMessages"
-
-
-interface MemoryFiles {
-	globalMemoryPath: string
-	projectMemoryPath: string
-}
-
-interface MemoryData {
-	globalMemories: string[]
-	projectMemories: string[]
-}
-
-/**
- * 获取记忆文件路径
- */
-export async function getMemoryFilePaths(globalStoragePath: string): Promise<MemoryFiles> {
-	const globalMemoryPath = path.join(globalStoragePath, "global-memory.md")
-
-	const workspacePath = getWorkspacePath()
-	if (!workspacePath) {
-		throw new Error("无法获取工作区路径")
+const generateDiagnosticText = (diagnostics?: Array<{ message: string; source?: string; code?: unknown }>) => {
+	if (!diagnostics?.length) {
+		return ""
 	}
 
-	const projectMemoryDir = path.join(workspacePath, ".roo")
-	const projectMemoryPath = path.join(projectMemoryDir, "project-memory.md")
-
-	return {
-		globalMemoryPath,
-		projectMemoryPath,
-	}
-}
-
-/**
- * 读取记忆文件内容
- */
-export async function readMemoryFiles(memoryFiles: MemoryFiles): Promise<MemoryData> {
-	const globalMemories: string[] = []
-	const projectMemories: string[] = []
-
-	// 读取全局记忆
-	if (await fileExistsAtPath(memoryFiles.globalMemoryPath)) {
-		try {
-			const content = await fs.readFile(memoryFiles.globalMemoryPath, "utf-8")
-			const lines = content.split("\n").filter((line) => line.trim())
-			globalMemories.push(...lines)
-		} catch (error) {
-			console.log("无法读取全局记忆文件:", error)
-		}
-	}
-
-	// 读取项目记忆
-	if (await fileExistsAtPath(memoryFiles.projectMemoryPath)) {
-		try {
-			const content = await fs.readFile(memoryFiles.projectMemoryPath, "utf-8")
-			const lines = content.split("\n").filter((line) => line.trim())
-			projectMemories.push(...lines)
-		} catch (error) {
-			console.log("无法读取项目记忆文件:", error)
-		}
-	}
-
-	return {
-		globalMemories,
-		projectMemories,
-	}
-}
-
-/**
- * 格式化记忆内容为显示格式
- */
-export function formatMemoryContent(memoryData: MemoryData): string {
-	if (memoryData.globalMemories.length === 0 && memoryData.projectMemories.length === 0) {
-		return "No memory data available"
-	}
-
-	let formatted = "The content of Agent memory includes records of Roo's understanding of user needs from past work, as well as insights into user habits and projects.\n\n"
-
-	if (memoryData.globalMemories.length > 0) {
-		formatted += "# Global Memory:\n"
-		memoryData.globalMemories.forEach((memory, index) => {
-			formatted += `${memory}\n`
-		})
-		formatted += "\n"
-	}
-
-	if (memoryData.projectMemories.length > 0) {
-		formatted += "# Project Memory:\n"
-		memoryData.projectMemories.forEach((memory, index) => {
-			formatted += `${memory}\n`
-		})
-	}
-
-	return formatted.trim()
-}
-
-/**
- * 获取代办中所有正在进行的项，如果没有正在进行的项目则获取第一个未进行的项目，
- * 判断这些项目的类型（analysis/planning/editing），组成一个任务类型set
- */
-function getTodoTaskTypes(cline: Task): Set<string> | undefined {
-	if (!cline.todoList || cline.todoList.length === 0) {
-		return undefined
-	}
-
-	// 先查找所有正在进行的项目
-	const inProgressTodos = cline.todoList.filter(todo => todo.status === "in_progress")
-	
-	let todosToAnalyze: TodoItem[]
-	if (inProgressTodos.length > 0) {
-		// 如果有正在进行的项目，使用这些项目
-		todosToAnalyze = inProgressTodos
-	} else {
-		// 如果没有正在进行的项目，获取第一个待处理的项目
-		const pendingTodos = cline.todoList.filter(todo => todo.status === "pending")
-		todosToAnalyze = pendingTodos.length > 0 ? [pendingTodos[0]] : []
-	}
-
-	// 分析任务类型
-	const taskTypes = new Set<string>()
-	
-	for (const todo of todosToAnalyze) {
-		// 从任务内容中提取类型标记，例如 [analysis], [planning], [editing]
-		const typeMatch = todo.content.match(/\[(\w+)\]/)
-		if (typeMatch) {
-			const taskType = typeMatch[1].toLowerCase()
-			if (["analysis", "planning", "editing"].includes(taskType)) {
-				taskTypes.add(taskType)
+	return `Current problems detected:\n${diagnostics
+		.map((diagnostic) => {
+			let codeText = ""
+			if (diagnostic.code !== undefined && diagnostic.code !== null) {
+				if (typeof diagnostic.code === "object" && "value" in diagnostic.code) {
+					codeText = String((diagnostic.code as { value: string | number }).value)
+				} else {
+					codeText = String(diagnostic.code)
+				}
 			}
-		} else {
-			// 如果没有明确的类型标记，根据关键词判断类型
-			const content = todo.content.toLowerCase()
-			if (content.includes("analyz") || content.includes("research") || content.includes("understand") || content.includes("investigate")) {
-				taskTypes.add("analysis")
-			} else if (content.includes("plan") || content.includes("design") || content.includes("architect") || content.includes("structure")) {
-				taskTypes.add("planning")
-			} else if (content.includes("implement") || content.includes("write") || content.includes("create") || content.includes("edit") || content.includes("fix") || content.includes("update")) {
-				taskTypes.add("editing")
-			}
-		}
-	}
-
-	return taskTypes
-}
-
-
-const generateDiagnosticText = (diagnostics?: any[]) => {
-	if (!diagnostics?.length) return ""
-	return `\nCurrent problems detected:\n${diagnostics
-		.map((d) => `- [${d.source || "Error"}] ${d.message}${d.code ? ` (${d.code})` : ""}`)
+			const suffix = codeText ? ` (${codeText})` : ""
+			return `- [${diagnostic.source ?? "Error"}] ${diagnostic.message}${suffix}`
+		})
 		.join("\n")}`
 }
 
-
-
-
 export async function getEnvironmentDetails(cline: Task, includeFileDetails: boolean = false) {
 	let details = ""
+
 	const clineProvider = cline.providerRef.deref()
 	const state = await clineProvider?.getState()
 	const {
@@ -193,167 +57,165 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 		terminalOutputCharacterLimit = DEFAULT_TERMINAL_OUTPUT_CHARACTER_LIMIT,
 		maxWorkspaceFiles = 200,
 	} = state ?? {}
-	
-	if (includeFileDetails) {
-		// It could be useful for cline to know if the user went from one or no
-		// file to another between messages, so we always include this context.
-		details += "\n\n# VSCode Visible Files"
 
-		const visibleFilePaths = vscode.window.visibleTextEditors
-			?.map((editor) => editor.document?.uri?.fsPath)
-			.filter(Boolean)
-			.map((absolutePath) => path.relative(cline.cwd, absolutePath))
-			.slice(0, maxWorkspaceFiles)
+	// It could be useful for cline to know if the user went from one or no
+	// file to another between messages, so we always include this context.
+	const visibleFilePaths = vscode.window.visibleTextEditors
+		?.map((editor) => editor.document?.uri?.fsPath)
+		.filter(Boolean)
+		.map((absolutePath) => path.relative(cline.cwd, absolutePath))
+		.slice(0, maxWorkspaceFiles)
 
-		// Filter paths through rooIgnoreController
-		const allowedVisibleFiles = cline.rooIgnoreController
-			? cline.rooIgnoreController.filterPaths(visibleFilePaths)
-			: visibleFilePaths.map((p) => p.toPosix()).join("\n")
+	// Filter paths through rooIgnoreController
+	const allowedVisibleFiles = cline.rooIgnoreController
+		? cline.rooIgnoreController.filterPaths(visibleFilePaths)
+		: visibleFilePaths.map((p) => p.toPosix()).join("\n")
 
-		if (allowedVisibleFiles) {
-			details += `\n${allowedVisibleFiles}`
-		} else {
-			details += "\n(No visible files)"
+	if (allowedVisibleFiles) {
+		// details += "\n\n# VSCode Visible Files"
+		// details += `\n${allowedVisibleFiles}`
+	}
+
+	const { maxOpenTabsContext } = state ?? {}
+	const maxTabs = maxOpenTabsContext ?? 20
+	const openTabPaths = vscode.window.tabGroups.all
+		.flatMap((group) => group.tabs)
+		.filter((tab) => tab.input instanceof vscode.TabInputText)
+		.map((tab) => (tab.input as vscode.TabInputText).uri.fsPath)
+		.filter(Boolean)
+		.map((absolutePath) => path.relative(cline.cwd, absolutePath).toPosix())
+		.slice(0, maxTabs)
+
+	// Filter paths through rooIgnoreController
+	const allowedOpenTabs = cline.rooIgnoreController
+		? cline.rooIgnoreController.filterPaths(openTabPaths)
+		: openTabPaths.map((p) => p.toPosix()).join("\n")
+
+	if (allowedOpenTabs) {
+		// details += "\n\n# VSCode Open Tabs"
+		// details += `\n${allowedOpenTabs}`
+	}
+
+	// Get task-specific and background terminals.
+	const busyTerminals = [
+		...TerminalRegistry.getTerminals(true, cline.taskId),
+		...TerminalRegistry.getBackgroundTerminals(true),
+	]
+
+	const inactiveTerminals = [
+		...TerminalRegistry.getTerminals(false, cline.taskId),
+		...TerminalRegistry.getBackgroundTerminals(false),
+	]
+
+	if (busyTerminals.length > 0) {
+		if (cline.didEditFile) {
+			await delay(300) // Delay after saving file to let terminals catch up.
 		}
 
-		details += "\n\n# VSCode Open Tabs"
-		const { maxOpenTabsContext } = state ?? {}
-		const maxTabs = maxOpenTabsContext ?? 20
-		const openTabPaths = vscode.window.tabGroups.all
-			.flatMap((group) => group.tabs)
-			.filter((tab) => tab.input instanceof vscode.TabInputText)
-			.map((tab) => (tab.input as vscode.TabInputText).uri.fsPath)
-			.filter(Boolean)
-			.map((absolutePath) => path.relative(cline.cwd, absolutePath).toPosix())
-			.slice(0, maxTabs)
+		// Wait for terminals to cool down.
+		await pWaitFor(() => busyTerminals.every((t) => !TerminalRegistry.isProcessHot(t.id)), {
+			interval: 100,
+			timeout: 5_000,
+		}).catch(() => {})
+	}
 
-		// Filter paths through rooIgnoreController
-		const allowedOpenTabs = cline.rooIgnoreController
-			? cline.rooIgnoreController.filterPaths(openTabPaths)
-			: openTabPaths.map((p) => p.toPosix()).join("\n")
+	// Reset, this lets us know when to wait for saved files to update terminals.
+	cline.didEditFile = false
 
-		if (allowedOpenTabs) {
-			details += `\n${allowedOpenTabs}`
-		} else {
-			details += "\n(No open tabs)"
+	// Waiting for updated diagnostics lets terminal output be the most
+	// up-to-date possible.
+	let terminalDetails = ""
+
+	if (busyTerminals.length > 0) {
+		// Terminals are cool, let's retrieve their output.
+		terminalDetails += "\n\n# Actively Running Terminals"
+
+		for (const busyTerminal of busyTerminals) {
+			const cwd = busyTerminal.getCurrentWorkingDirectory()
+			terminalDetails += `\n## Terminal ${busyTerminal.id} (Active)`
+			terminalDetails += `\n### Working Directory: \`${cwd}\``
+			terminalDetails += `\n### Original command: \`${busyTerminal.getLastCommand()}\``
+			let newOutput = TerminalRegistry.getUnretrievedOutput(busyTerminal.id)
+
+			if (newOutput) {
+				newOutput = Terminal.compressTerminalOutput(
+					newOutput,
+					terminalOutputLineLimit,
+					terminalOutputCharacterLimit,
+				)
+				terminalDetails += `\n### New Output\n${newOutput}`
+			}
 		}
+	}
 
-		// // Get task-specific and background terminals.
-		// const busyTerminals = [
-		// 	...TerminalRegistry.getTerminals(true, cline.taskId),
-		// 	...TerminalRegistry.getBackgroundTerminals(true),
-		// ]
+	// First check if any inactive terminals in this task have completed
+	// processes with output.
+	const terminalsWithOutput = inactiveTerminals.filter((terminal) => {
+		const completedProcesses = terminal.getProcessesWithOutput()
+		return completedProcesses.length > 0
+	})
 
-		// const inactiveTerminals = [
-		// 	...TerminalRegistry.getTerminals(false, cline.taskId),
-		// 	...TerminalRegistry.getBackgroundTerminals(false),
-		// ]
+	// Only add the header if there are terminals with output.
+	if (terminalsWithOutput.length > 0) {
+		terminalDetails += "\n\n# Inactive Terminals with Completed Process Output"
 
-		// if (busyTerminals.length > 0) {
-		// 	if (cline.didEditFile) {
-		// 		await delay(300) // Delay after saving file to let terminals catch up.
-		// 	}
+		// Process each terminal with output.
+		for (const inactiveTerminal of terminalsWithOutput) {
+			let terminalOutputs: string[] = []
 
-		// 	// Wait for terminals to cool down.
-		// 	await pWaitFor(() => busyTerminals.every((t) => !TerminalRegistry.isProcessHot(t.id)), {
-		// 		interval: 100,
-		// 		timeout: 5_000,
-		// 	}).catch(() => {})
-		// }
+			// Get output from completed processes queue.
+			const completedProcesses = inactiveTerminal.getProcessesWithOutput()
 
-		// // Reset, this lets us know when to wait for saved files to update terminals.
-		// cline.didEditFile = false
+			for (const process of completedProcesses) {
+				let output = process.getUnretrievedOutput()
 
-		// // Waiting for updated diagnostics lets terminal output be the most
-		// // up-to-date possible.
-		// let terminalDetails = ""
+				if (output) {
+					output = Terminal.compressTerminalOutput(
+						output,
+						terminalOutputLineLimit,
+						terminalOutputCharacterLimit,
+					)
+					terminalOutputs.push(`Command: \`${process.command}\`\n${output}`)
+				}
+			}
 
-		// if (busyTerminals.length > 0) {
-		// 	// Terminals are cool, let's retrieve their output.
-		// 	terminalDetails += "\n\n# Actively Running Terminals"
+			// Clean the queue after retrieving output.
+			inactiveTerminal.cleanCompletedProcessQueue()
 
-		// 	for (const busyTerminal of busyTerminals) {
-		// 		const cwd = busyTerminal.getCurrentWorkingDirectory()
-		// 		terminalDetails += `\n## Terminal ${busyTerminal.id} (Active)`
-		// 		terminalDetails += `\n### Working Directory: \`${cwd}\``
-		// 		terminalDetails += `\n### Original command: \`${busyTerminal.getLastCommand()}\``
-		// 		let newOutput = TerminalRegistry.getUnretrievedOutput(busyTerminal.id)
+			// Add this terminal's outputs to the details.
+			if (terminalOutputs.length > 0) {
+				const cwd = inactiveTerminal.getCurrentWorkingDirectory()
+				terminalDetails += `\n## Terminal ${inactiveTerminal.id} (Inactive)`
+				terminalDetails += `\n### Working Directory: \`${cwd}\``
+				terminalOutputs.forEach((output) => {
+					terminalDetails += `\n### New Output\n${output}`
+				})
+			}
+		}
+	}
 
-		// 		if (newOutput) {
-		// 			newOutput = Terminal.compressTerminalOutput(
-		// 				newOutput,
-		// 				terminalOutputLineLimit,
-		// 				terminalOutputCharacterLimit,
-		// 			)
-		// 			terminalDetails += `\n### New Output\n${newOutput}`
-		// 		}
-		// 	}
-		// }
+	// console.log(`[Task#getEnvironmentDetails] terminalDetails: ${terminalDetails}`)
 
-		// // First check if any inactive terminals in this task have completed
-		// // processes with output.
-		// const terminalsWithOutput = inactiveTerminals.filter((terminal) => {
-		// 	const completedProcesses = terminal.getProcessesWithOutput()
-		// 	return completedProcesses.length > 0
-		// })
+	// Add recently modified files section.
+	const recentlyModifiedFiles = cline.fileContextTracker.getAndClearRecentlyModifiedFiles()
 
-		// // Only add the header if there are terminals with output.
-		// if (terminalsWithOutput.length > 0) {
-		// 	terminalDetails += "\n\n# Inactive Terminals with Completed Process Output"
+	if (recentlyModifiedFiles.length > 0) {
+		details +=
+			"\n\n# Recently Modified Files\nThese files have been modified since you last accessed them (file was just edited so you may need to re-read it before editing):"
+		for (const filePath of recentlyModifiedFiles) {
+			details += `\n${filePath}`
+		}
+	}
 
-		// 	// Process each terminal with output.
-		// 	for (const inactiveTerminal of terminalsWithOutput) {
-		// 		let terminalOutputs: string[] = []
+	if (terminalDetails) {
+		details += terminalDetails
+	}
 
-		// 		// Get output from completed processes queue.
-		// 		const completedProcesses = inactiveTerminal.getProcessesWithOutput()
+	// Get settings for time and cost display
+	const { includeCurrentTime = true, includeCurrentCost = true, maxGitStatusFiles = 0 } = state ?? {}
 
-		// 		for (const process of completedProcesses) {
-		// 			let output = process.getUnretrievedOutput()
-
-		// 			if (output) {
-		// 				output = Terminal.compressTerminalOutput(
-		// 					output,
-		// 					terminalOutputLineLimit,
-		// 					terminalOutputCharacterLimit,
-		// 				)
-		// 				terminalOutputs.push(`Command: \`${process.command}\`\n${output}`)
-		// 			}
-		// 		}
-
-		// 		// Clean the queue after retrieving output.
-		// 		inactiveTerminal.cleanCompletedProcessQueue()
-
-		// 		// Add this terminal's outputs to the details.
-		// 		if (terminalOutputs.length > 0) {
-		// 			const cwd = inactiveTerminal.getCurrentWorkingDirectory()
-		// 			terminalDetails += `\n## Terminal ${inactiveTerminal.id} (Inactive)`
-		// 			terminalDetails += `\n### Working Directory: \`${cwd}\``
-		// 			terminalOutputs.forEach((output) => {
-		// 				terminalDetails += `\n### New Output\n${output}`
-		// 			})
-		// 		}
-		// 	}
-		// }
-
-		// // console.log(`[Task#getEnvironmentDetails] terminalDetails: ${terminalDetails}`)
-
-		// // Add recently modified files section.
-		// const recentlyModifiedFiles = cline.fileContextTracker.getAndClearRecentlyModifiedFiles()
-
-		// if (recentlyModifiedFiles.length > 0) {
-		// 	details +=
-		// 		"\n\n# Recently Modified Files\nThese files have been modified since you last accessed them (file was just edited so you may need to re-read it before editing):"
-		// 	for (const filePath of recentlyModifiedFiles) {
-		// 		details += `\n${filePath}`
-		// 	}
-		// }
-
-		// if (terminalDetails) {
-		// 	details += terminalDetails
-		// }
-
-		// Add current time information with timezone.
+	// Add current time information with timezone (if enabled).
+	if (includeCurrentTime) {
 		const now = new Date()
 
 		const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -362,61 +224,135 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 		const timeZoneOffsetMinutes = Math.abs(Math.round((Math.abs(timeZoneOffset) - timeZoneOffsetHours) * 60))
 		const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : "-"}${timeZoneOffsetHours}:${timeZoneOffsetMinutes.toString().padStart(2, "0")}`
 		details += `\n\n# Current Time\nCurrent time in ISO 8601 UTC format: ${now.toISOString()}\nUser time zone: ${timeZone}, UTC${timeZoneOffsetStr}`
+	}
 
-		// Add context tokens information.
-		const { contextTokens, totalCost } = getApiMetrics(cline.clineMessages)
-		const { id: modelId } = cline.api.getModel()
+	// Add git status information (if enabled with maxGitStatusFiles > 0).
+	if (maxGitStatusFiles > 0) {
+		const gitStatus = await getGitStatus(cline.cwd, maxGitStatusFiles)
+		if (gitStatus) {
+			details += `\n\n# Git Status\n${gitStatus}`
+		}
+	}
 
+	// Add context tokens information (if enabled).
+	if (includeCurrentCost) {
+		// const { totalCost } = getApiMetrics(cline.clineMessages)
 		// details += `\n\n# Current Cost\n${totalCost !== null ? `$${totalCost.toFixed(2)}` : "(Not available)"}`
+	}
 
-		// Add current mode and any mode-specific warnings.
-		const {
-			mode,
-			customModes,
-			customModePrompts,
-			experiments = {} as Record<ExperimentId, boolean>,
-			customInstructions: globalCustomInstructions,
-			language,
-		} = state ?? {}
+	const { id: modelId } = cline.api.getModel()
 
-		const currentMode = mode ?? defaultModeSlug
+	// Add current mode and any mode-specific warnings.
+	const {
+		mode,
+		customModes,
+		customModePrompts,
+		experiments = {} as Record<ExperimentId, boolean>,
+		customInstructions: globalCustomInstructions,
+		language,
+	} = state ?? {}
 
-		const modeDetails = await getFullModeDetails(currentMode, customModes, customModePrompts, {
-			cwd: cline.cwd,
-			globalCustomInstructions,
-			language: language ?? formatLanguage(vscode.env.language),
-		})
+	const currentMode = mode ?? defaultModeSlug
 
-		details += `\n\n# Current Mode\n`
-		details += `<slug>${currentMode}</slug>\n`
-		details += `<name>${modeDetails.name}</name>\n`
-		details += `<model>${modelId}</model>\n`
+	const modeDetails = await getFullModeDetails(currentMode, customModes, customModePrompts, {
+		cwd: cline.cwd,
+		globalCustomInstructions,
+		language: language ?? formatLanguage(vscode.env.language),
+	})
 
-		if (Experiments.isEnabled(experiments ?? {}, EXPERIMENT_IDS.POWER_STEERING)) {
-			details += `<role>${modeDetails.roleDefinition}</role>\n`
+	// Use the task's locked tool protocol for consistent environment details.
+	// This ensures the model sees the same tool format it was started with,
+	// even if user settings have changed. Fall back to resolving fresh if
+	// the task hasn't been fully initialized yet (shouldn't happen in practice).
+	const modelInfo = cline.api.getModel().info
+	const toolProtocol = resolveToolProtocol(state?.apiConfiguration ?? {}, modelInfo, cline.taskToolProtocol)
 
-			if (modeDetails.customInstructions) {
-				details += `<custom_instructions>${modeDetails.customInstructions}</custom_instructions>\n`
-			}
+	details += `\n\n# Current Mode\n`
+	details += `<slug>${currentMode}</slug>\n`
+	details += `<name>${modeDetails.name}</name>\n`
+	details += `<model>${modelId}</model>\n`
+	// details += `<tool_format>${toolProtocol}</tool_format>\n`
+
+	if (Experiments.isEnabled(experiments ?? {}, EXPERIMENT_IDS.POWER_STEERING)) {
+		details += `<role>${modeDetails.roleDefinition}</role>\n`
+
+		if (modeDetails.customInstructions) {
+			details += `<custom_instructions>${modeDetails.customInstructions}</custom_instructions>\n`
+		}
+	}
+
+	// Add browser session status - Only show when active to prevent cluttering context
+	const isBrowserActive = cline.browserSession.isSessionActive()
+
+	if (isBrowserActive) {
+		// Build viewport info for status (prefer actual viewport if available, else fallback to configured setting)
+		const configuredViewport = (state?.browserViewportSize as string | undefined) ?? "900x600"
+		let configuredWidth: number | undefined
+		let configuredHeight: number | undefined
+		if (configuredViewport.includes("x")) {
+			const parts = configuredViewport.split("x").map((v) => Number(v))
+			configuredWidth = parts[0]
+			configuredHeight = parts[1]
 		}
 
-		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()})\n`
-		details += "(Only folders are included. Files not shown automatically.)\n"
+		let actualWidth: number | undefined
+		let actualHeight: number | undefined
+		const vp = cline.browserSession.getViewportSize?.()
+		if (vp) {
+			actualWidth = vp.width
+			actualHeight = vp.height
+		}
+
+		const width = actualWidth ?? configuredWidth
+		const height = actualHeight ?? configuredHeight
+		const viewportInfo = width && height ? `\nCurrent viewport size: ${width}x${height} pixels.` : ""
+
+		details += `\n# Browser Session Status\nActive - A browser session is currently open and ready for browser_action commands${viewportInfo}\n`
+	}
+
+	if (includeFileDetails) {
 		const isDesktop = arePathsEqual(cline.cwd, path.join(os.homedir(), "Desktop"))
+		const maxFiles = maxWorkspaceFiles ?? 200
+		const { showRooIgnoredFiles = false } = state ?? {}
+
+		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Directories\n`
+		details += "(Only folders are included. Files not shown automatically.)\n"
 
 		if (isDesktop) {
 			// Don't want to immediately access desktop since it would show
 			// permission popup.
 			details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
 		} else {
-			const maxFiles = maxWorkspaceFiles ?? 200
+			// Early return for limit of 0
+			if (maxFiles === 0) {
+				details += "(Workspace directory context disabled. Use list_files to explore if needed.)"
+			} else {
+				const [directories, didHitLimit] = await listFiles(cline.cwd, true, maxFiles, "dir_only")
+				const result = formatResponse.formatFilesList(
+					cline.cwd,
+					directories,
+					didHitLimit,
+					cline.rooIgnoreController,
+					showRooIgnoredFiles,
+				)
 
+				details += result
+				details += "\n(dir_only mode: directories only. Use list_files for files.)\n"
+			}
+		}
+
+		details += `\n\n# Current Workspace Directory (${cline.cwd.toPosix()}) Files\n`
+
+		if (isDesktop) {
+			// Don't want to immediately access desktop since it would show
+			// permission popup.
+			details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
+		} else {
 			// Early return for limit of 0
 			if (maxFiles === 0) {
 				details += "(Workspace files context disabled. Use list_files to explore if needed.)"
 			} else {
-				const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles, "dir_only")
-				const { showRooIgnoredFiles = true } = state ?? {}
+				const [files, didHitLimit] = await listFiles(cline.cwd, true, maxFiles)
 
 				const result = formatResponse.formatFilesList(
 					cline.cwd,
@@ -427,189 +363,37 @@ export async function getEnvironmentDetails(cline: Task, includeFileDetails: boo
 				)
 
 				details += result
-				details += `\n('dir_only' mode, show directories only, you can understand the structure of the current project from this directory)\n`
 			}
 		}
-	
-		const globalStoragePath = cline.providerRef.deref()?.context.globalStorageUri.fsPath
-		if (globalStoragePath) {
-			try {
-				const memoryFiles = await getMemoryFilePaths(globalStoragePath)
-				const memoryData = await readMemoryFiles(memoryFiles)
-				const formattedMemory = formatMemoryContent(memoryData)
-				details += `\n\n# Agent Memory Content\n${formattedMemory}\n\n(If there are reminders or to-do items due, please notify the user.)\n`
-			} catch (error) {
-				details += `\n\n# Agent Memory Content\nError reading memory: ${error.message}\n`
-			}
-		}
-	
-		let filePath: string
-		let selectedText: string
-		let startLine: number | undefined
-		let endLine: number | undefined
-		let diagnostics: any[] | undefined
+
 		const context = EditorUtils.getEditorContext()
 		if (context) {
-			;({ filePath, selectedText, startLine, endLine, diagnostics } = context)
+			const { filePath, startLine, endLine, diagnostics } = context
 			const fullPath = path.resolve(cline.cwd, filePath)
-			if (endLine !== undefined && startLine != undefined) {
+			if (endLine !== undefined && startLine !== undefined) {
 				try {
-					// Check if file is readable
 					await vscode.workspace.fs.stat(vscode.Uri.file(fullPath))
-					details += `\n\n# The File Where The Cursor In\n${fullPath}\n`
+					details += `\n\n# The File Where The Cursor Is\n${fullPath}\n`
 					const content = addLineNumbers(
 						await readLines(fullPath, endLine + 5, startLine - 5),
-						startLine - 4 > 1 ? startLine - 4: 1,
+						startLine - 4 > 1 ? startLine - 4 : 1,
 					)
-					details += `\n# Line near the Cursor\n${content}\n(The cursor is on the line ${endLine}. Determine if the user's question is related to the code near the cursor.)\n\n`
-					if (diagnostics) {
-						const diagno = generateDiagnosticText(diagnostics)
-						details += `\n# Issues near the Cursor\n${diagno}\n`
+					details += `\n# Lines Near the Cursor\n${content}\n(The cursor is on line ${endLine-1}. Determine if the user's question is related to the code near the cursor.)\n`
+					if (diagnostics?.length) {
+						const diagnosticText = generateDiagnosticText(diagnostics)
+						if (diagnosticText) {
+							details += `\n# Issues Near the Cursor\n${diagnosticText}\n`
+						}
 					}
-				} catch (error) {}
+				} catch {}
 			}
 		}
 	}
 
-	const reminderSection = formatReminderSection(cline.todoList)
+	const todoListEnabled =
+		state && typeof state.apiConfiguration?.todoListEnabled === "boolean"
+			? state.apiConfiguration.todoListEnabled
+			: true
+	const reminderSection = todoListEnabled ? formatReminderSection(cline.todoList) : ""
 	return `<environment_details>\n${details.trim()}\n${reminderSection}\n</environment_details>`
-}
-
-
-// /**
-// 	* 删除用户推荐提示词
-// 	* 遍历cline的历史聊天记录后3个用户角色的记录，每个用户消息记录应该都是数组，
-// 	* 不是数组的忽略，删除数组中所有内容类型为"text"，内容由<user_suggestions>开头的对话块，
-// 	* 然后将修改后的聊天记录设回给cline
-// 	*/
-// export async function removeUserSuggestions(cline: Task): Promise<void> {
-// 	// 获取历史聊天记录
-// 	const conversationHistory = [...cline.apiConversationHistory]
-	
-// 	// 找到所有用户角色的消息记录
-// 	const userMessages: ApiMessage[] = conversationHistory.filter(msg => msg.role === "user")
-	
-// 	// 只处理最后3个用户消息
-// 	const lastThreeUserMessages = userMessages.slice(-3)
-	
-// 	// 遍历这3个用户消息
-// 	for (const message of lastThreeUserMessages) {
-// 		// 检查消息内容是否为数组
-// 		if (Array.isArray(message.content)) {
-// 			// 过滤掉内容类型为"text"且内容由<user_suggestions>开头的对话块
-// 			const filteredContent = message.content.filter((block: any) => {
-// 				if (block.type === "text" && typeof block.text === "string") {
-// 					return !block.text.startsWith("<user_suggestions>")
-// 				}
-// 				return true
-// 			})
-			
-// 			// 更新消息内容
-// 			message.content = filteredContent
-// 		}
-// 	}
-	
-// 	// 将修改后的聊天记录设回给cline
-// 	await cline.overwriteApiConversationHistory(conversationHistory)
-// }
-
-import { CodeIndexManager } from "../../services/code-index/manager"
-
-export async function getUserSuggestions(cline: Task): Promise<string|undefined> {
-	if (cline.toolSequence.length >= 6) {
-		cline.toolSequence = cline.toolSequence.slice(-6)
-	}
-
-	const lastTool = cline.toolSequence.length ? cline.toolSequence[cline.toolSequence.length - 1] : undefined
-	let toolRepeat = 1
-	
-	// Count backwards from the second last element
-	for (let i = cline.toolSequence.length - 2; i >= 0; i--) {
-		if (cline.toolSequence[i] === lastTool) {
-			toolRepeat++
-		} else {
-			break
-		}
-	}
-
-	const toolTimes = cline.toolSequence.filter(t => t === lastTool).length
-
-	const provider = cline.providerRef.deref()
-	let isCodebaseSearchAvailable = false
-	if (provider) {
-		const codeIndexManager = CodeIndexManager.getInstance(provider.context)
-		isCodebaseSearchAvailable = provider &&
-		codeIndexManager !== undefined &&
-		codeIndexManager.isFeatureEnabled &&
-		codeIndexManager.isFeatureConfigured &&
-		codeIndexManager.isInitialized
-	}
-
-	const UserSuggestions : Array<string> = []
-
-	switch (lastTool) {
-		case undefined:
-			break
-		case "execute_command":
-			break
-		case "read_file":
-			if (toolRepeat >= 3) {
-				UserSuggestions.push("- Use the available search tools to understand the codebase and the user's query. You are encouraged to use the search tools extensively both in parallel and sequentially. Using search tools to search for context is often more accurate than reading the files directly, resulting in a constructed context that aligns better with the logic contained in the code")
-			}
-			break
-		case "write_to_file":
-			break
-		case "apply_diff":
-			break
-		case "insert_content":
-			break
-		case "search_and_replace":
-			break
-		case "glob":
-			break
-		case "grep":
-			break
-		case "list_files":
-			break
-		case "list_code_definition_names":
-			break
-		case "browser_action":
-			break
-		case "use_mcp_tool":
-			break
-		case "access_mcp_resource":
-			break
-		case "ask_followup_question":
-			break
-		case "attempt_completion":
-			break
-		case "switch_mode":
-			break
-		case "new_task":
-			break
-		case "fetch_instructions":
-			break
-		case "codebase_search":
-			break
-		case "update_todo_list": 
-			break
-		case "web_search":
-			break
-		case "url_fetch":
-			break
-		case "thinking_tool":
-			break
-		default:
-			break
-	}
-
-	const state = await provider?.getState()
-	// const {
-	// 	thinkingToolEnabled,
-	// } = state ?? {}
-	// if (thinkingToolEnabled && cline.toolSequence.length > 5 && !cline.toolSequence.includes("thinking_tool")) {
-	// 	UserSuggestions.push("- You can use the 'thinking_tool' to analyze tasks and think through your approach, helping you to organize your thoughts and avoid overlooking details.")
-	// }
-	return undefined
-	// return UserSuggestions.join("\n") || undefined
 }

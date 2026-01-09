@@ -19,7 +19,7 @@ export class RooIgnoreController {
 	private ignorePath: string = ".rooignore"
 	rooIgnoreContent: string | undefined
 
-	constructor(cwd: string, ignorePath?:string) {
+	constructor(cwd: string, ignorePath?: string) {
 		this.cwd = cwd
 		if (ignorePath) {
 			this.ignorePath = ignorePath
@@ -86,6 +86,7 @@ export class RooIgnoreController {
 
 	/**
 	 * Check if a file should be accessible to the LLM
+	 * Automatically resolves symlinks
 	 * @param filePath - Path to check (relative to cwd)
 	 * @returns true if file is accessible, false if ignored
 	 */
@@ -95,54 +96,28 @@ export class RooIgnoreController {
 			return true
 		}
 		try {
-			// Normalize path to be relative to cwd and use forward slashes
 			const absolutePath = path.resolve(this.cwd, filePath)
-			const relativePath = path.relative(this.cwd, absolutePath).toPosix()
 
-			// Ignore expects paths to be path.relative()'d
+			// Follow symlinks to get the real path
+			let realPath: string
+			try {
+				realPath = fsSync.realpathSync(absolutePath)
+			} catch {
+				// If realpath fails (file doesn't exist, broken symlink, etc.),
+				// use the original path
+				realPath = absolutePath
+			}
+
+			// Convert real path to relative for .rooignore checking
+			const relativePath = path.relative(this.cwd, realPath).toPosix()
+
+			// Check if the real path is ignored
 			return !this.ignoreInstance.ignores(relativePath)
 		} catch (error) {
-			// console.error(`Error validating access for ${filePath}:`, error)
-			// Ignore is designed to work with relative file paths, so will throw error for paths outside cwd. We are allowing access to all files outside cwd.
+			// Allow access to files outside cwd or on errors (backward compatibility)
 			return true
 		}
 	}
-
-	// /**
-	//  * Check if a file should be accessible to the LLM
-	//  * Automatically resolves symlinks
-	//  * @param filePath - Path to check (relative to cwd)
-	//  * @returns true if file is accessible, false if ignored
-	//  */
-	// validateAccess(filePath: string): boolean {
-	// 	// Always allow access if .rooignore does not exist
-	// 	if (!this.rooIgnoreContent) {
-	// 		return true
-	// 	}
-	// 	try {
-	// 		// Normalize path to be relative to cwd and use forward slashes
-	// 		const absolutePath = path.resolve(this.cwd, filePath)
-
-	// 		// Follow symlinks to get the real path
-	// 		let realPath: string
-	// 		try {
-	// 			realPath = fsSync.realpathSync(absolutePath)
-	// 		} catch {
-	// 			// If realpath fails (file doesn't exist, broken symlink, etc.),
-	// 			// use the original path
-	// 			realPath = absolutePath
-	// 		}
-
-	// 		// Convert real path to relative for .rooignore checking
-	// 		const relativePath = path.relative(this.cwd, realPath).toPosix()
-
-	// 		// Check if the real path is ignored
-	// 		return !this.ignoreInstance.ignores(relativePath)
-	// 	} catch (error) {
-	// 		// Allow access to files outside cwd or on errors (backward compatibility)
-	// 		return true
-	// 	}
-	// }
 
 	/**
 	 * Check if a terminal command should be allowed to execute based on file access patterns

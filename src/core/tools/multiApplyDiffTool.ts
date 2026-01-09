@@ -14,8 +14,10 @@ import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { parseXmlForDiff } from "../../utils/xml"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
-import { applyDiffToolLegacy } from "./applyDiffTool"
+import { applyDiffTool as applyDiffToolClass } from "./ApplyDiffTool"
 import { computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
+import { isNativeProtocol } from "@roo-code/types"
+import { resolveToolProtocol } from "../../utils/resolveToolProtocol"
 
 interface DiffOperation {
 	path: string
@@ -59,18 +61,37 @@ export async function applyDiffTool(
 	pushToolResult: PushToolResult,
 	removeClosingTag: RemoveClosingTag,
 ) {
+	// Check if native protocol is enabled - if so, always use single-file class-based tool
+	// Use the task's locked protocol for consistency throughout the task lifetime
+	const toolProtocol = resolveToolProtocol(cline.apiConfiguration, cline.api.getModel().info, cline.taskToolProtocol)
+	if (isNativeProtocol(toolProtocol)) {
+		return applyDiffToolClass.handle(cline, block as ToolUse<"apply_diff">, {
+			askApproval,
+			handleError,
+			pushToolResult,
+			removeClosingTag,
+			toolProtocol,
+		})
+	}
+
 	// Check if MULTI_FILE_APPLY_DIFF experiment is enabled
 	const provider = cline.providerRef.deref()
-	if (provider) {
-		const state = await provider.getState()
+	const state = await provider?.getState()
+	if (provider && state) {
 		const isMultiFileApplyDiffEnabled = experiments.isEnabled(
 			state.experiments ?? {},
 			EXPERIMENT_IDS.MULTI_FILE_APPLY_DIFF,
 		)
 
-		// If experiment is disabled, use legacy tool
+		// If experiment is disabled, use single-file class-based tool
 		if (!isMultiFileApplyDiffEnabled) {
-			return applyDiffToolLegacy(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
+			return applyDiffToolClass.handle(cline, block as ToolUse<"apply_diff">, {
+				askApproval,
+				handleError,
+				pushToolResult,
+				removeClosingTag,
+				toolProtocol,
+			})
 		}
 	}
 
@@ -248,7 +269,7 @@ Original error: ${errorMessage}`
 				await cline.say("rooignore_error", relPath)
 				updateOperationResult(relPath, {
 					status: "blocked",
-					error: formatResponse.rooIgnoreError(relPath),
+					error: formatResponse.rooIgnoreError(relPath, undefined),
 				})
 				continue
 			}
@@ -619,7 +640,6 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 					didApprove = await askApproval("tool", operationMessage, toolProgressStatus, isWriteProtected)
 
 					if (!didApprove) {
-						await cline.say("text", "(Rejected)")
 						// Revert changes if diff view was shown
 						if (!isPreventFocusDisruptionEnabled) {
 							await cline.diffViewProvider.revertChanges()
@@ -717,9 +737,20 @@ ${errorDetails ? `\nTechnical details:\n${errorDetails}\n` : ""}
 			}
 		}
 
+		// Check protocol for notice formatting - reuse the task's locked protocol
+		const noticeProtocol = resolveToolProtocol(
+			cline.apiConfiguration,
+			cline.api.getModel().info,
+			cline.taskToolProtocol,
+		)
 		const singleBlockNotice =
 			totalSearchBlocks === 1
-				? "\n<notice>Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, please include them as additional SEARCH/REPLACE blocks.</notice>"
+				? isNativeProtocol(noticeProtocol)
+					? "\n" +
+						JSON.stringify({
+							notice: "Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, please include them as additional SEARCH/REPLACE blocks.",
+						})
+					: "\n<notice>Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, please include them as additional SEARCH/REPLACE blocks.</notice>"
 				: ""
 
 		// Push the final result combining all operation results

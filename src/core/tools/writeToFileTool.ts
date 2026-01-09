@@ -6,164 +6,107 @@ import fs from "fs/promises"
 import { Task } from "../task/Task"
 import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { formatResponse } from "../prompts/responses"
-import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } from "../../shared/tools"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
-import { fileExistsAtPath } from "../../utils/fs"
+import { fileExistsAtPath, createDirectoriesForFile } from "../../utils/fs"
 import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/misc/extract-text"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import { detectCodeOmission } from "../../integrations/editor/detect-omission"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ToolUse } from "../../shared/tools"
 
-export async function writeToFileTool(
-	cline: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-) {
-	const relPath: string | undefined = block.params.path
-	let newContent: string | undefined = block.params.content
-	let predictedLineCount: number | undefined = parseInt(block.params.line_count ?? "0")
+interface WriteToFileParams {
+	path: string
+	content: string
+}
 
-	if (block.partial && (!relPath || newContent === undefined)) {
-		// checking for newContent ensure relPath is complete
-		// wait so we can determine if it's a new file or editing an existing file
-		return
+export class WriteToFileTool extends BaseTool<"write_to_file"> {
+	readonly name = "write_to_file" as const
+
+	parseLegacy(params: Partial<Record<string, string>>): WriteToFileParams {
+		return {
+			path: params.path || "",
+			content: params.content || "",
+		}
 	}
 
-	if (!relPath) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("write_to_file")
-		pushToolResult(await cline.sayAndCreateMissingParamError("write_to_file", "path"))
-		await cline.diffViewProvider.reset()
-		return
-	}
+	async execute(params: WriteToFileParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { pushToolResult, handleError, askApproval, removeClosingTag } = callbacks
+		const relPath = params.path
+		let newContent = params.content
 
-	if (newContent === undefined) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("write_to_file")
-		pushToolResult(await cline.sayAndCreateMissingParamError("write_to_file", "content"))
-		await cline.diffViewProvider.reset()
-		return
-	}
-
-	const accessAllowed = cline.rooIgnoreController?.validateAccess(relPath)
-
-	if (!accessAllowed) {
-		await cline.say("rooignore_error", relPath)
-		pushToolResult(formatResponse.toolError(formatResponse.rooIgnoreError(relPath)))
-		return
-	}
-
-	// Check if file is write-protected
-	const isWriteProtected = cline.rooProtectedController?.isWriteProtected(relPath) || false
-
-	// Check if file exists using cached map or fs.access
-	let fileExists: boolean
-
-	if (cline.diffViewProvider.editType !== undefined) {
-		fileExists = cline.diffViewProvider.editType === "modify"
-	} else {
-		const absolutePath = path.resolve(cline.cwd, relPath)
-		fileExists = await fileExistsAtPath(absolutePath)
-		cline.diffViewProvider.editType = fileExists ? "modify" : "create"
-	}
-
-	// pre-processing newContent for cases where weaker models might add artifacts like markdown codeblock markers (deepseek/llama) or extra escape characters (gemini)
-	if (newContent.startsWith("```")) {
-		// cline handles cases where it includes language specifiers like ```python ```js
-		newContent = newContent.split("\n").slice(1).join("\n")
-	}
-
-	if (newContent.endsWith("```")) {
-		newContent = newContent.split("\n").slice(0, -1).join("\n")
-	}
-
-	if (!cline.api.getModel().id.includes("claude")) {
-		newContent = unescapeHtmlEntities(newContent)
-	}
-
-	// Determine if the path is outside the workspace
-	const fullPath = relPath ? path.resolve(cline.cwd, removeClosingTag("path", relPath)) : ""
-	const isOutsideWorkspace = isPathOutsideWorkspace(fullPath)
-
-	const sharedMessageProps: ClineSayTool = {
-		tool: fileExists ? "editedExistingFile" : "newFileCreated",
-		path: getReadablePath(cline.cwd, removeClosingTag("path", relPath)),
-		content: newContent,
-		isOutsideWorkspace,
-		isProtected: isWriteProtected,
-	}
-
-	try {
-		if (block.partial) {
-			// Check if preventFocusDisruption experiment is enabled
-			const provider = cline.providerRef.deref()
-			const state = await provider?.getState()
-			const isPreventFocusDisruptionEnabled = experiments.isEnabled(
-				state?.experiments ?? {},
-				EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION,
-			)
-
-			if (!isPreventFocusDisruptionEnabled) {
-				// update gui message
-				const partialMessage = JSON.stringify(sharedMessageProps)
-				await cline.ask("tool", partialMessage, block.partial).catch(() => {})
-
-				// update editor
-				if (!cline.diffViewProvider.isEditing) {
-					// open the editor and prepare to stream content in
-					await cline.diffViewProvider.open(relPath)
-				}
-
-				// editor is open, stream content in
-				await cline.diffViewProvider.update(
-					everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent,
-					false,
-				)
-			}
-
+		if (!relPath) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("write_to_file")
+			pushToolResult(await task.sayAndCreateMissingParamError("write_to_file", "path"))
+			await task.diffViewProvider.reset()
 			return
+		}
+
+		if (newContent === undefined) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("write_to_file")
+			pushToolResult(await task.sayAndCreateMissingParamError("write_to_file", "content"))
+			await task.diffViewProvider.reset()
+			return
+		}
+
+		const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+
+		if (!accessAllowed) {
+			await task.say("rooignore_error", relPath)
+			pushToolResult(formatResponse.rooIgnoreError(relPath))
+			return
+		}
+
+		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+
+		let fileExists: boolean
+		const absolutePath = path.resolve(task.cwd, relPath)
+
+		if (task.diffViewProvider.editType !== undefined) {
+			fileExists = task.diffViewProvider.editType === "modify"
 		} else {
-			if (predictedLineCount === undefined) {
-				cline.consecutiveMistakeCount++
-				cline.recordToolError("write_to_file")
+			fileExists = await fileExistsAtPath(absolutePath)
+			task.diffViewProvider.editType = fileExists ? "modify" : "create"
+		}
 
-				// Calculate the actual number of lines in the content
-				const actualLineCount = newContent.split("\n").length
+		// Create parent directories early for new files to prevent ENOENT errors
+		// in subsequent operations (e.g., diffViewProvider.open, fs.readFile)
+		if (!fileExists) {
+			await createDirectoriesForFile(absolutePath)
+		}
 
-				// Check if this is a new file or existing file
-				const isNewFile = !fileExists
+		if (newContent.startsWith("```")) {
+			newContent = newContent.split("\n").slice(1).join("\n")
+		}
 
-				// Check if diffStrategy is enabled
-				const diffStrategyEnabled = !!cline.diffStrategy
+		if (newContent.endsWith("```")) {
+			newContent = newContent.split("\n").slice(0, -1).join("\n")
+		}
 
-				// Use more specific error message for line_count that provides guidance based on the situation
-				await cline.say(
-					"error",
-					`Roo tried to use write_to_file${
-						relPath ? ` for '${relPath.toPosix()}'` : ""
-					} but the required parameter 'line_count' was missing or truncated after ${actualLineCount} lines of content were written. Retrying...`,
-				)
+		if (!task.api.getModel().id.includes("claude")) {
+			newContent = unescapeHtmlEntities(newContent)
+		}
 
-				pushToolResult(
-					formatResponse.toolError(
-						formatResponse.lineCountTruncationError(actualLineCount, isNewFile, diffStrategyEnabled),
-					),
-				)
-				await cline.diffViewProvider.revertChanges()
-				return
-			}
+		const fullPath = relPath ? path.resolve(task.cwd, removeClosingTag("path", relPath)) : ""
+		const isOutsideWorkspace = isPathOutsideWorkspace(fullPath)
 
-			cline.consecutiveMistakeCount = 0
+		const sharedMessageProps: ClineSayTool = {
+			tool: fileExists ? "editedExistingFile" : "newFileCreated",
+			path: getReadablePath(task.cwd, removeClosingTag("path", relPath)),
+			content: newContent,
+			isOutsideWorkspace,
+			isProtected: isWriteProtected,
+		}
 
-			// Check if preventFocusDisruption experiment is enabled
-			const provider = cline.providerRef.deref()
+		try {
+			task.consecutiveMistakeCount = 0
+
+			const provider = task.providerRef.deref()
 			const state = await provider?.getState()
 			const diagnosticsEnabled = state?.diagnosticsEnabled ?? true
 			const writeDelayMs = state?.writeDelayMs ?? DEFAULT_WRITE_DELAY_MS
@@ -173,48 +116,16 @@ export async function writeToFileTool(
 			)
 
 			if (isPreventFocusDisruptionEnabled) {
-				// Direct file write without diff view
-				// Set up diffViewProvider properties needed for diff generation and saveDirectly
-				cline.diffViewProvider.editType = fileExists ? "modify" : "create"
+				task.diffViewProvider.editType = fileExists ? "modify" : "create"
 				if (fileExists) {
-					const absolutePath = path.resolve(cline.cwd, relPath)
-					cline.diffViewProvider.originalContent = await fs.readFile(absolutePath, "utf-8")
+					const absolutePath = path.resolve(task.cwd, relPath)
+					task.diffViewProvider.originalContent = await fs.readFile(absolutePath, "utf-8")
 				} else {
-					cline.diffViewProvider.originalContent = ""
+					task.diffViewProvider.originalContent = ""
 				}
 
-				// Check for code omissions before proceeding
-				if (detectCodeOmission(cline.diffViewProvider.originalContent || "", newContent, predictedLineCount)) {
-					if (cline.diffStrategy) {
-						pushToolResult(
-							formatResponse.toolError(
-								`Content appears to be truncated (file has ${
-									newContent.split("\n").length
-								} lines but was predicted to have ${predictedLineCount} lines), and found comments indicating omitted code (e.g., '// rest of code unchanged', '/* previous code */'). Please provide the complete file content without any omissions if possible, or otherwise use the 'apply_diff' tool to apply the diff to the original file.`,
-							),
-						)
-						return
-					} else {
-						vscode.window
-							.showWarningMessage(
-								"Potential code truncation detected. cline happens when the AI reaches its max output limit.",
-								"Follow cline guide to fix the issue",
-							)
-							.then((selection) => {
-								if (selection === "Follow cline guide to fix the issue") {
-									vscode.env.openExternal(
-										vscode.Uri.parse(
-											"https://github.com/cline/cline/wiki/Troubleshooting-%E2%80%90-Cline-Deleting-Code-with-%22Rest-of-Code-Here%22-Comments",
-										),
-									)
-								}
-							})
-					}
-				}
-
-				// Build unified diff for both existing and new files
 				let unified = fileExists
-					? formatResponse.createPrettyPatch(relPath, cline.diffViewProvider.originalContent, newContent)
+					? formatResponse.createPrettyPatch(relPath, task.diffViewProvider.originalContent, newContent)
 					: convertNewFileToUnifiedDiff(newContent, relPath)
 				unified = sanitizeUnifiedDiff(unified)
 				const completeMessage = JSON.stringify({
@@ -229,62 +140,24 @@ export async function writeToFileTool(
 					return
 				}
 
-				// Save directly without showing diff view or opening the file
-				await cline.diffViewProvider.saveDirectly(relPath, newContent, false, diagnosticsEnabled, writeDelayMs)
+				await task.diffViewProvider.saveDirectly(relPath, newContent, false, diagnosticsEnabled, writeDelayMs)
 			} else {
-				// Original behavior with diff view
-				// if isEditingFile false, that means we have the full contents of the file already.
-				// it's important to note how cline function works, you can't make the assumption that the block.partial conditional will always be called since it may immediately get complete, non-partial data. So cline part of the logic will always be called.
-				// in other words, you must always repeat the block.partial logic here
-				if (!cline.diffViewProvider.isEditing) {
-					// show gui message before showing edit animation
+				if (!task.diffViewProvider.isEditing) {
 					const partialMessage = JSON.stringify(sharedMessageProps)
-					await cline.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, cline shows the edit row before the content is streamed into the editor
-					await cline.diffViewProvider.open(relPath)
+					await task.ask("tool", partialMessage, true).catch(() => {})
+					await task.diffViewProvider.open(relPath)
 				}
 
-				await cline.diffViewProvider.update(
+				await task.diffViewProvider.update(
 					everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent,
 					true,
 				)
 
-				await delay(300) // wait for diff view to update
-				cline.diffViewProvider.scrollToFirstDiff()
+				await delay(300)
+				task.diffViewProvider.scrollToFirstDiff()
 
-				// Check for code omissions before proceeding
-				if (detectCodeOmission(cline.diffViewProvider.originalContent || "", newContent, predictedLineCount)) {
-					if (cline.diffStrategy) {
-						await cline.diffViewProvider.revertChanges()
-
-						pushToolResult(
-							formatResponse.toolError(
-								`Content appears to be truncated (file has ${
-									newContent.split("\n").length
-								} lines but was predicted to have ${predictedLineCount} lines), and found comments indicating omitted code (e.g., '// rest of code unchanged', '/* previous code */'). Please provide the complete file content without any omissions if possible, or otherwise use the 'apply_diff' tool to apply the diff to the original file.`,
-							),
-						)
-						return
-					} else {
-						vscode.window
-							.showWarningMessage(
-								"Potential code truncation detected. cline happens when the AI reaches its max output limit.",
-								"Follow cline guide to fix the issue",
-							)
-							.then((selection) => {
-								if (selection === "Follow cline guide to fix the issue") {
-									vscode.env.openExternal(
-										vscode.Uri.parse(
-											"https://github.com/cline/cline/wiki/Troubleshooting-%E2%80%90-Cline-Deleting-Code-with-%22Rest-of-Code-Here%22-Comments",
-										),
-									)
-								}
-							})
-					}
-				}
-
-				// Build unified diff for both existing and new files
 				let unified = fileExists
-					? formatResponse.createPrettyPatch(relPath, cline.diffViewProvider.originalContent, newContent)
+					? formatResponse.createPrettyPatch(relPath, task.diffViewProvider.originalContent, newContent)
 					: convertNewFileToUnifiedDiff(newContent, relPath)
 				unified = sanitizeUnifiedDiff(unified)
 				const completeMessage = JSON.stringify({
@@ -296,37 +169,99 @@ export async function writeToFileTool(
 				const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
 				if (!didApprove) {
-					await cline.say("text", "(Rejected)")
-					await cline.diffViewProvider.revertChanges()
+					await task.diffViewProvider.revertChanges()
 					return
 				}
 
-				// Call saveChanges to update the DiffViewProvider properties
-				await cline.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
+				await task.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
 			}
 
-			// Track file edit operation
 			if (relPath) {
-				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
 
-			cline.didEditFile = true // used to determine if we should wait for busy terminal to update before sending api request
+			task.didEditFile = true
 
-			// Get the formatted response message
-			const message = await cline.diffViewProvider.pushToolWriteResult(cline, cline.cwd, !fileExists)
+			const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, !fileExists)
 
 			pushToolResult(message)
 
-			await cline.diffViewProvider.reset()
+			await task.diffViewProvider.reset()
+			this.resetPartialState()
 
-			// Process any queued messages after file edit completes
-			cline.processQueuedMessages()
+			task.processQueuedMessages()
 
 			return
+		} catch (error) {
+			await handleError("writing file", error as Error)
+			await task.diffViewProvider.reset()
+			this.resetPartialState()
+			return
 		}
-	} catch (error) {
-		await handleError("writing file", error)
-		await cline.diffViewProvider.reset()
-		return
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"write_to_file">): Promise<void> {
+		const relPath: string | undefined = block.params.path
+		let newContent: string | undefined = block.params.content
+
+		// Wait for path to stabilize before showing UI (prevents truncated paths)
+		if (!this.hasPathStabilized(relPath) || newContent === undefined) {
+			return
+		}
+
+		const provider = task.providerRef.deref()
+		const state = await provider?.getState()
+		const isPreventFocusDisruptionEnabled = experiments.isEnabled(
+			state?.experiments ?? {},
+			EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION,
+		)
+
+		if (isPreventFocusDisruptionEnabled) {
+			return
+		}
+
+		// relPath is guaranteed non-null after hasPathStabilized
+		let fileExists: boolean
+		const absolutePath = path.resolve(task.cwd, relPath!)
+
+		if (task.diffViewProvider.editType !== undefined) {
+			fileExists = task.diffViewProvider.editType === "modify"
+		} else {
+			fileExists = await fileExistsAtPath(absolutePath)
+			task.diffViewProvider.editType = fileExists ? "modify" : "create"
+		}
+
+		// Create parent directories early for new files to prevent ENOENT errors
+		// in subsequent operations (e.g., diffViewProvider.open)
+		if (!fileExists) {
+			await createDirectoriesForFile(absolutePath)
+		}
+
+		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath!) || false
+		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+
+		const sharedMessageProps: ClineSayTool = {
+			tool: fileExists ? "editedExistingFile" : "newFileCreated",
+			path: getReadablePath(task.cwd, relPath!),
+			content: newContent || "",
+			isOutsideWorkspace,
+			isProtected: isWriteProtected,
+		}
+
+		const partialMessage = JSON.stringify(sharedMessageProps)
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
+
+		if (newContent) {
+			if (!task.diffViewProvider.isEditing) {
+				await task.diffViewProvider.open(relPath!)
+			}
+
+			await task.diffViewProvider.update(
+				everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent,
+				false,
+			)
+		}
 	}
 }
+
+export const writeToFileTool = new WriteToFileTool()

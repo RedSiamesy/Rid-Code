@@ -4,6 +4,7 @@ import { Settings } from "lucide-react"
 
 import type { ModeConfig } from "@roo-code/types"
 import type { Command } from "@roo/ExtensionMessage"
+import type { SkillMetadata } from "@roo/skills"
 
 import {
 	ContextMenuOptionType,
@@ -30,6 +31,7 @@ interface ContextMenuProps {
 	loading?: boolean
 	dynamicSearchResults?: SearchResult[]
 	commands?: Command[]
+	skills?: SkillMetadata[]
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -43,13 +45,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 	modes,
 	dynamicSearchResults = [],
 	commands = [],
+	skills = [],
 }) => {
 	const [materialIconsBaseUri, setMaterialIconsBaseUri] = useState("")
 	const menuRef = useRef<HTMLDivElement>(null)
 
 	const filteredOptions = useMemo(() => {
-		return getContextMenuOptions(searchQuery, selectedType, queryItems, dynamicSearchResults, modes, commands)
-	}, [searchQuery, selectedType, queryItems, dynamicSearchResults, modes, commands])
+		return getContextMenuOptions(searchQuery, selectedType, queryItems, dynamicSearchResults, modes, commands, skills)
+	}, [searchQuery, selectedType, queryItems, dynamicSearchResults, modes, commands, skills])
 
 	useEffect(() => {
 		if (menuRef.current) {
@@ -138,6 +141,27 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 						)}
 					</div>
 				)
+			case ContextMenuOptionType.Skill:
+				return (
+					<div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+						<div style={{ lineHeight: "1.2" }}>
+							<span>{option.slashCommand}</span>
+						</div>
+						{option.description && (
+							<span
+								style={{
+									opacity: 0.5,
+									fontSize: "0.9em",
+									lineHeight: "1.2",
+									whiteSpace: "nowrap",
+									overflow: "hidden",
+									textOverflow: "ellipsis",
+								}}>
+								{option.description}
+							</span>
+						)}
+					</div>
+				)
 			case ContextMenuOptionType.Problems:
 				return <span>{t("chat:contextMenu.problems")}</span>
 			case ContextMenuOptionType.Terminal:
@@ -176,6 +200,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 					const pathList = path.split("/")
 					const filename = pathList.at(-1)
 					const folderPath = pathList.slice(0, -1).join("/")
+					const displayFolderPath =
+						folderPath.length > 50 ? "..." + folderPath.slice(-50) : folderPath
 					return (
 						<div
 							style={{
@@ -193,14 +219,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 								style={{
 									whiteSpace: "nowrap",
 									overflow: "hidden",
-									textOverflow: "ellipsis",
-									direction: "rtl",
-									textAlign: "right",
-									flex: 1,
-									opacity: 0.75,
-									fontSize: "0.75em",
-								}}>
-								{folderPath}
+								textOverflow: "ellipsis",
+								textAlign: "right",
+								flex: 1,
+								opacity: 0.75,
+								fontSize: "0.75em",
+							}}>
+								{displayFolderPath}
 							</span>
 						</div>
 					)
@@ -216,6 +241,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return "symbol-misc"
 			case ContextMenuOptionType.Command:
 				return "play"
+			case ContextMenuOptionType.Skill:
+				return ""
 			case ContextMenuOptionType.OpenedFile:
 				return "window"
 			case ContextMenuOptionType.File:
@@ -264,6 +291,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 			values: { section: "slashCommands" },
 		})
 	}
+	const handleSkillsSettingsClick = (e: React.MouseEvent) => {
+		e.preventDefault()
+		vscode.postMessage({
+			type: "switchTab",
+			tab: "settings",
+			values: { section: "skills" },
+		})
+	}
 
 	return (
 		<div
@@ -285,7 +320,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 					zIndex: 1000,
 					display: "flex",
 					flexDirection: "column",
-					maxHeight: "455px", // 增加可以显示更多选项
+					maxHeight: "455px",
 					overflowY: "auto",
 					overflowX: "hidden",
 				}}>
@@ -332,6 +367,36 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 								e.currentTarget.style.backgroundColor = "transparent"
 							}}
 							title={t("chat:slashCommands.manageCommands")}>
+							<Settings size={16} />
+						</button>
+					</div>
+				)}
+				{searchQuery === "$" && (
+					<div className="p-2 flex items-start gap-4 justify-between">
+						{searchQuery.length === 1 && (
+							<div className="text-sm">
+								<p className="font-bold text-base text-vscode-foreground mt-1 mb-0.5">
+									{"Skills"}
+								</p>
+								<p className="text-xs mt-0.5 -mb-1">{t("settings:skills.description")}</p>
+							</div>
+						)}
+						<button
+							className="mt-1 cursor-pointer"
+							onClick={handleSkillsSettingsClick}
+							onMouseDown={(e) => {
+								e.stopPropagation()
+								e.preventDefault()
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.opacity = "1"
+								e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)"
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.opacity = "0.7"
+								e.currentTarget.style.backgroundColor = "transparent"
+							}}
+							title={t("settings:sections.skills")}>
 							<Settings size={16} />
 						</button>
 					</div>
@@ -392,6 +457,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 								)}
 								{option.type !== ContextMenuOptionType.Mode &&
 									option.type !== ContextMenuOptionType.Command &&
+									option.type !== ContextMenuOptionType.Skill &&
 									option.type !== ContextMenuOptionType.File &&
 									option.type !== ContextMenuOptionType.Folder &&
 									option.type !== ContextMenuOptionType.OpenedFile &&

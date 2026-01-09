@@ -11,7 +11,6 @@ export const TITLES: Record<CodeActionName, string> = {
 	FIX: "Fix with Roo Code",
 	IMPROVE: "Improve with Roo Code",
 	ADD_TO_CONTEXT: "Add to Roo Code",
-	ADD_FILE_PATH_TO_CONTEXT: "Add Path to Roo Code",
 	NEW_TASK: "New Roo Code Task",
 } as const
 

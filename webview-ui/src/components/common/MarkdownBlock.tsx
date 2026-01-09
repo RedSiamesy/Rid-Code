@@ -198,10 +198,6 @@ const StyledMarkdown = styled.div`
 		background-color: var(--vscode-editor-inactiveSelectionBackground);
 	}
 
-	tr {
-		transition: background-color 0.16s ease; /* 添加过渡效果 */
-	}
-
 	tr:hover {
 		background-color: var(--vscode-list-hoverBackground);
 	}

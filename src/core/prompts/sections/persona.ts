@@ -139,7 +139,6 @@ NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTAN
 - When doing file search, prefer to use the 'new_task' tool with 'ask' mode in order to reduce context usage.
 - You should proactively use the 'new_task' tool with specialized agents when the task at hand matches the agent's description.
 
-- When 'url_fetch' returns a message about a redirect to a different host, you should immediately make a new 'url_fetch' request with the redirect URL provided in the response.
 - You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run \"git status\" and \"git diff\", send a single message with two tool calls to run the calls in parallel.
 - If the user specifies that they want you to run tools \"in parallel\", you MUST send a single message with multiple tool use content blocks. For example, if you need to launch multiple agents in parallel, send a single message with multiple Task tool calls.
 
@@ -163,41 +162,3 @@ IMPORTANT: Always use the 'update_todo_list' tool to plan and track tasks throug
 }
 
 
-
-// export function getRulesSection(
-// 	cwd: string,
-// 	supportsComputerUse: boolean,
-// 	diffStrategy?: DiffStrategy,
-// 	codeIndexManager?: CodeIndexManager,
-// 	allowedMultiCall?: boolean,
-// ): string {
-// 	const isCodebaseSearchAvailable =
-// 		codeIndexManager &&
-// 		codeIndexManager.isFeatureEnabled &&
-// 		codeIndexManager.isFeatureConfigured &&
-// 		codeIndexManager.isInitialized
-
-// 	const allowedMultiCallEnabled = allowedMultiCall ?? false 
-// 	// - When doing file search, prefer to use the 'new_task' tool with 'ask' mode to start a "Analysis" subtask.
-// 	return `
-// ====
-
-// RULES
-
-// ${!allowedMultiCallEnabled? "YOU MUST ONLY USE ONE TOOL AT A TIME PER MESSAGE! If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.":""}
-// - You should proactively use the 'new_task' tool with specialized agents when the task at hand matches the agent's description. For example, when doing file search and are currently not in ask mode, prefer to use the 'new_task' tool with 'ask' mode to start a "Analysis" subtask.
-// - When WebFetch returns a message about a redirect to a different host, you should immediately make a new WebFetch request with the redirect URL provided in the response. ${allowedMultiCallEnabled ? "\n- You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run \"git status\" and \"git diff\", send a single message with two tool calls to run the calls in parallel.":""}
-// - When executing commands, if you don't see the expected output, use the ask_followup_question tool to request the user to copy and paste it back to you.
-// - For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.
-// - Don't be stingy with search attempts; **use various keywords or matching patterns from multiple angles to conduct a broad search**.
-// - Be thorough: When you use a search tool, check multiple locations, consider different naming conventions, look for related files.
-// - For key content or logic encountered during the process of understanding source code, you MUST use the search tools (like glob/grep) to perform comprehensive verification searches in a big scope to determine their scope of influence.
-// - ${isCodebaseSearchAvailable?"**CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use the `codebase_search` tool FIRST before using grep/glob or other file exploration tools.** This requirement applies throughout the entire conversation, not just when starting a task. The codebase_search tool uses semantic search to find relevant code based on meaning, not just keywords, making it much more effective for understanding how features are implemented. Even if you've already explored some parts of the codebase, any new area or functionality you need to understand requires using codebase_search first. The “codebase_search” can help you start from an unknown field but cannot help you find all clues, as it will lose some more accurate and detailed information. Therefore, you **SHOULD NOT** rely entirely on “codebase_search” and should use more explicitly controllable tools like \`grep\`, \`glob\`, \`read_file\`, \`list_code_definition_names\` after obtaining the clue. Implement the solution using all tools available to you.":"Implement the solution using all tools available to you. "}
-// - After finding contextual information related to the issue, you should still perform redundant searches using the additional key information and reflect to **ENSURE that no content related to the task is missed**.
-// - IMPORTANT: If you want to reference code in a file, you MUST use a markdown-formatted link pointing to the location of the source code, rather than outputting it as texts or code blocks. It allows you to direct the user to easily navigate to the source code location.
-// - For all file paths, use markdown-formatted links to point to the source files.
-// - Think harder: You should conduct periodic reviews and reflections at appropriate times, asking yourself if you have missed any clues or key points.
-// - For key content or logic encountered during the process of understanding source code, you MUST use the search tools (like glob/grep) to perform comprehensive verification searches in a big scope to determine their scope of influence.
-// - NEVER update the todo list multiple times in one message
-// `
-// }

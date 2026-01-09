@@ -96,7 +96,6 @@ describe("TaskHeader", () => {
 		totalCost: 0.05,
 		contextTokens: 200,
 		buttonsDisabled: false,
-		onClose: ()=>{},
 		handleCondenseContext: vi.fn(),
 	}
 

@@ -6,9 +6,8 @@ export const EXPERIMENT_IDS = {
 	PREVENT_FOCUS_DISRUPTION: "preventFocusDisruption",
 	IMAGE_GENERATION: "imageGeneration",
 	RUN_SLASH_COMMAND: "runSlashCommand",
-	ALLOWED_MULTI_CALL: "allowedMultiCall",
-	USE_TOOL_CALLING: "useToolCalling",
-	USE_NATIVE_PROMPT: "useNativePrompt",
+	MULTIPLE_NATIVE_TOOL_CALLS: "multipleNativeToolCalls",
+	CUSTOM_TOOLS: "customTools",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -25,9 +24,8 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	PREVENT_FOCUS_DISRUPTION: { enabled: false },
 	IMAGE_GENERATION: { enabled: false },
 	RUN_SLASH_COMMAND: { enabled: false },
-	ALLOWED_MULTI_CALL: { enabled: true },
-	USE_TOOL_CALLING: { enabled: true },
-	USE_NATIVE_PROMPT: { enabled: false },
+	MULTIPLE_NATIVE_TOOL_CALLS: { enabled: false },
+	CUSTOM_TOOLS: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

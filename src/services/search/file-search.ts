@@ -5,6 +5,7 @@ import * as childProcess from "child_process"
 import * as readline from "readline"
 import { byLengthAsc, Fzf } from "fzf"
 import { getBinPath } from "../ripgrep"
+import { Package } from "../../shared/package"
 
 export type FileResult = { path: string; type: "file" | "folder"; label?: string }
 
@@ -85,14 +86,44 @@ export async function executeRipgrep({
 	})
 }
 
+/**
+ * Get extra ripgrep arguments based on VSCode search configuration
+ */
+function getRipgrepSearchOptions(): string[] {
+	const config = vscode.workspace.getConfiguration("search")
+	const extraArgs: string[] = []
+
+	// Respect VSCode's search.useIgnoreFiles setting
+	if (config.get("useIgnoreFiles") === false) {
+		extraArgs.push("--no-ignore")
+	}
+
+	// Respect VSCode's search.useGlobalIgnoreFiles setting
+	if (config.get("useGlobalIgnoreFiles") === false) {
+		extraArgs.push("--no-ignore-global")
+	}
+
+	// Respect VSCode's search.useParentIgnoreFiles setting
+	if (config.get("useParentIgnoreFiles") === false) {
+		extraArgs.push("--no-ignore-parent")
+	}
+
+	return extraArgs
+}
+
 export async function executeRipgrepForFiles(
 	workspacePath: string,
-	limit: number = 5000,
+	limit?: number,
 ): Promise<{ path: string; type: "file" | "folder"; label?: string }[]> {
+	// Get limit from configuration if not provided
+	const effectiveLimit =
+		limit ?? vscode.workspace.getConfiguration(Package.name).get<number>("maximumIndexedFilesForFileSearch", 10000)
+
 	const args = [
 		"--files",
 		"--follow",
 		"--hidden",
+		...getRipgrepSearchOptions(),
 		"-g",
 		"!**/node_modules/**",
 		"-g",
@@ -104,7 +135,7 @@ export async function executeRipgrepForFiles(
 		workspacePath,
 	]
 
-	return executeRipgrep({ args, workspacePath, limit })
+	return executeRipgrep({ args, workspacePath, limit: effectiveLimit })
 }
 
 export async function searchWorkspaceFiles(
@@ -113,12 +144,12 @@ export async function searchWorkspaceFiles(
 	limit: number = 20,
 ): Promise<{ path: string; type: "file" | "folder"; label?: string }[]> {
 	try {
-		// Get all files and directories (from our modified function)
-		const allItems = await executeRipgrepForFiles(workspacePath, 5000)
+		// Get all files and directories (uses configured limit)
+		const allItems = await executeRipgrepForFiles(workspacePath)
 
 		// If no query, just return the top items
 		if (!query.trim()) {
-			return allItems.slice(0, limit)
+			return allItems.filter((item) => item.type !== "folder").slice(0, limit)
 		}
 
 		// Create search items for all files AND directories
@@ -155,22 +186,13 @@ export async function searchWorkspaceFiles(
 			}),
 		)
 
-		// return verifiedResults
 		let inc: typeof allItems = []
-		const _query = query.replace(/\\/g, '/')
-		if (_query.includes("/")) {
+		const normalizedQuery = query.replace(/\\/g, "/")
+		if (normalizedQuery.includes("/")) {
 			inc = allItems
 				.filter((item) => {
-					const itemAbsolutePath = path.resolve(workspacePath, item.path).replace(/\\/g, '/')
-					if (!itemAbsolutePath.includes(_query)) {
-						return false
-					}
-					// const afterQuery = itemAbsolutePath.split(abs_queryPath).pop() || ""
-					// const slashCount = (afterQuery.match(/\//g) || []).length
-					// if (slashCount > 1 && !afterQuery.endsWith('/')) {
-					// 	return false
-					// }
-					return true
+					const itemAbsolutePath = path.resolve(workspacePath, item.path).replace(/\\/g, "/")
+					return itemAbsolutePath.includes(normalizedQuery)
 				})
 				.map((item) => {
 					const fullPath = path.join(workspacePath, item.path)
@@ -182,37 +204,8 @@ export async function searchWorkspaceFiles(
 					}
 				})
 		}
-		
-		// const abs_queryPath = path.resolve(workspacePath, query).replace(/\\/g, '/')
-		// let inc: typeof allItems = []
-		// if (fs.existsSync(abs_queryPath)) {
-		// 	inc = allItems
-		// 		.filter((item) => {
-		// 			const itemAbsolutePath = path.resolve(workspacePath, item.path).replace(/\\/g, '/')
-		// 			if (!itemAbsolutePath.includes(abs_queryPath)) {
-		// 				return false
-		// 			}
-		// 			const afterQuery = itemAbsolutePath.split(abs_queryPath).pop() || ""
-		// 			const slashCount = (afterQuery.match(/\//g) || []).length
-		// 			if (slashCount > 1 && !afterQuery.endsWith('/')) {
-		// 				return false
-		// 			}
-		// 			return true
-		// 		})
-		// 		.map((item) => {
-		// 			const fullPath = path.join(workspacePath, item.path)
-		// 			const isDirectory = fs.lstatSync(fullPath).isDirectory()
-		// 			return {
-		// 				...item,
-		// 				path: item.path.toPosix(),
-		// 				type: isDirectory ? ("folder" as const) : ("file" as const),
-		// 			}
-		// 		})
-		// }
 
-		return [...inc,...verifiedResults,].filter((item) => {
-			return item.type !== "folder"
-		})
+		return [...inc, ...verifiedResults].filter((item) => item.type !== "folder")
 	} catch (error) {
 		console.error("Error in searchWorkspaceFiles:", error)
 		return []

@@ -4,7 +4,6 @@ import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import type { ProviderSettings } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"
 
 import { inputEventTransform } from "../transforms"
 
@@ -33,9 +32,9 @@ export const IFlow = ({ apiConfiguration, setApiConfigurationField }: IFlowProps
 				value={apiConfiguration?.iflowApiKey || ""}
 				type="password"
 				onInput={handleInputChange("iflowApiKey")}
-				placeholder={"iFlow API Key"}
+				placeholder={t("settings:placeholders.apiKey")}
 				className="w-full">
-				<label className="block font-medium mb-1">{"iFlow API Key"}</label>
+				<label className="block font-medium mb-1">iFlow API Key</label>
 			</VSCodeTextField>
 			<div className="text-sm text-vscode-descriptionForeground -mt-2">
 				{t("settings:providers.apiKeyStorageNotice")}

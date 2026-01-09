@@ -100,7 +100,7 @@ const CodeAccordian = ({
 					)}
 					{onJumpToFile && path && (
 						<span
-							className="codicon codicon-link-external mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+							className="codicon codicon-link-external mr-1"
 							style={{ fontSize: 13.5 }}
 							onClick={(e) => {
 								e.stopPropagation()

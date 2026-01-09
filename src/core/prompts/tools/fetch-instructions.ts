@@ -1,5 +1,3 @@
-import { OpenAIToolDefinition } from "./types"
-
 /**
  * Generates the fetch_instructions tool description.
  * @param enableMcpServerCreation - Whether to include MCP server creation task.
@@ -32,31 +30,4 @@ Parameters:
 ${tasks}
 
 ${example}`
-}
-
-export function getFetchInstructionsOpenAIToolDefinition(enableMcpServerCreation?: boolean): OpenAIToolDefinition {
-	const taskValues = enableMcpServerCreation !== false
-		? "create_mcp_server, create_mode"
-		: "create_mode"
-
-	return {
-		type: "function",
-		function: {
-			name: "fetch_instructions",
-			description: "Request to fetch instructions to perform a task",
-			parameters: {
-				type: "object",
-				properties: {
-					task: {
-						type: "string",
-						description: `The task to get instructions for. This can take the following values: ${taskValues}`,
-						enum: enableMcpServerCreation !== false
-							? ["create_mcp_server", "create_mode"]
-							: ["create_mode"]
-					}
-				},
-				required: ["task"]
-			}
-		}
-	}
 }

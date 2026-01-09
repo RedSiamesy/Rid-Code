@@ -21,15 +21,12 @@ export function formatReminderSection(todoList?: TodoItem[]): string {
 		"",
 	]
 
-	// lines.push("| # | Content | Status |")
-	// lines.push("|---|---------|--------|")
-	let l:any[] = []
+	lines.push("| # | Content | Status |")
+	lines.push("|---|---------|--------|")
 	todoList.forEach((item, idx) => {
 		const escapedContent = item.content.replace(/\\/g, "\\\\").replace(/\|/g, "\\|")
-		// lines.push(`| ${idx + 1} | ${escapedContent} | ${statusMap[item.status] || item.status} |`)
-		l.push({ index: idx + 1, content: escapedContent, status: statusMap[item.status] || item.status })
+		lines.push(`| ${idx + 1} | ${escapedContent} | ${statusMap[item.status] || item.status} |`)
 	})
-	lines.push(`${JSON.stringify(l)}`)
 	lines.push("")
 
 	lines.push(

@@ -1,11 +1,10 @@
-import { iFlowModels, iFlowDefaultModelId } from "@roo-code/types"
+import { iFlowDefaultModelId, iFlowModels } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import type { ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
-import { RiddlerHandler } from "./providers-rid"
+import { RiddlerHandler } from "./rid-providers/providers-new"
 
 export class IFlowHandler extends RiddlerHandler {
 	constructor(options: ApiHandlerOptions) {

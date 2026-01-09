@@ -12,7 +12,3 @@ export type ToolArgs = {
 	settings?: Record<string, any>
 	experiments?: Record<string, boolean>
 }
-
-import OpenAI from "openai"
-
-export type OpenAIToolDefinition = OpenAI.ChatCompletionTool

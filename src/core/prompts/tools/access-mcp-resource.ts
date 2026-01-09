@@ -1,7 +1,16 @@
-import { ToolArgs, OpenAIToolDefinition } from "./types"
+import { ToolArgs } from "./types"
+import { McpHub } from "../../../services/mcp/McpHub"
+
+/**
+ * Helper function to check if any MCP server has resources available
+ */
+function hasAnyMcpResources(mcpHub: McpHub): boolean {
+	const servers = mcpHub.getServers()
+	return servers.some((server) => server.resources && server.resources.length > 0)
+}
 
 export function getAccessMcpResourceDescription(args: ToolArgs): string | undefined {
-	if (!args.mcpHub) {
+	if (!args.mcpHub || !hasAnyMcpResources(args.mcpHub)) {
 		return undefined
 	}
 	return `## access_mcp_resource
@@ -21,31 +30,4 @@ Example: Requesting to access an MCP resource
 <server_name>weather-server</server_name>
 <uri>weather://san-francisco/current</uri>
 </access_mcp_resource>`
-}
-
-export function getAccessMcpResourceOpenAIToolDefinition(args: ToolArgs): OpenAIToolDefinition | undefined {
-	if (!args.mcpHub) {
-		return undefined
-	}
-	return {
-		type: "function",
-		function: {
-			name: "access_mcp_resource",
-			description: "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.",
-			parameters: {
-				type: "object",
-				properties: {
-					server_name: {
-						type: "string",
-						description: "The name of the MCP server providing the resource"
-					},
-					uri: {
-						type: "string",
-						description: "The URI identifying the specific resource to access"
-					}
-				},
-				required: ["server_name", "uri"]
-			}
-		}
-	}
 }

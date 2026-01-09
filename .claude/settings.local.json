@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//c/Users/wxyri/Documents/Rid-Code-3.25.4-bk/webview-ui/src/i18n/locales/**)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}

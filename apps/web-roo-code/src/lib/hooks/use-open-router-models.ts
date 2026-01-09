@@ -33,7 +33,7 @@ export type OpenRouterModel = z.infer<typeof openRouterModelSchema>
 export type OpenRouterModelRecord = Record<string, OpenRouterModel & { modelInfo: ModelInfo }>
 
 export const getOpenRouterModels = async (): Promise<OpenRouterModelRecord> => {
-	const response = await fetch("https://riddler.mynatapp.cc/llm/openrouter/v1/models")
+	const response = await fetch("https://openrouter.ai/api/v1/models")
 
 	if (!response.ok) {
 		console.error("Failed to fetch OpenRouter models")

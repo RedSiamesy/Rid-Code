@@ -46,4 +46,9 @@ logs
 .qodo/
 .vercel
 .roo/mcp.json
-docs/
+
+# Qdrant
+qdrant_storage/
+
+# Architect plans
+plans/

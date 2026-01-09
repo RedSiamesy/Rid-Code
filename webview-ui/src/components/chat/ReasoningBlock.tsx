@@ -16,8 +16,7 @@ interface ReasoningBlockProps {
 
 export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockProps) => {
 	const { t } = useTranslation()
-	// const { reasoningBlockCollapsed } = useExtensionState()
-	const reasoningBlockCollapsed = true
+	const { reasoningBlockCollapsed } = useExtensionState()
 
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 

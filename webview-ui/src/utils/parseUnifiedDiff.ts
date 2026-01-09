@@ -1,4 +1,4 @@
-import * as diff from "diff"
+import { parsePatch } from "diff"
 
 export interface DiffLine {
 	oldLineNum: number | null
@@ -17,11 +17,11 @@ export function parseUnifiedDiff(source: string, filePath?: string): DiffLine[] 
 	if (!source) return []
 
 	try {
-		const patches = diff.parsePatch(source)
+		const patches = parsePatch(source)
 		if (!patches || patches.length === 0) return []
 
 		const patch = filePath
-			? (patches.find((p:any) =>
+			? (patches.find((p) =>
 					[p.newFileName, p.oldFileName].some(
 						(n) => typeof n === "string" && (n === filePath || (n as string).endsWith("/" + filePath)),
 					),

@@ -4,7 +4,6 @@ import { z } from "zod"
 import {
 	type ModelInfo,
 	isModelParameter,
-	OPEN_ROUTER_COMPUTER_USE_MODELS,
 	OPEN_ROUTER_REASONING_BUDGET_MODELS,
 	OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS,
 	anthropicModels,
@@ -97,7 +96,7 @@ type OpenRouterModelEndpointsResponse = z.infer<typeof openRouterModelEndpointsR
 
 export async function getOpenRouterModels(options?: ApiHandlerOptions): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/llm/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelsResponse>(`${baseURL}/models`)
@@ -116,7 +115,7 @@ export async function getOpenRouterModels(options?: ApiHandlerOptions): Promise<
 				continue
 			}
 
-			models[id] = parseOpenRouterModel({
+			const parsedModel = parseOpenRouterModel({
 				id,
 				model,
 				inputModality: architecture?.input_modalities,
@@ -124,6 +123,8 @@ export async function getOpenRouterModels(options?: ApiHandlerOptions): Promise<
 				maxTokens: top_provider?.max_completion_tokens,
 				supportedParameters: supported_parameters,
 			})
+
+			models[id] = parsedModel
 		}
 	} catch (error) {
 		console.error(
@@ -143,7 +144,7 @@ export async function getOpenRouterModelEndpoints(
 	options?: ApiHandlerOptions,
 ): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
-	const baseURL = options?.openRouterBaseUrl || "https://riddler.mynatapp.cc/llm/openrouter/v1"
+	const baseURL = options?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 
 	try {
 		const response = await axios.get<OpenRouterModelEndpointsResponse>(`${baseURL}/models/${modelId}/endpoints`)
@@ -206,6 +207,8 @@ export const parseOpenRouterModel = ({
 
 	const supportsPromptCache = typeof cacheReadsPrice !== "undefined" // some models support caching but don't charge a cacheWritesPrice, e.g. GPT-5
 
+	const supportsNativeTools = supportedParameters ? supportedParameters.includes("tools") : undefined
+
 	const modelInfo: ModelInfo = {
 		maxTokens: maxTokens || Math.ceil(model.context_length * 0.2),
 		contextWindow: model.context_length,
@@ -217,13 +220,10 @@ export const parseOpenRouterModel = ({
 		cacheReadsPrice,
 		description: model.description,
 		supportsReasoningEffort: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
+		supportsNativeTools,
 		supportedParameters: supportedParameters ? supportedParameters.filter(isModelParameter) : undefined,
-	}
-
-	// The OpenRouter model definition doesn't give us any hints about
-	// computer use, so we need to set that manually.
-	if (OPEN_ROUTER_COMPUTER_USE_MODELS.has(id)) {
-		modelInfo.supportsComputerUse = true
+		// Default to native tool protocol when native tools are supported
+		defaultToolProtocol: supportsNativeTools ? ("native" as const) : undefined,
 	}
 
 	if (OPEN_ROUTER_REASONING_BUDGET_MODELS.has(id)) {
@@ -253,6 +253,17 @@ export const parseOpenRouterModel = ({
 		modelInfo.maxTokens = anthropicModels["claude-opus-4-1-20250805"].maxTokens
 	}
 
+	// Ensure correct reasoning handling for Claude Haiku 4.5 on OpenRouter
+	// Use budget control and disable effort-based reasoning fallback
+	if (id === "anthropic/claude-haiku-4.5") {
+		modelInfo.supportsReasoningBudget = true
+		modelInfo.supportsReasoningEffort = false
+	}
+
+	// Set horizon-alpha model to 32k max tokens
+	if (id === "openrouter/horizon-alpha") {
+		modelInfo.maxTokens = 32768
+	}
 
 	// Set horizon-beta model to 32k max tokens
 	if (id === "openrouter/horizon-beta") {

@@ -28,7 +28,7 @@ export const BatchFilePermission = memo(({ files = [], onPermissionResponse, ts 
 	return (
 		<div className="pt-[5px]">
 			{/* Individual files */}
-			<div className="bg-vscode-editor-background flex flex-col gap-0  rounded-md p-1 ml-6 mr-1">
+			<div className="bg-vscode-editor-background flex flex-col gap-0 rounded-md p-1 ml-6 mr-1">
 				{files.map((file) => {
 					return (
 						<div key={`${file.path}-${ts}`} className="flex items-center gap-2">
@@ -50,9 +50,7 @@ export const BatchFilePermission = memo(({ files = [], onPermissionResponse, ts 
 										</span>
 									</PathTooltip>
 									<div className="flex-grow"></div>
-									<span
-										className={`codicon codicon-link-external w-4 shrink-0 codicon codicon-link-external opacity-0 group-hover:opacity-100 transition-opacity`}
-									/>
+									<span className="codicon codicon-link-external w-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
 								</ToolUseBlockHeader>
 							</ToolUseBlock>
 						</div>

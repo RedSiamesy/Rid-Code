@@ -29,11 +29,10 @@ describe("experiments", () => {
 				powerSteering: false,
 				multiFileApplyDiff: false,
 				preventFocusDisruption: false,
-				allowedMultiCall: false,
-				useToolCalling: false,
 				imageGeneration: false,
 				runSlashCommand: false,
-				useNativePrompt: false,
+				multipleNativeToolCalls: false,
+				customTools: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(false)
 		})
@@ -43,11 +42,10 @@ describe("experiments", () => {
 				powerSteering: true,
 				multiFileApplyDiff: false,
 				preventFocusDisruption: false,
-				allowedMultiCall: false,
-				useToolCalling: false,
 				imageGeneration: false,
 				runSlashCommand: false,
-				useNativePrompt: false,
+				multipleNativeToolCalls: false,
+				customTools: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(true)
 		})
@@ -57,11 +55,10 @@ describe("experiments", () => {
 				powerSteering: false,
 				multiFileApplyDiff: false,
 				preventFocusDisruption: false,
-				allowedMultiCall: false,
-				useToolCalling: false,
 				imageGeneration: false,
 				runSlashCommand: false,
-				useNativePrompt: false,
+				multipleNativeToolCalls: false,
+				customTools: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(false)
 		})

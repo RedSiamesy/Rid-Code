@@ -1,153 +1,239 @@
-import Anthropic from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
 
-import { RooCodeEventName } from "@roo-code/types"
+import { RooCodeEventName, type HistoryItem } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { Task } from "../task/Task"
-import {
-	ToolResponse,
-	ToolUse,
-	AskApproval,
-	HandleError,
-	PushToolResult,
-	RemoveClosingTag,
-	ToolDescription,
-	AskFinishSubTaskApproval,
-} from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
 import { Package } from "../../shared/package"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ToolUse } from "../../shared/tools"
+import { t } from "../../i18n"
 
-export async function attemptCompletionTool(
-	cline: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-	toolDescription: ToolDescription,
-	askFinishSubTaskApproval: AskFinishSubTaskApproval,
-) {
-	let result: string | undefined = block.params.result
-	const command: string | undefined = block.params.command
+interface AttemptCompletionParams {
+	result: string
+	command?: string
+}
 
-	// Get the setting for preventing completion with open todos from VSCode configuration
-	const preventCompletionWithOpenTodos = vscode.workspace
-		.getConfiguration(Package.name)
-		.get<boolean>("preventCompletionWithOpenTodos", false)
+export interface AttemptCompletionCallbacks extends ToolCallbacks {
+	askFinishSubTaskApproval: () => Promise<boolean>
+	toolDescription: () => string
+}
 
-	// Check if there are incomplete todos (only if the setting is enabled)
-	const hasIncompleteTodos = cline.todoList && cline.todoList.some((todo) => todo.status !== "completed")
+/**
+ * Interface for provider methods needed by AttemptCompletionTool for delegation handling.
+ */
+interface DelegationProvider {
+	getTaskWithId(id: string): Promise<{ historyItem: HistoryItem }>
+	reopenParentFromDelegation(params: {
+		parentTaskId: string
+		childTaskId: string
+		completionResultSummary: string
+	}): Promise<void>
+}
 
-	if (preventCompletionWithOpenTodos && hasIncompleteTodos) {
-		cline.consecutiveMistakeCount++
-		cline.recordToolError("attempt_completion")
+export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
+	readonly name = "attempt_completion" as const
 
-		pushToolResult(
-			formatResponse.toolError(
-				"Cannot complete task while there are incomplete todos. Please finish all todos before attempting completion.",
-			),
-		)
-
-		return
+	parseLegacy(params: Partial<Record<string, string>>): AttemptCompletionParams {
+		return {
+			result: params.result || "",
+			command: params.command,
+		}
 	}
 
-	try {
-		const lastMessage = cline.clineMessages.at(-1)
+	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
+		const { result } = params
+		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
-		if (block.partial) {
-			if (command) {
-				// the attempt_completion text is done, now we're getting command
-				// remove the previous partial attempt_completion ask, replace with say, post state to webview, then stream command
+		// Prevent attempt_completion if any tool failed in the current turn
+		if (task.didToolFailInCurrentTurn) {
+			const errorMsg = t("common:errors.attempt_completion_tool_failed")
 
-				// const secondLastMessage = cline.clineMessages.at(-2)
-				if (lastMessage && lastMessage.ask === "command") {
-					// update command
-					await cline.ask("command", removeClosingTag("command", command), block.partial).catch(() => {})
-				} else {
-					// last message is completion_result
-					// we have command string, which means we have the result as well, so finish it (doesnt have to exist yet)
-					await cline.say("completion_result", removeClosingTag("result", result), undefined, false)
-
-					TelemetryService.instance.captureTaskCompleted(cline.taskId)
-					cline.emit(RooCodeEventName.TaskCompleted, cline.taskId, cline.getTokenUsage(), cline.toolUsage)
-
-					await cline.ask("command", removeClosingTag("command", command), block.partial).catch(() => {})
-				}
-			} else {
-				// No command, still outputting partial result
-				await cline.say("completion_result", removeClosingTag("result", result), undefined, block.partial)
-			}
+			await task.say("error", errorMsg)
+			pushToolResult(formatResponse.toolError(errorMsg))
 			return
-		} else {
-			if (!result) {
-				const lastApiMessage = cline.apiConversationHistory[cline.apiConversationHistory.length - 2].role === "assistant" ? cline.apiConversationHistory[cline.apiConversationHistory.length - 2] : cline.apiConversationHistory[cline.apiConversationHistory.length - 1]
+		}
 
-				if (typeof lastApiMessage.content === "string") {
-					// If the last API message exists, use it as the result
-					result = lastApiMessage.content
-				} else if (lastApiMessage.content[0].type === "text") {
-					result = lastApiMessage.content[0].text
-				} 
-				if (lastApiMessage.role !== "assistant" || !result) {
-					cline.consecutiveMistakeCount++
-					cline.recordToolError("attempt_completion")
-					pushToolResult(await cline.sayAndCreateMissingParamError("attempt_completion", "result"))
-					return
-				}
-			}
+		const preventCompletionWithOpenTodos = vscode.workspace
+			.getConfiguration(Package.name)
+			.get<boolean>("preventCompletionWithOpenTodos", false)
 
-			cline.consecutiveMistakeCount = 0
+		const hasIncompleteTodos = task.todoList && task.todoList.some((todo) => todo.status !== "completed")
 
-			// Command execution is permanently disabled in attempt_completion
-			// Users must use execute_command tool separately before attempt_completion
-			await cline.say("completion_result", result, undefined, false)
-			TelemetryService.instance.captureTaskCompleted(cline.taskId)
-			cline.emit(RooCodeEventName.TaskCompleted, cline.taskId, cline.getTokenUsage(), cline.toolUsage)
+		if (preventCompletionWithOpenTodos && hasIncompleteTodos) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("attempt_completion")
 
-			if (cline.parentTask) {
-				const didApprove = await askFinishSubTaskApproval()
-
-				if (!didApprove) {
-					return
-				}
-				
-				const summary = await cline.summarizeSubTaskContext()
-
-				// tell the provider to remove the current subtask and resume the previous task in the stack
-				await cline.providerRef.deref()?.finishSubTask(`## Result \n${result} \n\n## Summary  \n${summary}\n\n`)
-				return
-			}
-
-			// We already sent completion_result says, an
-			// empty string asks relinquishes control over
-			// button and field.
-			const { response, text, images } = await cline.ask("completion_result", "", false)
-
-			// Signals to recursive loop to stop (for now
-			// cline never happens since yesButtonClicked
-			// will trigger a new task).
-			if (response === "yesButtonClicked") {
-				pushToolResult("")
-				return
-			}
-
-			await cline.say("user_feedback", text ?? "", images)
-			const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
-
-			toolResults.push({
-				type: "text",
-				text: `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`,
-			})
-
-			toolResults.push(...formatResponse.imageBlocks(images))
-			cline.userMessageContent.push({ type: "text", text: `${toolDescription()} Result:` })
-			cline.userMessageContent.push(...toolResults)
+			pushToolResult(
+				formatResponse.toolError(
+					"Cannot complete task while there are incomplete todos. Please finish all todos before attempting completion.",
+				),
+			)
 
 			return
 		}
-	} catch (error) {
-		await handleError("inspecting site", error)
-		return
+
+		try {
+			if (!result) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("attempt_completion")
+				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "result"))
+				return
+			}
+
+			task.consecutiveMistakeCount = 0
+
+			await task.say("completion_result", result, undefined, false)
+
+			// Force final token usage update before emitting TaskCompleted
+			// This ensures the most recent stats are captured regardless of throttle timer
+			// and properly updates the snapshot to prevent redundant emissions
+			task.emitFinalTokenUsageUpdate()
+
+			TelemetryService.instance.captureTaskCompleted(task.taskId)
+			task.emit(RooCodeEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
+
+			// Check for subtask using parentTaskId (metadata-driven delegation)
+			if (task.parentTaskId) {
+				// Check if this subtask has already completed and returned to parent
+				// to prevent duplicate tool_results when user revisits from history
+				const provider = task.providerRef.deref() as DelegationProvider | undefined
+				if (provider) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(task.taskId)
+						const status = historyItem?.status
+
+						if (status === "completed") {
+							// Subtask already completed - skip delegation flow entirely
+							// Fall through to normal completion ask flow below (outside this if block)
+							// This shows the user the completion result and waits for acceptance
+							// without injecting another tool_result to the parent
+						} else if (status === "active") {
+							// Normal subtask completion - do delegation
+							const delegated = await this.delegateToParent(
+								task,
+								result,
+								provider,
+								askFinishSubTaskApproval,
+								pushToolResult,
+							)
+							if (delegated) return
+						} else {
+							// Unexpected status (undefined or "delegated") - log error and skip delegation
+							// undefined indicates a bug in status persistence during child creation
+							// "delegated" would mean this child has its own grandchild pending (shouldn't reach attempt_completion)
+							console.error(
+								`[AttemptCompletionTool] Unexpected child task status "${status}" for task ${task.taskId}. ` +
+									`Expected "active" or "completed". Skipping delegation to prevent data corruption.`,
+							)
+							// Fall through to normal completion ask flow
+						}
+					} catch (err) {
+						// If we can't get the history, log error and skip delegation
+						console.error(
+							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
+								`Skipping delegation.`,
+						)
+						// Fall through to normal completion ask flow
+					}
+				}
+			}
+
+			const { response, text, images } = await task.ask("completion_result", "", false)
+
+			if (response === "yesButtonClicked") {
+				return
+			}
+
+			// User provided feedback - push tool result to continue the conversation
+			await task.say("user_feedback", text ?? "", images)
+
+			const feedbackText = `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`
+			pushToolResult(formatResponse.toolResult(feedbackText, images))
+		} catch (error) {
+			await handleError("inspecting site", error as Error)
+		}
+	}
+
+	/**
+	 * Handles the common delegation flow when a subtask completes.
+	 * Returns true if delegation was performed and the caller should return early.
+	 */
+	private async delegateToParent(
+		task: Task,
+		result: string,
+		provider: DelegationProvider,
+		askFinishSubTaskApproval: () => Promise<boolean>,
+		pushToolResult: (result: string) => void,
+	): Promise<boolean> {
+		const didApprove = await askFinishSubTaskApproval()
+
+		if (!didApprove) {
+			pushToolResult(formatResponse.toolDenied())
+			return true
+		}
+
+		let summary = ""
+		try {
+			summary = await task.summarizeSubTaskContext()
+		} catch (error) {
+			console.error(
+				`[AttemptCompletionTool] Failed to summarize subtask ${task.taskId}: ${(error as Error)?.message ?? String(error)}`,
+			)
+		}
+
+		const completionResultSummary = `## Result \n${result}\n\n## Summary \n${summary}\n`
+
+		pushToolResult("")
+
+		await provider.reopenParentFromDelegation({
+			parentTaskId: task.parentTaskId!,
+			childTaskId: task.taskId,
+			completionResultSummary,
+		})
+
+		return true
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"attempt_completion">): Promise<void> {
+		const result: string | undefined = block.params.result
+		const command: string | undefined = block.params.command
+
+		const lastMessage = task.clineMessages.at(-1)
+
+		if (command) {
+			if (lastMessage && lastMessage.ask === "command") {
+				await task
+					.ask("command", this.removeClosingTag("command", command, block.partial), block.partial)
+					.catch(() => {})
+			} else {
+				await task.say(
+					"completion_result",
+					this.removeClosingTag("result", result, block.partial),
+					undefined,
+					false,
+				)
+
+				// Force final token usage update before emitting TaskCompleted for consistency
+				task.emitFinalTokenUsageUpdate()
+
+				TelemetryService.instance.captureTaskCompleted(task.taskId)
+				task.emit(RooCodeEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
+
+				await task
+					.ask("command", this.removeClosingTag("command", command, block.partial), block.partial)
+					.catch(() => {})
+			}
+		} else {
+			await task.say(
+				"completion_result",
+				this.removeClosingTag("result", result, block.partial),
+				undefined,
+				block.partial,
+			)
+		}
 	}
 }
+
+export const attemptCompletionTool = new AttemptCompletionTool()

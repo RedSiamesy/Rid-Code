@@ -170,7 +170,16 @@ const mockContext = {
 // Instead of extending McpHub, create a mock that implements just what we need
 const createMockMcpHub = (withServers: boolean = false): McpHub =>
 	({
-		getServers: () => (withServers ? [{ name: "test-server", disabled: false }] : []),
+		getServers: () =>
+			withServers
+				? [
+						{
+							name: "test-server",
+							disabled: false,
+							resources: [{ uri: "test://resource", name: "Test Resource" }],
+						},
+					]
+				: [],
 		getMcpServersPath: async () => "/mock/mcp/path",
 		getMcpSettingsFilePath: async () => "/mock/settings/path",
 		dispose: async () => {},
@@ -193,7 +202,7 @@ describe("addCustomInstructions", () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
-			false, // supportsComputerUse
+			false, // supportsImages
 			undefined, // mcpHub
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
@@ -216,7 +225,7 @@ describe("addCustomInstructions", () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
-			false, // supportsComputerUse
+			false, // supportsImages
 			undefined, // mcpHub
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
@@ -241,7 +250,7 @@ describe("addCustomInstructions", () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
-			false, // supportsComputerUse
+			false, // supportsImages
 			mockMcpHub, // mcpHub
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
@@ -267,7 +276,7 @@ describe("addCustomInstructions", () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
-			false, // supportsComputerUse
+			false, // supportsImages
 			mockMcpHub, // mcpHub
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
@@ -291,7 +300,7 @@ describe("addCustomInstructions", () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
-			false, // supportsComputerUse
+			false, // supportsImages
 			undefined, // mcpHub
 			undefined, // diffStrategy
 			undefined, // browserViewportSize

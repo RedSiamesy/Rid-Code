@@ -26,7 +26,9 @@
 		"shareSuccessOrganization": "Organisationslink in die Zwischenablage kopiert",
 		"shareSuccessPublic": "Öffentlicher Link in die Zwischenablage kopiert",
 		"openInCloud": "Aufgabe in Roo Code Cloud öffnen",
-		"openInCloudIntro": "Überwache oder interagiere mit Roo von überall aus. Scanne, klicke oder kopiere zum Öffnen."
+		"openInCloudIntro": "Überwache oder interagiere mit Roo von überall aus. Scanne, klicke oder kopiere zum Öffnen.",
+		"openApiHistory": "API-Verlauf öffnen",
+		"openUiHistory": "UI-Verlauf öffnen"
 	},
 	"unpin": "Lösen von oben",
 	"pin": "Anheften",
@@ -61,7 +63,7 @@
 		"tooltip": "Diese Aktion genehmigen"
 	},
 	"runCommand": {
-		"title": "Befehl ausführen",
+		"title": "Befehl",
 		"tooltip": "Diesen Befehl ausführen"
 	},
 	"proceedWhileRunning": {
@@ -85,24 +87,17 @@
 		"tooltip": "Aktuelle Operation abbrechen"
 	},
 	"scrollToBottom": "Zum Chat-Ende scrollen",
-	"about": "Generiere, überarbeite und debugge Code mit KI-Unterstützung. Weitere Informationen findest du in unserer <DocsLink>Dokumentation</DocsLink>.",
-	"onboarding": "<strong>Deine Aufgabenliste in diesem Arbeitsbereich ist leer.</strong> Beginne mit der Eingabe einer Aufgabe unten. Du bist dir nicht sicher, wie du anfangen sollst? Lies mehr darüber, was Roo für dich tun kann, in <DocsLink>den Dokumenten</DocsLink>.",
+	"about": "Roo Code ist ein ganzes KI-Entwicklerteam in deinem Editor.",
+	"docs": "Schau in unsere <DocsLink>Dokumentation</DocsLink>, um mehr zu erfahren.",
+	"onboarding": "Deine Aufgabenliste in diesem Arbeitsbereich ist leer.",
 	"rooTips": {
-		"boomerangTasks": {
-			"title": "Aufgaben-Orchestrierung",
-			"description": "Teile Aufgaben in kleinere, überschaubare Teile auf."
-		},
-		"stickyModels": {
-			"title": "Sticky Modi",
-			"description": "Jeder Modus merkt sich dein zuletzt verwendetes Modell"
-		},
-		"tools": {
-			"title": "Tools",
-			"description": "Erlaube der KI, Probleme durch Surfen im Web, Ausführen von Befehlen und mehr zu lösen."
-		},
 		"customizableModes": {
 			"title": "Anpassbare Modi",
-			"description": "Spezialisierte Personas mit eigenem Verhalten und zugewiesenen Modellen"
+			"description": "Spezialisierte Personas, die bei der Sache bleiben und liefern."
+		},
+		"modelAgnostic": {
+			"title": "Bring dein eigenes Modell mit",
+			"description": "Verwende deinen eigenen Anbieter-Schlüssel oder führe sogar lokale Inferenz aus – kein Aufschlag, keine Bindung, keine Einschränkungen"
 		}
 	},
 	"selectMode": "Interaktionsmodus auswählen",
@@ -110,6 +105,7 @@
 	"enhancePrompt": "Prompt mit zusätzlichem Kontext verbessern",
 	"addImages": "Bilder zur Nachricht hinzufügen",
 	"sendMessage": "Nachricht senden",
+	"pressToSend": "Drücke {{keyCombination}} zum Senden",
 	"stopTts": "Text-in-Sprache beenden",
 	"typeMessage": "Nachricht eingeben...",
 	"typeTask": "Gib deine Aufgabe hier ein...",
@@ -125,7 +121,7 @@
 		"searchPlaceholder": "Modi suchen...",
 		"noResults": "Keine Ergebnisse gefunden"
 	},
-	"errorReadingFile": "Fehler beim Lesen der Datei:",
+	"errorReadingFile": "Fehler beim Lesen der Datei",
 	"noValidImages": "Keine gültigen Bilder wurden verarbeitet",
 	"separator": "Trennlinie",
 	"edit": "Bearbeiten...",
@@ -141,13 +137,31 @@
 		"failed": "API-Anfrage fehlgeschlagen",
 		"streaming": "API-Anfrage...",
 		"cancelled": "API-Anfrage abgebrochen",
-		"streamingFailed": "API-Streaming fehlgeschlagen"
+		"streamingFailed": "API-Streaming fehlgeschlagen",
+		"rateLimitWait": "Ratenbegrenzung",
+		"errorTitle": "Anbieter-Fehler {{code}}",
+		"errorMessage": {
+			"docs": "Dokumentation",
+			"goToSettings": "Einstellungen",
+			"400": "Der Anbieter konnte die Anfrage nicht wie gestellt verarbeiten. Beende die Aufgabe und versuche einen anderen Ansatz.",
+			"401": "Authentifizierung beim Anbieter fehlgeschlagen. Bitte überprüfe deine API-Schlüssel-Konfiguration.",
+			"402": "Es sieht so aus, als ob dir die Guthaben/Credits in deinem Konto ausgegangen sind. Gehe zu deinem Anbieter und füge mehr hinzu, um fortzufahren.",
+			"403": "Nicht autorisiert. Dein API-Schlüssel ist gültig, aber der Anbieter hat sich geweigert, diese Anfrage zu erfüllen.",
+			"429": "Zu viele Anfragen. Du wirst vom Anbieter rate-limitiert. Bitte warte ein wenig, bevor du den nächsten API-Aufruf machst.",
+			"500": "Fehler auf dem Server des Anbieters. Es stimmt etwas mit der Anbieterseite nicht, mit deiner Anfrage stimmt alles.",
+			"unknown": "Unbekannter API-Fehler. Bitte kontaktiere den Roo Code Support.",
+			"connection": "Verbindungsfehler. Stelle sicher, dass du eine funktionierende Internetverbindung hast.",
+			"claudeCodeNotAuthenticated": "Du musst dich anmelden, um Claude Code zu verwenden. Gehe zu den Einstellungen und klicke auf \"Bei Claude Code anmelden\", um dich zu authentifizieren."
+		}
 	},
 	"checkpoint": {
 		"regular": "Checkpoint",
 		"initializingWarning": "Checkpoint wird noch initialisiert... Falls dies zu lange dauert, kannst du Checkpoints in den <settingsLink>Einstellungen</settingsLink> deaktivieren und deine Aufgabe neu starten.",
 		"menu": {
 			"viewDiff": "Unterschiede anzeigen",
+			"more": "Weitere Optionen",
+			"viewDiffFromInit": "Alle Änderungen anzeigen",
+			"viewDiffWithCurrent": "Änderungen seit diesem Checkpoint anzeigen",
 			"restore": "Checkpoint wiederherstellen",
 			"restoreFiles": "Dateien wiederherstellen",
 			"restoreFilesDescription": "Stellt die Dateien deines Projekts auf einen Snapshot zurück, der an diesem Punkt erstellt wurde.",
@@ -163,66 +177,68 @@
 		"wantsToFetch": "Roo möchte detaillierte Anweisungen abrufen, um bei der aktuellen Aufgabe zu helfen"
 	},
 	"fileOperations": {
-		"wantsToRead": "Roo möchte diese Datei lesen:",
-		"wantsToReadAndXMore": "Roo möchte diese Datei und {{count}} weitere lesen:",
-		"wantsToReadOutsideWorkspace": "Roo möchte diese Datei außerhalb des Arbeitsbereichs lesen:",
-		"didRead": "Roo hat diese Datei gelesen:",
-		"wantsToEdit": "Roo möchte diese Datei bearbeiten:",
-		"wantsToEditOutsideWorkspace": "Roo möchte diese Datei außerhalb des Arbeitsbereichs bearbeiten:",
-		"wantsToEditProtected": "Roo möchte eine geschützte Konfigurationsdatei bearbeiten:",
-		"wantsToCreate": "Roo möchte eine neue Datei erstellen:",
-		"wantsToSearchReplace": "Roo möchte in dieser Datei suchen und ersetzen:",
-		"didSearchReplace": "Roo hat Suchen und Ersetzen in dieser Datei durchgeführt:",
-		"wantsToInsert": "Roo möchte Inhalte in diese Datei einfügen:",
-		"wantsToInsertWithLineNumber": "Roo möchte Inhalte in diese Datei in Zeile {{lineNumber}} einfügen:",
-		"wantsToInsertAtEnd": "Roo möchte Inhalte am Ende dieser Datei anhängen:",
-		"wantsToReadMultiple": "Roo möchte mehrere Dateien lesen:",
-		"wantsToApplyBatchChanges": "Roo möchte Änderungen an mehreren Dateien vornehmen:",
-		"wantsToGenerateImage": "Roo möchte ein Bild generieren:",
-		"wantsToGenerateImageOutsideWorkspace": "Roo möchte ein Bild außerhalb des Arbeitsbereichs generieren:",
-		"wantsToGenerateImageProtected": "Roo möchte ein Bild an einem geschützten Ort generieren:",
-		"didGenerateImage": "Roo hat ein Bild generiert:"
+		"wantsToRead": "Roo möchte diese Datei lesen",
+		"wantsToReadAndXMore": "Roo möchte diese Datei und {{count}} weitere lesen",
+		"wantsToReadOutsideWorkspace": "Roo möchte diese Datei außerhalb des Arbeitsbereichs lesen",
+		"didRead": "Roo hat diese Datei gelesen",
+		"wantsToEdit": "Roo möchte diese Datei bearbeiten",
+		"wantsToEditOutsideWorkspace": "Roo möchte diese Datei außerhalb des Arbeitsbereichs bearbeiten",
+		"wantsToEditProtected": "Roo möchte eine geschützte Konfigurationsdatei bearbeiten",
+		"wantsToCreate": "Roo möchte eine neue Datei erstellen",
+		"wantsToSearchReplace": "Roo möchte in dieser Datei suchen und ersetzen",
+		"didSearchReplace": "Roo hat Suchen und Ersetzen in dieser Datei durchgeführt",
+		"wantsToInsert": "Roo möchte Inhalte in diese Datei einfügen",
+		"wantsToInsertWithLineNumber": "Roo möchte Inhalte in diese Datei in Zeile {{lineNumber}} einfügen",
+		"wantsToInsertAtEnd": "Roo möchte Inhalte am Ende dieser Datei anhängen",
+		"wantsToReadMultiple": "Roo möchte mehrere Dateien lesen",
+		"wantsToApplyBatchChanges": "Roo möchte Änderungen an mehreren Dateien vornehmen",
+		"wantsToGenerateImage": "Roo möchte ein Bild generieren",
+		"wantsToGenerateImageOutsideWorkspace": "Roo möchte ein Bild außerhalb des Arbeitsbereichs generieren",
+		"wantsToGenerateImageProtected": "Roo möchte ein Bild an einem geschützten Ort generieren",
+		"didGenerateImage": "Roo hat ein Bild generiert"
 	},
 	"directoryOperations": {
-		"wantsToViewTopLevel": "Roo möchte die Dateien auf oberster Ebene in diesem Verzeichnis anzeigen:",
-		"didViewTopLevel": "Roo hat die Dateien auf oberster Ebene in diesem Verzeichnis angezeigt:",
-		"wantsToViewRecursive": "Roo möchte rekursiv alle Dateien in diesem Verzeichnis anzeigen:",
-		"didViewRecursive": "Roo hat rekursiv alle Dateien in diesem Verzeichnis angezeigt:",
-		"wantsToViewDefinitions": "Roo möchte Quellcode-Definitionsnamen in diesem Verzeichnis anzeigen:",
-		"didViewDefinitions": "Roo hat Quellcode-Definitionsnamen in diesem Verzeichnis angezeigt:",
-		"wantsToSearch": "Roo möchte dieses Verzeichnis nach <code>{{regex}}</code> durchsuchen:",
-		"didSearch": "Roo hat dieses Verzeichnis nach <code>{{regex}}</code> durchsucht:",
-		"wantsToSearchOutsideWorkspace": "Roo möchte dieses Verzeichnis (außerhalb des Arbeitsbereichs) nach <code>{{regex}}</code> durchsuchen:",
-		"didSearchOutsideWorkspace": "Roo hat dieses Verzeichnis (außerhalb des Arbeitsbereichs) nach <code>{{regex}}</code> durchsucht:",
-		"wantsToViewTopLevelOutsideWorkspace": "Roo möchte die Dateien auf oberster Ebene in diesem Verzeichnis (außerhalb des Arbeitsbereichs) anzeigen:",
-		"didViewTopLevelOutsideWorkspace": "Roo hat die Dateien auf oberster Ebene in diesem Verzeichnis (außerhalb des Arbeitsbereichs) angezeigt:",
-		"wantsToViewRecursiveOutsideWorkspace": "Roo möchte rekursiv alle Dateien in diesem Verzeichnis (außerhalb des Arbeitsbereichs) anzeigen:",
-		"didViewRecursiveOutsideWorkspace": "Roo hat rekursiv alle Dateien in diesem Verzeichnis (außerhalb des Arbeitsbereichs) angezeigt:",
-		"wantsToViewDefinitionsOutsideWorkspace": "Roo möchte Quellcode-Definitionsnamen in diesem Verzeichnis (außerhalb des Arbeitsbereichs) anzeigen:",
-		"didViewDefinitionsOutsideWorkspace": "Roo hat Quellcode-Definitionsnamen in diesem Verzeichnis (außerhalb des Arbeitsbereichs) angezeigt:"
+		"wantsToViewTopLevel": "Roo möchte die Dateien auf oberster Ebene in diesem Verzeichnis anzeigen",
+		"didViewTopLevel": "Roo hat die Dateien auf oberster Ebene in diesem Verzeichnis angezeigt",
+		"wantsToViewRecursive": "Roo möchte rekursiv alle Dateien in diesem Verzeichnis anzeigen",
+		"didViewRecursive": "Roo hat rekursiv alle Dateien in diesem Verzeichnis angezeigt",
+		"wantsToSearch": "Roo möchte dieses Verzeichnis nach <code>{{regex}}</code> durchsuchen",
+		"didSearch": "Roo hat dieses Verzeichnis nach <code>{{regex}}</code> durchsucht",
+		"wantsToSearchOutsideWorkspace": "Roo möchte dieses Verzeichnis (außerhalb des Arbeitsbereichs) nach <code>{{regex}}</code> durchsuchen",
+		"didSearchOutsideWorkspace": "Roo hat dieses Verzeichnis (außerhalb des Arbeitsbereichs) nach <code>{{regex}}</code> durchsucht",
+		"wantsToViewTopLevelOutsideWorkspace": "Roo möchte die Dateien auf oberster Ebene in diesem Verzeichnis (außerhalb des Arbeitsbereichs) anzeigen",
+		"didViewTopLevelOutsideWorkspace": "Roo hat die Dateien auf oberster Ebene in diesem Verzeichnis (außerhalb des Arbeitsbereichs) angezeigt",
+		"wantsToViewRecursiveOutsideWorkspace": "Roo möchte rekursiv alle Dateien in diesem Verzeichnis (außerhalb des Arbeitsbereichs) anzeigen",
+		"didViewRecursiveOutsideWorkspace": "Roo hat rekursiv alle Dateien in diesem Verzeichnis (außerhalb des Arbeitsbereichs) angezeigt"
 	},
 	"commandOutput": "Befehlsausgabe",
 	"commandExecution": {
+		"abort": "Abbrechen",
 		"running": "Wird ausgeführt",
 		"pid": "PID: {{pid}}",
-		"exited": "Beendet ({{exitCode}})",
-		"manageCommands": "Befehlsberechtigungen verwalten",
-		"commandManagementDescription": "Befehlsberechtigungen verwalten: Klicke auf ✓, um die automatische Ausführung zu erlauben, ✗, um die Ausführung zu verweigern. Muster können ein-/ausgeschaltet oder aus Listen entfernt werden. <settingsLink>Alle Einstellungen anzeigen</settingsLink>",
-		"addToAllowed": "Zur Liste der erlaubten Befehle hinzufügen",
-		"removeFromAllowed": "Von der Liste der erlaubten Befehle entfernen",
-		"addToDenied": "Zur Liste der verweigerten Befehle hinzufügen",
-		"removeFromDenied": "Von der Liste der verweigerten Befehle entfernen",
+		"exitStatus": "Beendet mit Status {{exitCode}}",
+		"manageCommands": "Automatisch genehmigte Befehle",
+		"addToAllowed": "Zur erlaubten Liste hinzufügen",
+		"removeFromAllowed": "Von der erlaubten Liste entfernen",
+		"addToDenied": "Zur verweigerten Liste hinzufügen",
+		"removeFromDenied": "Von der verweigerten Liste entfernen",
 		"abortCommand": "Befehlsausführung abbrechen",
 		"expandOutput": "Ausgabe erweitern",
-		"collapseOutput": "Ausgabe einklappen",
+		"collapseOutput": "Ausgabe reduzieren",
 		"expandManagement": "Befehlsverwaltungsbereich erweitern",
-		"collapseManagement": "Befehlsverwaltungsbereich einklappen"
+		"collapseManagement": "Befehlsverwaltungsbereich reduzieren"
 	},
 	"response": "Antwort",
 	"arguments": "Argumente",
+	"text": {
+		"rooSaid": "Roo hat gesagt"
+	},
+	"feedback": {
+		"youSaid": "Du hast gesagt"
+	},
 	"mcp": {
-		"wantsToUseTool": "Roo möchte ein Tool auf dem {{serverName}} MCP-Server verwenden:",
-		"wantsToAccessResource": "Roo möchte auf eine Ressource auf dem {{serverName}} MCP-Server zugreifen:"
+		"wantsToUseTool": "Roo möchte ein Tool auf dem {{serverName}} MCP-Server verwenden",
+		"wantsToAccessResource": "Roo möchte auf eine Ressource auf dem {{serverName}} MCP-Server zugreifen"
 	},
 	"modes": {
 		"wantsToSwitch": "Roo möchte zum <code>{{mode}}</code>-Modus wechseln",
@@ -231,7 +247,7 @@
 		"didSwitchWithReason": "Roo hat zum <code>{{mode}}</code>-Modus gewechselt, weil: {{reason}}"
 	},
 	"subtasks": {
-		"wantsToCreate": "Roo möchte eine neue Teilaufgabe im <code>{{mode}}</code>-Modus erstellen:",
+		"wantsToCreate": "Roo möchte eine neue Teilaufgabe im <code>{{mode}}</code>-Modus erstellen",
 		"wantsToFinish": "Roo möchte diese Teilaufgabe abschließen",
 		"newTaskContent": "Teilaufgabenanweisungen",
 		"completionContent": "Teilaufgabe abgeschlossen",
@@ -240,53 +256,94 @@
 		"completionInstructions": "Teilaufgabe abgeschlossen! Du kannst die Ergebnisse überprüfen und Korrekturen oder nächste Schritte vorschlagen. Wenn alles gut aussieht, bestätige, um das Ergebnis an die übergeordnete Aufgabe zurückzugeben."
 	},
 	"questions": {
-		"hasQuestion": "Roo hat eine Frage:"
+		"hasQuestion": "Roo hat eine Frage"
 	},
 	"taskCompleted": "Aufgabe abgeschlossen",
+	"modelResponseIncomplete": "Modellantwort unvollständig",
+	"modelResponseErrors": {
+		"noToolsUsed": "Das Modell hat in seiner Antwort keine Tools verwendet. Dies passiert normalerweise, wenn das Modell nur Text/Überlegungen liefert, ohne die erforderlichen Tools aufzurufen, um die Aufgabe zu erledigen.",
+		"noToolsUsedDetails": "Das Modell hat Text/Überlegungen geliefert, aber keine der erforderlichen Tools aufgerufen. Dies deutet normalerweise darauf hin, dass das Modell die Aufgabe missverstanden hat oder Schwierigkeiten hat zu bestimmen, welches Tool verwendet werden soll. Das Modell wurde automatisch aufgefordert, es erneut mit der richtigen Tool-Verwendung zu versuchen.",
+		"noAssistantMessages": "Das Modell hat keinen Antwortinhalt geliefert. Dies kann auf ein Problem mit der API oder der Modellausgabe hindeuten.",
+		"noAssistantMessagesDetails": "Das Sprachmodell hat eine leere Antwort ohne Text oder Tool-Aufrufe zurückgegeben. Dies kann aufgrund von API-Problemen, Ratenbegrenzung oder modellspezifischen Problemen passieren. Das Modell wurde automatisch aufgefordert, es erneut zu versuchen."
+	},
+	"errorDetails": {
+		"link": "Details",
+		"title": "Fehlerdetails",
+		"copyToClipboard": "In Zwischenablage kopieren",
+		"copied": "Kopiert!",
+		"diagnostics": "Detaillierte Fehlerinformationen abrufen"
+	},
 	"powershell": {
 		"issues": "Es scheint, dass du Probleme mit Windows PowerShell hast, bitte sieh dir dies an"
 	},
 	"autoApprove": {
-		"tooltip": "Einstellungen für die automatische Genehmigung verwalten",
+		"tooltipManage": "Einstellungen für die automatische Genehmigung verwalten",
+		"tooltipStatus": "Automatische Genehmigung aktiviert für: {{toggles}}",
 		"title": "Automatische Genehmigung",
+		"toggle": "Automatische Genehmigung umschalten",
 		"all": "Alle",
 		"none": "Keine",
 		"description": "Führe diese Aktionen aus, ohne um Erlaubnis zu fragen. Aktiviere dies nur für Aktionen, denen du voll vertraust.",
-		"selectOptionsFirst": "Wähle zuerst mindestens eine Option unten aus, um die automatische Genehmigung zu aktivieren",
+		"selectOptionsFirst": "Wähle mindestens eine Option unten aus, um die automatische Genehmigung zu aktivieren",
 		"toggleAriaLabel": "Automatische Genehmigung umschalten",
 		"disabledAriaLabel": "Automatische Genehmigung deaktiviert - wähle zuerst Optionen aus",
-		"triggerLabel_zero": "Keine automatische Genehmigung",
+		"triggerLabelOff": "Automatische Genehmigung aus",
+		"triggerLabelOffShort": "Aus",
+		"triggerLabel_zero": "0 automatisch genehmigt",
 		"triggerLabel_one": "1 automatisch genehmigt",
 		"triggerLabel_other": "{{count}} automatisch genehmigt",
-		"triggerLabelAll": "YOLO",
-		"triggerLabelOff": "Automatische Genehmigung aus"
+		"triggerLabelAll": "BRRR"
 	},
 	"reasoning": {
 		"thinking": "Denke nach",
 		"seconds": "{{count}}s"
 	},
-	"contextCondense": {
-		"title": "Kontext komprimiert",
-		"condensing": "Kontext wird komprimiert...",
-		"errorHeader": "Kontext konnte nicht komprimiert werden",
-		"tokens": "Tokens"
+	"contextManagement": {
+		"tokens": "Tokens",
+		"condensation": {
+			"title": "Kontext komprimiert",
+			"inProgress": "Kontext wird komprimiert...",
+			"errorHeader": "Kontext konnte nicht komprimiert werden"
+		},
+		"truncation": {
+			"title": "Kontext gekürzt",
+			"inProgress": "Kontext wird gekürzt...",
+			"messagesRemoved": "{{count}} Nachricht entfernt",
+			"messagesRemoved_other": "{{count}} Nachrichten entfernt",
+			"description": "Ältere Nachrichten wurden aus der Konversation entfernt, um innerhalb des Kontextfenster-Limits zu bleiben. Dies ist ein schnellerer, aber weniger kontexterhaltender Ansatz im Vergleich zur Komprimierung."
+		}
 	},
 	"followUpSuggest": {
 		"copyToInput": "In Eingabefeld kopieren (oder Shift + Klick)",
-		"autoSelectCountdown": "Automatische Auswahl in {{count}}s",
-		"countdownDisplay": "{{count}}s"
+		"timerPrefix": "Automatische Genehmigung aktiviert. Wähle in {{seconds}}s…"
 	},
 	"announcement": {
-		"title": "🎉 Roo Code {{version}} veröffentlicht",
-		"description": "Wir stellen vor: <bold>Roo Code Cloud:</bold> Die Macht von Roo über die IDE hinaus bringen",
-		"feature1": "<bold>Aufgabenfortschritt von überall verfolgen (Kostenlos):</bold> Erhalte Echtzeit-Updates zu lang laufenden Aufgaben, ohne in deiner IDE festzustecken",
-		"feature2": "<bold>Die Roo-Erweiterung fernsteuern (Pro):</bold> Starte, stoppe und interagiere mit Aufgaben über eine chat-basierte Browser-Oberfläche.",
-		"learnMore": "Bereit, die Kontrolle zu übernehmen? Erfahre mehr <learnMoreLink>hier</learnMoreLink>.",
-		"visitCloudButton": "Roo Code Cloud besuchen",
-		"socialLinks": "Folge uns auf <xLink>X</xLink>, <discordLink>Discord</discordLink> oder <redditLink>r/RooCode</redditLink>"
+		"title": "Roo Code {{version}} veröffentlicht",
+		"support": "Bitte unterstütze Roo Code, indem du uns auf <githubLink>GitHub</githubLink> einen Stern gibst.",
+		"stealthModel": {
+			"feature": "<bold>Zeitlich begrenztes KOSTENLOSES Stealth-Modell</bold> - Code Supernova: Jetzt mit einem <bold>1M Token Kontextfenster</bold> erweitert! Ein vielseitiges agentisches Coding-Modell, das Bildeingaben unterstützt und über Roo Code Cloud zugänglich ist.",
+			"note": "(Hinweis: Prompts und Vervollständigungen werden vom Modellersteller protokolliert und zur Verbesserung des Modells verwendet)",
+			"connectButton": "Mit Roo Code Cloud verbinden",
+			"selectModel": "Wähle <code>roo/code-supernova</code> vom Roo Code Cloud-Provider in den Einstellungen aus, um zu beginnen.",
+			"goToSettingsButton": "Zu den Einstellungen"
+		},
+		"release": {
+			"heading": "Was ist neu:",
+			"stickyProfiles": "Sticky Provider-Profile - Aufgaben merken sich jetzt ihre API-Konfiguration, daher wirkt sich ein Profilwechsel während einer Sitzung nicht auf laufende Aufgaben aus.",
+			"imageMentions": "Bilddatei @-Mentions - Referenziere Bilder direkt im Chat mit @ Mentions, um sie in deinen Kontext einzubeziehen.",
+			"brrrMode": "YOLO ist jetzt BRRR - Die automatische Genehmigung von allem wurde von \"YOLO\" in \"BRRR\" umbenannt. Natürlich."
+		},
+		"cloudAgents": {
+			"heading": "Neu in der Cloud:",
+			"specialized": "Wir stellen <bold>Explainer</bold>, <bold>Planner</bold> und <bold>Coder</bold> vor - drei spezialisierte Cloud-Agenten zur Verbesserung deiner Workflows.",
+			"description": "Die Agenten arbeiten zusammen in der Cloud und können vom Web oder über Slack ausgelöst werden.",
+			"tryButton": "Probiere Cloud-Agenten aus"
+		},
+		"careers": "Außerdem, <careersLink>wir stellen ein!</careersLink>"
 	},
 	"browser": {
-		"rooWantsToUse": "Roo möchte den Browser verwenden:",
+		"session": "Browser-Sitzung",
+		"rooWantsToUse": "Roo möchte den Browser verwenden",
 		"consoleLogs": "Konsolenprotokolle",
 		"noNewLogs": "(Keine neuen Protokolle)",
 		"screenshot": "Browser-Screenshot",
@@ -299,11 +356,25 @@
 		"sessionStarted": "Browser-Sitzung gestartet",
 		"actions": {
 			"title": "Browser-Aktion: ",
+			"launched": "Browser gestartet",
 			"launch": "Browser starten auf {{url}}",
+			"clicked": "Geklickt auf: {{coordinate}}",
 			"click": "Klicken ({{coordinate}})",
+			"typed": "Eingegeben: {{text}}",
 			"type": "Eingeben \"{{text}}\"",
+			"pressed": "{{key}} gedrückt",
+			"press": "{{key}} drücken",
+			"scrolledDown": "Nach unten gescrollt",
 			"scrollDown": "Nach unten scrollen",
+			"scrolledUp": "Nach oben gescrollt",
 			"scrollUp": "Nach oben scrollen",
+			"hovered": "Gehovered auf: {{coordinate}}",
+			"hover": "Hover ({{coordinate}})",
+			"resized": "Größe geändert auf: {{size}}",
+			"resize": "Größe ändern auf {{size}}",
+			"screenshotSaved": "Screenshot gespeichert",
+			"screenshot": "Screenshot speichern unter {{path}}",
+			"closed": "Browser geschlossen",
 			"close": "Browser schließen"
 		}
 	},
@@ -311,8 +382,6 @@
 		"tooltips": {
 			"expand": "Code-Block erweitern",
 			"collapse": "Code-Block reduzieren",
-			"enable_wrap": "Zeilenumbruch aktivieren",
-			"disable_wrap": "Zeilenumbruch deaktivieren",
 			"copy_code": "Code kopieren"
 		}
 	},
@@ -336,8 +405,8 @@
 		}
 	},
 	"codebaseSearch": {
-		"wantsToSearch": "Roo möchte den Codebase nach <code>{{query}}</code> durchsuchen:",
-		"wantsToSearchWithPath": "Roo möchte den Codebase nach <code>{{query}}</code> in <code>{{path}}</code> durchsuchen:",
+		"wantsToSearch": "Roo möchte den Codebase nach <code>{{query}}</code> durchsuchen",
+		"wantsToSearchWithPath": "Roo möchte den Codebase nach <code>{{query}}</code> in <code>{{path}}</code> durchsuchen",
 		"didSearch_one": "1 Ergebnis gefunden",
 		"didSearch_other": "{{count}} Ergebnisse gefunden",
 		"resultTooltip": "Ähnlichkeitswert: {{score}} (klicken zum Öffnen der Datei)"
@@ -398,11 +467,18 @@
 		"url": "URL einfügen, um Inhalte abzurufen"
 	},
 	"queuedMessages": {
-		"title": "Warteschlange Nachrichten:",
+		"title": "Warteschlange Nachrichten",
 		"clickToEdit": "Klicken zum Bearbeiten der Nachricht"
 	},
 	"slashCommand": {
-		"wantsToRun": "Roo möchte einen Slash-Befehl ausführen:",
-		"didRun": "Roo hat einen Slash-Befehl ausgeführt:"
+		"wantsToRun": "Roo möchte einen Slash-Befehl ausführen",
+		"didRun": "Roo hat einen Slash-Befehl ausgeführt"
+	},
+	"todo": {
+		"partial": "{{completed}} von {{total}} To-Dos erledigt",
+		"complete": "{{total}} To-Dos erledigt",
+		"updated": "Die To-Do-Liste wurde aktualisiert",
+		"completed": "Abgeschlossen",
+		"started": "Gestartet"
 	}
 }

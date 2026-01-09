@@ -1,72 +1,71 @@
 import path from "path"
 
 import { Task } from "../task/Task"
-import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } from "../../shared/tools"
 import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import { regexSearchFiles, OutputMode } from "../../services/ripgrep"
+import { regexSearchFiles } from "../../services/ripgrep"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ToolUse } from "../../shared/tools"
 
-export async function globTool(
-	cline: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-) {
-	const relDirPath: string | undefined = block.params.path || "."
-	const pattern: string | undefined = block.params.pattern
+interface GlobParams {
+	path: string
+	pattern: string
+}
 
-	const absolutePath = relDirPath ? path.resolve(cline.cwd, relDirPath) : cline.cwd
-	const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+export class GlobTool extends BaseTool<"glob"> {
+	readonly name = "glob" as const
 
-	const sharedMessageProps: ClineSayTool = {
-		tool: "searchFiles", // 复用searchFiles的前端消息类型
-		path: getReadablePath(cline.cwd, removeClosingTag("path", relDirPath)),
-		regex: "(.*)", // 使用".*"作为regex来匹配所有文件，主要依靠glob pattern过滤
-		filePattern: removeClosingTag("file_pattern", pattern),
-		isOutsideWorkspace,
+	parseLegacy(params: Partial<Record<string, string>>): GlobParams {
+		return {
+			path: params.path || ".",
+			pattern: params.pattern || "",
+		}
 	}
 
-	try {
-		if (block.partial) {
-			const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
-			await cline.ask("tool", partialMessage, block.partial).catch(() => {})
+	async execute(params: GlobParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { askApproval, handleError, pushToolResult } = callbacks
+
+		const relDirPath = params.path || "."
+		const pattern = params.pattern
+
+		if (!relDirPath) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("glob")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(await task.sayAndCreateMissingParamError("glob", "path"))
 			return
-		} else {
-			if (!cline.clineMessages || cline.clineMessages.length === 0 
-				|| cline.clineMessages[cline.clineMessages.length - 1].type !== "ask"
-				|| cline.clineMessages[cline.clineMessages.length - 1].ask !== "tool"
-			){
-				const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
-				await cline.ask("tool", partialMessage, true).catch(() => {})
-			}
+		}
 
-			if (!relDirPath) {
-				cline.consecutiveMistakeCount++
-				cline.recordToolError("grep")
-				pushToolResult(await cline.sayAndCreateMissingParamError("grep", "path"))
-				return
-			}
+		if (!pattern) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("glob")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(await task.sayAndCreateMissingParamError("glob", "pattern"))
+			return
+		}
 
-			if (!pattern) {
-				cline.consecutiveMistakeCount++
-				cline.recordToolError("grep")
-				pushToolResult(await cline.sayAndCreateMissingParamError("grep", "file_pattern"))
-				return
-			}
+		task.consecutiveMistakeCount = 0
 
-			cline.consecutiveMistakeCount = 0
+		const absolutePath = path.resolve(task.cwd, relDirPath)
+		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			// 使用files_with_matches模式，并用".*"作为regex来匹配所有文件，主要依靠glob pattern过滤
+		const sharedMessageProps: ClineSayTool = {
+			tool: "searchFiles",
+			path: getReadablePath(task.cwd, relDirPath),
+			regex: ".*",
+			filePattern: pattern,
+			isOutsideWorkspace,
+		}
+
+		try {
 			const results = await regexSearchFiles(
-				cline.cwd,
+				task.cwd,
 				absolutePath,
-				".*", // 匹配所有内容，让glob pattern来做文件过滤
-				pattern, // 使用用户提供的glob pattern
-				cline.rooIgnoreController,
-				"files_with_matches" as OutputMode, // 只返回文件名，不返回内容
+				".*",
+				pattern,
+				task.rooIgnoreController,
+				"files_with_matches",
 			)
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ClineSayTool)
@@ -77,11 +76,29 @@ export async function globTool(
 			}
 
 			pushToolResult(results)
-
-			return
+		} catch (error) {
+			await handleError("finding files with glob pattern", error as Error)
 		}
-	} catch (error) {
-		await handleError("finding files with glob pattern", error)
-		return
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"glob">): Promise<void> {
+		const relDirPath = block.params.path || "."
+		const pattern = block.params.pattern
+
+		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
+		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+
+		const sharedMessageProps: ClineSayTool = {
+			tool: "searchFiles",
+			path: getReadablePath(task.cwd, this.removeClosingTag("path", relDirPath, block.partial)),
+			regex: ".*",
+			filePattern: this.removeClosingTag("pattern", pattern, block.partial),
+			isOutsideWorkspace,
+		}
+
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }
+
+export const globTool = new GlobTool()

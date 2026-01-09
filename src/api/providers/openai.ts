@@ -1,12 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI, { AzureOpenAI } from "openai"
 import axios from "axios"
-import { MAX, v4 as uuidv4 } from 'uuid'
 
 import {
 	type ModelInfo,
 	azureOpenAiDefaultApiVersion,
 	openAiModelInfoSaneDefaults,
+	NATIVE_TOOL_DEFAULTS,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
 } from "@roo-code/types"
@@ -18,7 +18,7 @@ import { XmlMatcher } from "../../utils/xml-matcher"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToSimpleMessages } from "../transform/simple-format"
-import { ApiStream, ApiStreamUsageChunk, ApiStreamToolChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
 import { DEFAULT_HEADERS } from "./constants"
@@ -32,7 +32,7 @@ import { handleOpenAIError } from "./utils/openai-error-handler"
 // compatible with the OpenAI API. We can also rename it to `OpenAIHandler`.
 export class OpenAiHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
-	private client: OpenAI
+	protected client: OpenAI
 	private readonly providerName = "OpenAI"
 
 	constructor(options: ApiHandlerOptions) {
@@ -84,8 +84,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	override async *createMessage(
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
-		_metadata?: ApiHandlerCreateMessageMetadata,
-		tools?: OpenAI.ChatCompletionTool[]
+		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		const { info: modelInfo, reasoning } = this.getModel()
 		const modelUrl = this.options.openAiBaseUrl ?? ""
@@ -97,16 +96,16 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const ark = modelUrl.includes(".volces.com")
 
 		if (modelId.includes("o1") || modelId.includes("o3") || modelId.includes("o4")) {
-			yield* this.handleO3FamilyMessage(modelId, systemPrompt, messages, tools)
+			yield* this.handleO3FamilyMessage(modelId, systemPrompt, messages, metadata)
 			return
 		}
 
-		if (this.options.openAiStreamingEnabled ?? true) {
-			let systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
-				role: "system",
-				content: systemPrompt,
-			}
+		let systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
+			role: "system",
+			content: systemPrompt,
+		}
 
+		if (this.options.openAiStreamingEnabled ?? true) {
 			let convertedMessages
 
 			if (deepseekReasoner) {
@@ -166,13 +165,17 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				...(reasoning && reasoning),
-				...(tools && tools.length > 0 ? { tools } : {}),
+				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
+				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
+				...(metadata?.toolProtocol === "native" && {
+					parallel_tool_calls: metadata.parallelToolCalls ?? false,
+				}),
 			}
 
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
-			let startTime = Date.now()
+			const startTime = Date.now()
 			let firstTokenTime: number | null = null
 			let hasFirstToken = false
 
@@ -196,125 +199,33 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			)
 
 			let lastUsage
-			let lastToolCache: ApiStreamToolChunk = {
-				type: "tool",
-				index: undefined,
-				tool_call_id: "",
-				name: "",
-				params: ""
-			}
+			const activeToolCallIds = new Set<string>()
 
-			yield {
-				type: "text",
-				text: " \n\n",
-			}
 			for await (const chunk of stream) {
-				const delta = chunk.choices[0]?.delta ?? {}
+				const delta = chunk.choices?.[0]?.delta ?? {}
+				const finishReason = chunk.choices?.[0]?.finish_reason
 
 				if (delta.content) {
-					// Record first token time
 					if (!hasFirstToken && delta.content.trim()) {
 						firstTokenTime = Date.now()
 						hasFirstToken = true
 					}
-
-					for (const content_chunk of matcher.update(delta.content)) {
-						yield content_chunk
+					for (const chunk of matcher.update(delta.content)) {
+						yield chunk
 					}
 				}
 
 				if ("reasoning_content" in delta && delta.reasoning_content) {
-					// Record first token time for reasoning content too
-					if (!hasFirstToken && (delta.reasoning_content as string)?.trim()) {
-						firstTokenTime = Date.now()
-						hasFirstToken = true
-					}
-
-					if (hasFirstToken) {
-						yield {
-							type: "reasoning",
-							text: (delta.reasoning_content as string | undefined) || "",
-						}
+					yield {
+						type: "reasoning",
+						text: (delta.reasoning_content as string | undefined) || "",
 					}
 				}
 
-				// Handle tool calls
-				if (delta.tool_calls && delta.tool_calls.length > 0) {
-					if (!hasFirstToken) {
-						// if (delta.tool_calls[0].function?.name && !delta.tool_calls[0].function?.arguments) {
-						// 	firstTokenTime = Date.now()
-						// } else {
-						// 	// 有些模型在没有正文时会一次性攒出完整的tool_calls再传出（相当于非流式），首字延迟不准
-							firstTokenTime = Math.floor((startTime*90+Date.now()*10)/100)
-						// }
-						hasFirstToken = true
-					}
-					for (const toolCall of delta.tool_calls) {
-						// && toolCall.function.name && toolCall.function.arguments
-						if ('function' in toolCall && toolCall.function ) {
-							try {
-								// const tool: ApiStreamToolChunk = {
-								// 	type: "tool",
-								// 	tool_call_id: toolCall.id,
-								// 	name: toolCall.function.name,
-								// 	params: JSON.parse(toolCall.function.arguments)
-								// }
-								if (lastToolCache.index !== undefined && toolCall.index !== lastToolCache.index) {
-									lastToolCache.params = JSON.parse(lastToolCache.params)
-									yield lastToolCache
-									lastToolCache = {
-										type: "tool",
-										index: undefined,
-										tool_call_id: "",
-										name: "",
-										params: ""
-									}
-								} 
-								if (lastToolCache.index === undefined) {
-									lastToolCache = {
-										type: "tool",
-										index: toolCall.index,
-										tool_call_id: toolCall.id,
-										name: toolCall.function.name || "",
-										params: toolCall.function.arguments || ""
-									}
-									if (chunk.choices[0]?.finish_reason === "tool_calls") {
-										lastToolCache.params = JSON.parse(lastToolCache.params)
-										yield lastToolCache
-										lastToolCache = {
-											type: "tool",
-											index: undefined,
-											tool_call_id: "",
-											name: "",
-											params: ""
-										}
-									}
-								} else {
-									lastToolCache = {
-										type: "tool",
-										index: lastToolCache.index,
-										tool_call_id: lastToolCache.tool_call_id,
-										name: lastToolCache.name + (toolCall.function.name || ""),
-										params: lastToolCache.params + (toolCall.function.arguments || "")
-									}
-								}
-							} catch (error) {
-								throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
-							}
-						}
-					}
-				}
+				yield* this.processToolCalls(delta, finishReason, activeToolCallIds)
 
 				if (chunk.usage) {
 					lastUsage = chunk.usage
-				}
-			}
-			if (lastToolCache.index !== undefined) {
-				try {
-					lastToolCache.params = JSON.parse(lastToolCache.params)
-					yield lastToolCache
-				} catch (error) {
-					throw new Error(`Tool call JSON parsing failed: ${error} (${lastToolCache.params})`)
 				}
 			}
 
@@ -326,26 +237,18 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				const endTime = Date.now()
 				const totalLatency = endTime - startTime
 				const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
-				
-				// Add timing information to usage
 				const enhancedUsage = {
 					...lastUsage,
 					startTime,
 					firstTokenTime,
 					endTime,
 					totalLatency,
-					firstTokenLatency
+					firstTokenLatency,
 				}
-				
+
 				yield this.processUsageMetrics(enhancedUsage, modelInfo)
 			}
 		} else {
-			// o1 for instance doesnt support streaming, non-1 temp, or system prompt
-			const systemMessage: OpenAI.Chat.ChatCompletionUserMessageParam = {
-				role: "user",
-				content: systemPrompt,
-			}
-
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 				model: modelId,
 				messages: deepseekReasoner
@@ -353,7 +256,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					: enabledLegacyFormat
 						? [systemMessage, ...convertToSimpleMessages(messages)]
 						: [systemMessage, ...convertToOpenAiMessages(messages)],
-				...(tools && tools.length > 0 ? { tools } : {}),
+				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
+				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
+				...(metadata?.toolProtocol === "native" && {
+					parallel_tool_calls: metadata.parallelToolCalls ?? false,
+				}),
 			}
 
 			// Add max_tokens if needed
@@ -369,23 +276,16 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				throw handleOpenAIError(error, this.providerName)
 			}
 
-			const message = response.choices[0]?.message
-			let content = message?.content || ""
+			const message = response.choices?.[0]?.message
 
-			// Handle tool calls in non-streaming response
-			if (message?.tool_calls && message.tool_calls.length > 0) {
+			if (message?.tool_calls) {
 				for (const toolCall of message.tool_calls) {
-					if ('function' in toolCall && toolCall.function && toolCall.function.name && toolCall.function.arguments) {
-						try {
-							const tool: ApiStreamToolChunk = {
-								type: "tool",
-								tool_call_id: toolCall.id,
-								name: toolCall.function.name,
-								params: JSON.parse(toolCall.function.arguments)
-							}
-							yield tool
-						} catch (error) {
-							throw new Error(`Tool call JSON parsing failed: ${error}`)
+					if (toolCall.type === "function") {
+						yield {
+							type: "tool_call",
+							id: toolCall.id,
+							name: toolCall.function.name,
+							arguments: toolCall.function.arguments,
 						}
 					}
 				}
@@ -393,7 +293,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			yield {
 				type: "text",
-				text: content,
+				text: message?.content || "",
 			}
 
 			yield this.processUsageMetrics(response.usage, modelInfo)
@@ -402,35 +302,38 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 	protected processUsageMetrics(usage: any, _modelInfo?: ModelInfo): ApiStreamUsageChunk {
 		const outputTokens = usage?.completion_tokens || 0
-		const totalLatency = usage?.totalLatency || 10
-		const firstTokenLatency = usage?.firstTokenLatency || 10
-		
-		// Calculate TPS excluding first token latency
-		// TPS = (total_tokens - 1) / (total_time - first_token_time) * 1000
-		let tps = 0 // default fallback
-		if (outputTokens > 1 && totalLatency > firstTokenLatency) {
+		const totalLatency = typeof usage?.totalLatency === "number" ? usage.totalLatency : 0
+		const firstTokenLatency =
+			typeof usage?.firstTokenLatency === "number" ? usage.firstTokenLatency : totalLatency
+		let tps = 0
+		if (outputTokens > 1 && totalLatency > firstTokenLatency && totalLatency > 0) {
 			const tokensAfterFirst = outputTokens - 1
 			const timeAfterFirstToken = totalLatency - firstTokenLatency
 			tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
 		} else if (outputTokens > 0 && totalLatency > 0) {
-			// Fallback: calculate TPS for all tokens including first
 			tps = (outputTokens * 1000) / totalLatency
 		}
 
 		return {
 			type: "usage",
 			inputTokens: usage?.prompt_tokens || 0,
-			outputTokens: outputTokens,
+			outputTokens,
 			cacheWriteTokens: usage?.cache_creation_input_tokens || undefined,
 			cacheReadTokens: usage?.cache_read_input_tokens || undefined,
-			tps: tps, // Round to 2 decimal places
-			latency: firstTokenLatency, // Use first token latency as the latency metric
+			tps,
+			latency: firstTokenLatency,
 		}
 	}
 
 	override getModel() {
 		const id = this.options.openAiModelId ?? ""
-		const info = this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults
+		// Ensure OpenAI-compatible models default to supporting native tool calling.
+		// This is required for [`Task.attemptApiRequest()`](src/core/task/Task.ts:3817) to
+		// include tool definitions in the request.
+		const info: ModelInfo = {
+			...NATIVE_TOOL_DEFAULTS,
+			...(this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
+		}
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
 		return { id, info, ...params }
 	}
@@ -459,7 +362,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				throw handleOpenAIError(error, this.providerName)
 			}
 
-			return response.choices[0]?.message.content || ""
+			return response.choices?.[0]?.message.content || ""
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`${this.providerName} completion error: ${error.message}`)
@@ -473,7 +376,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		modelId: string,
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
-		tools?: OpenAI.ChatCompletionTool[],
+		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		const modelInfo = this.getModel().info
 		const methodIsAzureAiInference = this._isAzureAiInference(this.options.openAiBaseUrl)
@@ -494,7 +397,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				...(tools && tools.length > 0 ? { tools } : {}),
+				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
+				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
+				...(metadata?.toolProtocol === "native" && {
+					parallel_tool_calls: metadata.parallelToolCalls ?? false,
+				}),
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter
@@ -525,7 +432,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				],
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				...(tools && tools.length > 0 ? { tools } : {}),
+				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
+				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
+				...(metadata?.toolProtocol === "native" && {
+					parallel_tool_calls: metadata.parallelToolCalls ?? false,
+				}),
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter
@@ -543,23 +454,15 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				throw handleOpenAIError(error, this.providerName)
 			}
 
-			const message = response.choices[0]?.message
-			let content = message?.content || ""
-
-			// Handle tool calls in O3 non-streaming response
-			if (message?.tool_calls && message.tool_calls.length > 0) {
+			const message = response.choices?.[0]?.message
+			if (message?.tool_calls) {
 				for (const toolCall of message.tool_calls) {
-					if ('function' in toolCall && toolCall.function && toolCall.function.name && toolCall.function.arguments) {
-						try {
-							const tool: ApiStreamToolChunk = {
-								type: "tool",
-								tool_call_id: toolCall.id,
-								name: toolCall.function.name,
-								params: JSON.parse(toolCall.function.arguments)
-							}
-							yield tool
-						} catch (error) {
-							throw new Error(`Tool call JSON parsing failed: ${error}`)
+					if (toolCall.type === "function") {
+						yield {
+							type: "tool_call",
+							id: toolCall.id,
+							name: toolCall.function.name,
+							arguments: toolCall.function.arguments,
 						}
 					}
 				}
@@ -567,77 +470,81 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			yield {
 				type: "text",
-				text: content,
+				text: message?.content || "",
 			}
 			yield this.processUsageMetrics(response.usage)
 		}
 	}
 
 	private async *handleStreamResponse(stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>): ApiStream {
-		let startTime = Date.now()
-		let firstTokenTime: number | null = null
-		let hasFirstToken = false
-		let lastUsage
+		const activeToolCallIds = new Set<string>()
 
 		for await (const chunk of stream) {
-			const delta = chunk.choices[0]?.delta
-			if (delta?.content) {
-				// Record first token
-				if (!hasFirstToken && delta.content.trim()) {
-					firstTokenTime = Date.now()
-					hasFirstToken = true
-				}
+			const delta = chunk.choices?.[0]?.delta
+			const finishReason = chunk.choices?.[0]?.finish_reason
 
-				yield {
-					type: "text",
-					text: delta.content,
-				}
-			}
-
-			// Handle tool calls in stream response
-			if (delta?.tool_calls && delta.tool_calls.length > 0) {
-				for (const toolCall of delta.tool_calls) {
-					if ('function' in toolCall && toolCall.function && toolCall.function.name && toolCall.function.arguments) {
-						try {
-							const tool: ApiStreamToolChunk = {
-								type: "tool",
-								tool_call_id: toolCall.id,
-								name: toolCall.function.name,
-								params: JSON.parse(toolCall.function.arguments)
-							}
-							yield tool
-						} catch (error) {
-							throw new Error(`Tool call JSON parsing failed: ${error}`)
-						}
+			if (delta) {
+				if (delta.content) {
+					yield {
+						type: "text",
+						text: delta.content,
 					}
 				}
+
+				yield* this.processToolCalls(delta, finishReason, activeToolCallIds)
 			}
 
 			if (chunk.usage) {
-				lastUsage = chunk.usage
+				yield {
+					type: "usage",
+					inputTokens: chunk.usage.prompt_tokens || 0,
+					outputTokens: chunk.usage.completion_tokens || 0,
+				}
 			}
-		}
-
-		if (lastUsage) {
-			const endTime = Date.now()
-			const totalLatency = endTime - startTime
-			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
-			
-			// Add timing information to usage
-			const enhancedUsage = {
-				...lastUsage,
-				startTime,
-				firstTokenTime,
-				endTime,
-				totalLatency,
-				firstTokenLatency
-			}
-
-			yield this.processUsageMetrics(enhancedUsage)
 		}
 	}
 
-	private _getUrlHost(baseUrl?: string): string {
+	/**
+	 * Helper generator to process tool calls from a stream chunk.
+	 * Tracks active tool call IDs and yields tool_call_partial and tool_call_end events.
+	 * @param delta - The delta object from the stream chunk
+	 * @param finishReason - The finish_reason from the stream chunk
+	 * @param activeToolCallIds - Set to track active tool call IDs (mutated in place)
+	 */
+	private *processToolCalls(
+		delta: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta | undefined,
+		finishReason: string | null | undefined,
+		activeToolCallIds: Set<string>,
+	): Generator<
+		| { type: "tool_call_partial"; index: number; id?: string; name?: string; arguments?: string }
+		| { type: "tool_call_end"; id: string }
+	> {
+		if (delta?.tool_calls) {
+			for (const toolCall of delta.tool_calls) {
+				if (toolCall.id) {
+					activeToolCallIds.add(toolCall.id)
+				}
+				yield {
+					type: "tool_call_partial",
+					index: toolCall.index,
+					id: toolCall.id,
+					name: toolCall.function?.name,
+					arguments: toolCall.function?.arguments,
+				}
+			}
+		}
+
+		// Emit tool_call_end events when finish_reason is "tool_calls"
+		// This ensures tool calls are finalized even if the stream doesn't properly close
+		if (finishReason === "tool_calls" && activeToolCallIds.size > 0) {
+			for (const id of activeToolCallIds) {
+				yield { type: "tool_call_end", id }
+			}
+			activeToolCallIds.clear()
+		}
+	}
+
+	protected _getUrlHost(baseUrl?: string): string {
 		try {
 			return new URL(baseUrl ?? "").host
 		} catch (error) {
@@ -650,7 +557,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		return urlHost.includes("x.ai")
 	}
 
-	private _isAzureAiInference(baseUrl?: string): boolean {
+	protected _isAzureAiInference(baseUrl?: string): boolean {
 		const urlHost = this._getUrlHost(baseUrl)
 		return urlHost.endsWith(".services.ai.azure.com")
 	}

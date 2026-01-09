@@ -4,7 +4,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { isBinaryFile } from "isbinaryfile"
 
-import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
+import { mentionRegexGlobal, commandRegexGlobal, skillRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
 
 import { getCommitInfo, getWorkingState } from "../../utils/git"
 
@@ -12,7 +12,7 @@ import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFile } from "../../integrations/misc/extract-text"
 import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
 
-import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher-riddler"
+import { UrlContentFetcher } from "../../services/browser/UrlContentFetcher"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
@@ -20,6 +20,7 @@ import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { getCommand, type Command } from "../../services/command/commands"
 
 import { t } from "../../i18n"
+import type { SkillContent, SkillsManager } from "../../services/skills/SkillsManager"
 
 function getUrlErrorMessage(error: unknown): string {
 	const errorMessage = error instanceof Error ? error.message : String(error)
@@ -71,6 +72,11 @@ export async function openMention(cwd: string, mention?: string): Promise<void> 
 	}
 }
 
+export interface ParseMentionsResult {
+	text: string
+	mode?: string // Mode from the first slash command that has one
+}
+
 export async function parseMentions(
 	text: string,
 	cwd: string,
@@ -81,9 +87,13 @@ export async function parseMentions(
 	includeDiagnosticMessages: boolean = true,
 	maxDiagnosticMessages: number = 50,
 	maxReadFileLine?: number,
-): Promise<string> {
+	skillsManager?: SkillsManager,
+	currentMode?: string,
+): Promise<ParseMentionsResult> {
 	const mentions: Set<string> = new Set()
 	const validCommands: Map<string, Command> = new Map()
+	const validSkills: Map<string, SkillContent> = new Map()
+	let commandMode: string | undefined // Track mode from the first slash command that has one
 
 	// First pass: check which command mentions exist and cache the results
 	const commandMatches = Array.from(text.matchAll(commandRegexGlobal))
@@ -101,10 +111,38 @@ export async function parseMentions(
 		}),
 	)
 
-	// Store valid commands for later use
+	// Store valid commands for later use and capture the first mode found
 	for (const { commandName, command } of commandExistenceChecks) {
 		if (command) {
 			validCommands.set(commandName, command)
+			// Capture the mode from the first command that has one
+			if (!commandMode && command.mode) {
+				commandMode = command.mode
+			}
+		}
+	}
+
+	// Collect valid skills using the current mode or the slash command mode if present
+	const skillMatches = Array.from(text.matchAll(skillRegexGlobal))
+	const uniqueSkillNames = new Set(skillMatches.map(([, skillName]) => skillName))
+	const skillMode = commandMode ?? currentMode
+
+	if (skillsManager && uniqueSkillNames.size > 0) {
+		const skillContentChecks = await Promise.all(
+			Array.from(uniqueSkillNames).map(async (skillName) => {
+				try {
+					const skillContent = await skillsManager.getSkillContent(skillName, skillMode)
+					return { skillName, skillContent }
+				} catch {
+					return { skillName, skillContent: null }
+				}
+			}),
+		)
+
+		for (const { skillName, skillContent } of skillContentChecks) {
+			if (skillContent) {
+				validSkills.set(skillName, skillContent)
+			}
 		}
 	}
 
@@ -113,6 +151,12 @@ export async function parseMentions(
 	for (const [match, commandName] of commandMatches) {
 		if (validCommands.has(commandName)) {
 			parsedText = parsedText.replace(match, `Command '${commandName}' (see below for command content)`)
+		}
+	}
+
+	for (const [match, skillName] of skillMatches) {
+		if (validSkills.has(skillName)) {
+			parsedText = parsedText.replace(match, `User requires you to use skills '${skillName}' (see below for skill content. Includes the full content of skill.md, no need for further reading.)`)
 		}
 	}
 
@@ -249,6 +293,10 @@ export async function parseMentions(
 		}
 	}
 
+	for (const [skillName, skillContent] of validSkills) {
+		parsedText += `\n\n<skill name="${skillName}">\n${skillContent.instructions}\n</skill>`
+	}
+
 	if (urlMention) {
 		try {
 			await urlContentFetcher.closeBrowser()
@@ -257,7 +305,7 @@ export async function parseMentions(
 		}
 	}
 
-	return parsedText
+	return { text: parsedText, mode: commandMode }
 }
 
 async function getFileOrFolderContent(
@@ -274,7 +322,13 @@ async function getFileOrFolderContent(
 		const stats = await fs.stat(absPath)
 
 		if (stats.isFile()) {
-			if (rooIgnoreController && !rooIgnoreController.validateAccess(absPath)) {
+			// Avoid trying to include image binary content as text context.
+			// Image mentions are handled separately via image attachment flow.
+			const isBinary = await isBinaryFile(absPath).catch(() => false)
+			if (isBinary) {
+				return `(Binary file ${mentionPath} omitted)`
+			}
+			if (rooIgnoreController && !rooIgnoreController.validateAccess(unescapedPath)) {
 				return `(File ${mentionPath} is ignored by .rooignore)`
 			}
 			try {
@@ -410,3 +464,4 @@ export async function getLatestTerminalOutput(): Promise<string> {
 
 // Export processUserContentMentions from its own file
 export { processUserContentMentions } from "./processUserContentMentions"
+export type { ProcessUserContentMentionsResult } from "./processUserContentMentions"

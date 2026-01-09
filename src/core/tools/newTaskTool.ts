@@ -2,46 +2,46 @@ import * as vscode from "vscode"
 
 import { TodoItem } from "@roo-code/types"
 
-import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } from "../../shared/tools"
 import { Task } from "../task/Task"
-import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
+import { getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
 import { t } from "../../i18n"
-
-import { ApiMessage } from "../task-persistence/apiMessages"
-import { getMessagesSinceLastSummary } from "../condense"
-
-import { parseMarkdownChecklist } from "./updateTodoListTool"
+import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
+import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ToolUse } from "../../shared/tools"
 
-export async function newTaskTool(
-	task: Task,
-	block: ToolUse,
-	askApproval: AskApproval,
-	handleError: HandleError,
-	pushToolResult: PushToolResult,
-	removeClosingTag: RemoveClosingTag,
-) {
-	const mode: string | undefined = block.params.mode
-	const message: string | undefined = block.params.message
-	const todos: string | undefined = block.params.todos
+import { getMessagesSinceLastSummary } from "../condense"
+import { ApiMessage } from "../task-persistence/apiMessages"
+import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 
-	try {
-		if (block.partial) {
-			const partialMessage = JSON.stringify({
-				tool: "newTask",
-				mode: removeClosingTag("mode", mode),
-				content: removeClosingTag("message", message),
-				todos: removeClosingTag("todos", todos),
-			})
+interface NewTaskParams {
+	mode: string
+	message: string
+	todos?: string
+}
 
-			await task.ask("tool", partialMessage, block.partial).catch(() => {})
-			return
-		} else {
+export class NewTaskTool extends BaseTool<"new_task"> {
+	readonly name = "new_task" as const
+
+	parseLegacy(params: Partial<Record<string, string>>): NewTaskParams {
+		return {
+			mode: params.mode || "",
+			message: params.message || "",
+			todos: params.todos,
+		}
+	}
+
+	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { mode, message, todos } = params
+		const { askApproval, handleError, pushToolResult, toolProtocol, toolCallId } = callbacks
+
+		try {
 			// Validate required parameters.
 			if (!mode) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
+				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "mode"))
 				return
 			}
@@ -49,6 +49,7 @@ export async function newTaskTool(
 			if (!message) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
+				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "message"))
 				return
 			}
@@ -74,6 +75,7 @@ export async function newTaskTool(
 			if (requireTodos && todos === undefined) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
+				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "todos"))
 				return
 			}
@@ -86,6 +88,7 @@ export async function newTaskTool(
 				} catch (error) {
 					task.consecutiveMistakeCount++
 					task.recordToolError("new_task")
+					task.didToolFailInCurrentTurn = true
 					pushToolResult(formatResponse.toolError("Invalid todos format: must be a markdown checklist"))
 					return
 				}
@@ -124,46 +127,62 @@ export async function newTaskTool(
 				task.checkpointSave(true)
 			}
 
-			// Preserve the current mode so we can resume with it later.
-			task.pausedModeSlug = (await provider.getState()).mode ?? defaultModeSlug
+			// Delegate parent and open child as sole active task
+			const child = await provider.delegateParentAndOpenChild({
+				parentTaskId: task.taskId,
+				message: unescapedMessage,
+				initialTodos: todoItems,
+				mode,
+			})
 
-			const newTask = await task.startSubtask(unescapedMessage, todoItems, mode)
-
-			if (!newTask) {
-				pushToolResult(t("tools:newTask.errors.policy_restriction"))
-				return
-			}
-
-			const parentMessages:ApiMessage[] = [
-				...getMessagesSinceLastSummary(task.apiConversationHistory),
-				{
-					role: "user",
-					content: `现在得你，是一个由主要智能体创建的子智能体，用于完成父任务中的一个子任务。` +
-						`在此之前的对话都是主要智能体完成父任务时，所进行的对话上下文记录`,
-					ts: Date.now(),
-				},
-				{
-					role: "assistant",
-					content: `那么作为一个子智能体，我当前的任务是什么呢？`,
-					ts: Date.now(),
-				}
-			]
-			// 将父任务的对话上下文传递给子任务
+			
 			if (task.apiConversationHistory && task.apiConversationHistory.length > 0) {
-				await newTask.overwriteApiConversationHistory(parentMessages)
+				
+				const messagesToSummarize = getMessagesSinceLastSummary(task.apiConversationHistory)
+				const requestMessages = maybeRemoveImageBlocks(messagesToSummarize).map(
+					({ role, content }) => ({ role, content }),
+				)
+
+				const parentMessages:ApiMessage[] = [
+					{
+						role: "user",
+						content: `You are now a sub-agent created by the primary agent to complete a sub-task within the parent task.` +
+							`${JSON.stringify(requestMessages)}` + 
+							`The previous conversation is the conversation context recorded while the primary agent was completing the parent task.`,
+						ts: Date.now(),
+					},
+					{
+						role: "assistant",
+						content: `As a sub-agent, what is my current task?`,
+						ts: Date.now(),
+					}
+				]
+				await child.overwriteApiConversationHistory(parentMessages)
 			}
 
-			// Now switch the newly created task to the desired mode
-			await provider.handleModeSwitch(mode)
-
-			pushToolResult(
-				`Successfully created new task in ${targetMode.name} mode with message: ${unescapedMessage} and ${todoItems.length} todo items`,
-			)
-
+			// Reflect delegation in tool result (no pause/unpause, no wait)
+			pushToolResult(`Delegated to child task ${child.taskId}`)
+			return
+		} catch (error) {
+			await handleError("creating new task", error)
 			return
 		}
-	} catch (error) {
-		await handleError("creating new task", error)
-		return
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"new_task">): Promise<void> {
+		const mode: string | undefined = block.params.mode
+		const message: string | undefined = block.params.message
+		const todos: string | undefined = block.params.todos
+
+		const partialMessage = JSON.stringify({
+			tool: "newTask",
+			mode: this.removeClosingTag("mode", mode, block.partial),
+			content: this.removeClosingTag("message", message, block.partial),
+			todos: this.removeClosingTag("todos", todos, block.partial),
+		})
+
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }
+
+export const newTaskTool = new NewTaskTool()

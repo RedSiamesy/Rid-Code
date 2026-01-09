@@ -28,9 +28,15 @@ interface ScanContext {
  * @param dirPath - Directory path to list files from
  * @param recursive - Whether to recursively list files in subdirectories
  * @param limit - Maximum number of files to return
+ * @param mode - Optional. "file_only" to return only files, "dir_only" to return only directories
  * @returns Tuple of [file paths array, whether the limit was reached]
  */
-export async function listFiles(dirPath: string, recursive: boolean, limit: number, mode?: "file_only" | "dir_only" | undefined): Promise<[string[], boolean]> {
+export async function listFiles(
+	dirPath: string,
+	recursive: boolean,
+	limit: number,
+	mode?: "file_only" | "dir_only",
+): Promise<[string[], boolean]> {
 	// Early return for limit of 0 - no need to scan anything
 	if (limit === 0) {
 		return [[], false]
@@ -52,15 +58,16 @@ export async function listFiles(dirPath: string, recursive: boolean, limit: numb
 		const ignoreInstance = await createIgnoreInstance(dirPath)
 		// Calculate remaining limit for directories
 		const remainingLimit = Math.max(0, limit - files.length)
-		const directories = mode === "file_only" ? [] : await listFilteredDirectories(dirPath, false, ignoreInstance, remainingLimit)
-		
-		// Apply mode filtering
+		const directories =
+			mode === "file_only" ? [] : await listFilteredDirectories(dirPath, false, ignoreInstance, remainingLimit)
+
 		if (mode === "file_only") {
 			return [files.slice(0, limit), files.length >= limit]
-		} else if (mode === "dir_only") {
+		}
+		if (mode === "dir_only") {
 			return [directories.slice(0, limit), directories.length >= limit]
 		}
-		
+
 		return formatAndCombineResults(files, directories, limit)
 	}
 
@@ -69,15 +76,14 @@ export async function listFiles(dirPath: string, recursive: boolean, limit: numb
 	const ignoreInstance = await createIgnoreInstance(dirPath)
 	// Calculate remaining limit for directories
 	const remainingLimit = Math.max(0, limit - files.length)
-	const directories = mode === "file_only" ? [] : await listFilteredDirectories(dirPath, true, ignoreInstance, remainingLimit)
+	const directories =
+		mode === "file_only" ? [] : await listFilteredDirectories(dirPath, true, ignoreInstance, remainingLimit)
 
-	// Apply mode filtering for recursive mode
 	if (mode === "file_only") {
-		const limitReached = files.length >= limit
-		return [files.slice(0, limit), limitReached]
-	} else if (mode === "dir_only") {
-		const limitReached = directories.length >= limit
-		return [directories.slice(0, limit), limitReached]
+		return [files.slice(0, limit), files.length >= limit]
+	}
+	if (mode === "dir_only") {
+		return [directories.slice(0, limit), directories.length >= limit]
 	}
 
 	// Combine and check if we hit the limits
@@ -525,7 +531,7 @@ async function listFilteredDirectories(
 /**
  * Critical directories that should always be ignored, even inside explicitly targeted hidden directories
  */
-const CRITICAL_IGNORE_PATTERNS = new Set(["node_modules", ".git", ".svn", "__pycache__", "venv", "env"])
+const CRITICAL_IGNORE_PATTERNS = new Set(["node_modules", ".git", "__pycache__", "venv", "env"])
 
 /**
  * Check if a directory matches any of the given patterns

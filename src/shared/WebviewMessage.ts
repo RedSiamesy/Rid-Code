@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import {
+	type RooCodeSettings,
 	type ProviderSettings,
 	type PromptComponent,
 	type ModeConfig,
@@ -38,21 +39,13 @@ export interface WebviewMessage {
 		| "renameApiConfiguration"
 		| "getListApiConfiguration"
 		| "customInstructions"
-		| "allowedCommands"
-		| "deniedCommands"
-		| "alwaysAllowReadOnly"
-		| "alwaysAllowReadOnlyOutsideWorkspace"
-		| "alwaysAllowWrite"
-		| "alwaysAllowWriteOutsideWorkspace"
-		| "alwaysAllowWriteProtected"
-		| "alwaysAllowExecute"
-		| "alwaysAllowFollowupQuestions"
-		| "alwaysAllowUpdateTodoList"
-		| "followupAutoApproveTimeoutMs"
 		| "webviewDidLaunch"
 		| "newTask"
 		| "askResponse"
 		| "terminalOperation"
+		| "useTerminalCommand"
+		| "saveMemory"
+		| "savedMemory"
 		| "clearTask"
 		| "didShowAnnouncement"
 		| "selectImages"
@@ -69,6 +62,8 @@ export interface WebviewMessage {
 		| "requestOpenAiModels"
 		| "requestOllamaModels"
 		| "requestLmStudioModels"
+		| "requestRooModels"
+		| "requestRooCreditBalance"
 		| "requestVsCodeLmModels"
 		| "requestHuggingFaceModels"
 		| "openImage"
@@ -76,33 +71,17 @@ export interface WebviewMessage {
 		| "openFile"
 		| "openMention"
 		| "cancelTask"
+		| "cancelAutoApproval"
 		| "updateVSCodeSetting"
 		| "getVSCodeSetting"
 		| "vsCodeSetting"
-		| "alwaysAllowBrowser"
-		| "alwaysAllowMcp"
-		| "alwaysAllowModeSwitch"
-		| "allowedMaxRequests"
-		| "allowedMaxCost"
-		| "alwaysAllowSubtasks"
-		| "alwaysAllowUpdateTodoList"
-		| "autoCondenseContext"
-		| "autoCondenseContextPercent"
-		| "condensingApiConfigId"
 		| "updateCondensingPrompt"
 		| "playSound"
 		| "playTts"
 		| "stopTts"
-		| "soundEnabled"
 		| "ttsEnabled"
 		| "ttsSpeed"
-		| "soundVolume"
-		| "notificationHook"
-		| "diffEnabled"
-		| "enableCheckpoints"
-		| "browserViewportSize"
-		| "screenshotQuality"
-		| "remoteBrowserHost"
+		| "openKeyboardShortcuts"
 		| "openMcpSettings"
 		| "openProjectMcpSettings"
 		| "restartMcpServer"
@@ -111,16 +90,6 @@ export interface WebviewMessage {
 		| "toggleToolEnabledForPrompt"
 		| "toggleMcpServer"
 		| "updateMcpTimeout"
-		| "fuzzyMatchThreshold"
-		| "writeDelayMs"
-		| "thinkingToolEnabled"
-		| "thinkingToolApiConfigId"
-		| "multiModalToolEnabled"
-		| "multiModalToolApiConfigId"
-		| "useTerminalCommand"
-		| "saveMemory"
-		| "savedMemory"
-		| "diagnosticsEnabled"
 		| "enhancePrompt"
 		| "enhancedPrompt"
 		| "draggedImages"
@@ -128,34 +97,17 @@ export interface WebviewMessage {
 		| "deleteMessageConfirm"
 		| "submitEditedMessage"
 		| "editMessageConfirm"
-		| "terminalOutputLineLimit"
-		| "terminalOutputCharacterLimit"
-		| "terminalShellIntegrationTimeout"
-		| "terminalShellIntegrationDisabled"
-		| "terminalCommandDelay"
-		| "terminalPowershellCounter"
-		| "terminalZshClearEolMark"
-		| "terminalZshOhMy"
-		| "terminalZshP10k"
-		| "terminalZdotdir"
-		| "terminalCompressProgressBar"
-		| "mcpEnabled"
 		| "enableMcpServerCreation"
 		| "remoteControlEnabled"
 		| "taskSyncEnabled"
 		| "searchCommits"
-		| "alwaysApproveResubmit"
-		| "requestDelaySeconds"
 		| "setApiConfigPassword"
 		| "mode"
 		| "updatePrompt"
-		| "updateSupportPrompt"
 		| "getSystemPrompt"
 		| "copySystemPrompt"
 		| "systemPrompt"
 		| "enhancementApiConfigId"
-		| "includeTaskHistoryInEnhance"
-		| "updateExperimental"
 		| "autoApprovalEnabled"
 		| "updateCustomMode"
 		| "deleteCustomMode"
@@ -164,32 +116,22 @@ export interface WebviewMessage {
 		| "checkpointDiff"
 		| "checkpointRestore"
 		| "deleteMcpServer"
-		| "maxOpenTabsContext"
-		| "maxWorkspaceFiles"
-		| "humanRelayResponse"
-		| "humanRelayCancel"
-		| "browserToolEnabled"
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"
-		| "showRooIgnoredFiles"
 		| "testBrowserConnection"
 		| "browserConnectionResult"
-		| "remoteBrowserEnabled"
-		| "language"
-		| "maxReadFileLine"
-		| "maxImageFileSize"
-		| "maxTotalImageSize"
-		| "maxConcurrentFileReads"
-		| "includeDiagnosticMessages"
-		| "maxDiagnosticMessages"
 		| "searchFiles"
 		| "toggleApiConfigPin"
-		| "setHistoryPreviewCollapsed"
 		| "hasOpenedModeSelector"
+		| "clearCloudAuthSkipModel"
 		| "cloudButtonClicked"
 		| "rooCloudSignIn"
+		| "cloudLandingPageSignIn"
 		| "rooCloudSignOut"
 		| "rooCloudManualUrl"
+		| "claudeCodeSignIn"
+		| "claudeCodeSignOut"
+		| "switchOrganization"
 		| "condenseTaskContextRequest"
 		| "requestIndexingStatus"
 		| "startIndexing"
@@ -197,8 +139,6 @@ export interface WebviewMessage {
 		| "indexingStatusUpdate"
 		| "indexCleared"
 		| "focusPanelRequest"
-		| "profileThresholds"
-		| "setHistoryPreviewCollapsed"
 		| "openExternal"
 		| "filterMarketplaceItems"
 		| "marketplaceButtonClicked"
@@ -209,7 +149,6 @@ export interface WebviewMessage {
 		| "marketplaceInstallResult"
 		| "fetchMarketplaceData"
 		| "switchTab"
-		| "profileThresholds"
 		| "shareTaskSuccess"
 		| "exportMode"
 		| "exportModeResult"
@@ -220,20 +159,32 @@ export interface WebviewMessage {
 		| "saveCodeIndexSettingsAtomic"
 		| "requestCodeIndexSecretStatus"
 		| "requestCommands"
+		| "requestSkills"
 		| "openCommandFile"
 		| "deleteCommand"
 		| "createCommand"
+		| "createSkill"
 		| "insertTextIntoTextarea"
 		| "showMdmAuthRequiredNotification"
 		| "imageGenerationSettings"
-		| "openRouterImageApiKey"
-		| "openRouterImageGenerationSelectedModel"
 		| "queueMessage"
 		| "removeQueuedMessage"
 		| "editQueuedMessage"
 		| "dismissUpsell"
 		| "getDismissedUpsells"
-		| "executeNotificationHook"
+		| "updateSettings"
+		| "allowedCommands"
+		| "deniedCommands"
+		| "killBrowserSession"
+		| "openBrowserSessionPanel"
+		| "showBrowserSessionPanelAtStep"
+		| "refreshBrowserSessionPanel"
+		| "browserPanelDidLaunch"
+		| "openDebugApiHistory"
+		| "openDebugUiHistory"
+		| "downloadErrorDiagnostics"
+		| "requestClaudeCodeRateLimits"
+		| "refreshCustomTools"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
@@ -244,7 +195,11 @@ export interface WebviewMessage {
 	apiConfiguration?: ProviderSettings
 	images?: string[]
 	bool?: boolean
+	success?: boolean
 	value?: number
+	stepIndex?: number
+	isLaunchAction?: boolean
+	forceShow?: boolean
 	commands?: string[]
 	audioType?: AudioType
 	serverName?: string
@@ -281,6 +236,8 @@ export interface WebviewMessage {
 	checkOnly?: boolean // For deleteCustomMode check
 	upsellId?: string // For dismissUpsell
 	list?: string[] // For dismissedUpsells response
+	organizationId?: string | null // For organization switching
+	useProviderSignup?: boolean // For rooCloudSignIn to use provider signup flow
 	codeIndexSettings?: {
 		// Global state settings
 		codebaseIndexEnabled: boolean
@@ -292,12 +249,17 @@ export interface WebviewMessage {
 			| "gemini"
 			| "mistral"
 			| "vercel-ai-gateway"
+			| "bedrock"
+			| "openrouter"
 		codebaseIndexEmbedderBaseUrl?: string
 		codebaseIndexEmbedderModelId: string
 		codebaseIndexEmbedderModelDimension?: number // Generic dimension for all providers
 		codebaseIndexOpenAiCompatibleBaseUrl?: string
+		codebaseIndexBedrockRegion?: string
+		codebaseIndexBedrockProfile?: string
 		codebaseIndexSearchMaxResults?: number
 		codebaseIndexSearchMinScore?: number
+		codebaseIndexOpenRouterSpecificProvider?: string // OpenRouter provider routing
 
 		// Secret settings
 		codeIndexOpenAiKey?: string
@@ -306,14 +268,16 @@ export interface WebviewMessage {
 		codebaseIndexGeminiApiKey?: string
 		codebaseIndexMistralApiKey?: string
 		codebaseIndexVercelAiGatewayApiKey?: string
+		codebaseIndexOpenRouterApiKey?: string
 	}
+	updatedSettings?: RooCodeSettings
 }
 
 export const checkoutDiffPayloadSchema = z.object({
-	ts: z.number(),
+	ts: z.number().optional(),
 	previousCommitHash: z.string().optional(),
 	commitHash: z.string(),
-	mode: z.enum(["full", "checkpoint"]),
+	mode: z.enum(["full", "checkpoint", "from-init", "to-current"]),
 })
 
 export type CheckpointDiffPayload = z.infer<typeof checkoutDiffPayloadSchema>

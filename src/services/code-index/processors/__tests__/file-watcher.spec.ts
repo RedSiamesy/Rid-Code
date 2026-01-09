@@ -3,6 +3,7 @@
 import * as vscode from "vscode"
 
 import { FileWatcher } from "../file-watcher"
+import { codeParser } from "../parser"
 
 // Mock TelemetryService
 vi.mock("../../../../../packages/telemetry/src/TelemetryService", () => ({
@@ -17,6 +18,7 @@ vi.mock("../../../../../packages/telemetry/src/TelemetryService", () => ({
 vi.mock("../../cache-manager")
 vi.mock("../../../core/ignore/RooIgnoreController", () => ({
 	RooIgnoreController: vi.fn().mockImplementation(() => ({
+		initialize: vi.fn().mockResolvedValue(undefined),
 		validateAccess: vi.fn().mockReturnValue(true),
 	})),
 }))
@@ -128,6 +130,7 @@ describe("FileWatcher", () => {
 			"/mock/workspace",
 			mockContext,
 			mockCacheManager,
+			codeParser,
 			mockEmbedder,
 			mockVectorStore,
 			mockIgnoreInstance,

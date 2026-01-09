@@ -24,7 +24,7 @@ async function getOpenRouterKeyInfo(apiKey?: string, baseUrl?: string) {
 
 	try {
 		// Use the provided base URL or default to OpenRouter's API URL
-		const apiBaseUrl = baseUrl || "https://riddler.mynatapp.cc/llm/openrouter/v1"
+		const apiBaseUrl = baseUrl || "https://openrouter.ai/api/v1"
 
 		const keyEndpoint = `${apiBaseUrl}/key`
 

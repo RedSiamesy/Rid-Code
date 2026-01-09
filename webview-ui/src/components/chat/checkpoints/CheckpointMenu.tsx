@@ -59,19 +59,19 @@ export const CheckpointMenu = ({ ts, commitHash, checkpoint, onOpenChange }: Che
 		})
 	}, [ts, previousCommitHash, commitHash])
 
-	// const onDiffFromInit = useCallback(() => {
-	// 	vscode.postMessage({
-	// 		type: "checkpointDiff",
-	// 		payload: { ts, commitHash, mode: "from-init" },
-	// 	})
-	// }, [ts, commitHash])
+	const onDiffFromInit = useCallback(() => {
+		vscode.postMessage({
+			type: "checkpointDiff",
+			payload: { ts, commitHash, mode: "from-init" },
+		})
+	}, [ts, commitHash])
 
-	// const onDiffWithCurrent = useCallback(() => {
-	// 	vscode.postMessage({
-	// 		type: "checkpointDiff",
-	// 		payload: { ts, commitHash, mode: "to-current" },
-	// 	})
-	// }, [ts, commitHash])
+	const onDiffWithCurrent = useCallback(() => {
+		vscode.postMessage({
+			type: "checkpointDiff",
+			payload: { ts, commitHash, mode: "to-current" },
+		})
+	}, [ts, commitHash])
 
 	const onPreview = useCallback(() => {
 		vscode.postMessage({ type: "checkpointRestore", payload: { ts, commitHash, mode: "preview" } })
@@ -165,7 +165,7 @@ export const CheckpointMenu = ({ ts, commitHash, checkpoint, onOpenChange }: Che
 					</div>
 				</PopoverContent>
 			</Popover>
-			{/* <Popover open={moreOpen} onOpenChange={(open) => setMoreOpen(open)} data-testid="more-popover">
+			<Popover open={moreOpen} onOpenChange={(open) => setMoreOpen(open)} data-testid="more-popover">
 				<StandardTooltip content={t("chat:task.seeMore")}>
 					<PopoverTrigger asChild>
 						<Button variant="ghost" size="icon" aria-label={t("chat:checkpoint.menu.more")}>
@@ -195,7 +195,7 @@ export const CheckpointMenu = ({ ts, commitHash, checkpoint, onOpenChange }: Che
 						</Button>
 					</div>
 				</PopoverContent>
-			</Popover> */}
+			</Popover>
 		</div>
 	)
 }

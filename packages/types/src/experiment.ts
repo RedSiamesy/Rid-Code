@@ -12,9 +12,8 @@ export const experimentIds = [
 	"preventFocusDisruption",
 	"imageGeneration",
 	"runSlashCommand",
-	"allowedMultiCall",
-	"useToolCalling",
-	"useNativePrompt",
+	"multipleNativeToolCalls",
+	"customTools",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -31,9 +30,8 @@ export const experimentsSchema = z.object({
 	preventFocusDisruption: z.boolean().optional(),
 	imageGeneration: z.boolean().optional(),
 	runSlashCommand: z.boolean().optional(),
-	allowedMultiCall: z.boolean().optional(),
-	useToolCalling: z.boolean().optional(),
-	useNativePrompt: z.boolean().optional(),
+	multipleNativeToolCalls: z.boolean().optional(),
+	customTools: z.boolean().optional(),
 })
 
 export type Experiments = z.infer<typeof experimentsSchema>

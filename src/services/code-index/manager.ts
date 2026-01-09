@@ -284,15 +284,6 @@ export class CodeIndexManager {
 		return this._searchService!.searchIndex(query, directoryPrefix)
 	}
 
-
-	public async searchSummary(directoryPrefix: string): Promise<VectorStoreSearchResult[]> {
-		if (!this.isFeatureEnabled) {
-			return []
-		}
-		this.assertInitialized()
-		return this._searchService!.searchSummary(directoryPrefix)
-	}
-
 	/**
 	 * Private helper method to recreate services with current configuration.
 	 * Used by both initialize() and handleSettingsChange().

@@ -35,19 +35,6 @@ const getBuildArtifactPatterns = () => [
 	"venv/",
 ]
 
-const getSvnPatterns = () => [
-	".svn/",
-	"_svn/",
-	".svnignore",
-	".svnignore.*",
-	"*.svn-base",
-	"*.svn-work",
-	"*.tmp",
-	"*.temp",
-	"svn-commit*.tmp",
-	"svn-commit*.temp",
-]
-
 const getMediaFilePatterns = () => [
 	"*.jpg",
 	"*.jpeg",
@@ -213,7 +200,6 @@ const getLfsPatterns = async (workspacePath: string) => {
 
 export const getExcludePatterns = async (workspacePath: string) => [
 	".git/",
-	...getSvnPatterns(),
 	...getBuildArtifactPatterns(),
 	...getMediaFilePatterns(),
 	...getCacheFilePatterns(),

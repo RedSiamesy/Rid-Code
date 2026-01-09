@@ -7,7 +7,7 @@ import { AssistantMessageContent } from "./parseAssistantMessage"
  * to avoid reprocessing the entire message on each update.
  */
 export class AssistantMessageParser {
-	public contentBlocks: AssistantMessageContent[] = []
+	private contentBlocks: AssistantMessageContent[] = []
 	private currentTextContent: TextContent | undefined = undefined
 	private currentTextContentStartIndex = 0
 	private currentToolUse: ToolUse | undefined = undefined

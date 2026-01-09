@@ -30,7 +30,7 @@ const mockResolve = (dirPath: string): string => {
  * @param limit - Maximum number of files to return
  * @returns Promise resolving to [file paths, limit reached flag]
  */
-export const listFiles = vi.fn((dirPath: string, _recursive: boolean, limit: number) => {
+export const listFiles = vi.fn((dirPath: string, _recursive: boolean, limit: number, mode?: "file_only" | "dir_only") => {
 	// Early return for limit of 0 - matches the actual implementation
 	if (limit === 0) {
 		return Promise.resolve([[], false])
@@ -55,6 +55,12 @@ export const listFiles = vi.fn((dirPath: string, _recursive: boolean, limit: num
 			`${mockResolve(dirPath)}/file2.js`,
 			`${mockResolve(dirPath)}/folder1/`,
 		]
+		if (mode === "file_only") {
+			return Promise.resolve([mockFiles.filter((file) => !file.endsWith("/")), false])
+		}
+		if (mode === "dir_only") {
+			return Promise.resolve([mockFiles.filter((file) => file.endsWith("/")), false])
+		}
 		return Promise.resolve([mockFiles, false])
 	}
 

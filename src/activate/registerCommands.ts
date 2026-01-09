@@ -8,11 +8,8 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { Package } from "../shared/package"
 import { getCommand } from "../utils/commands"
 import { ClineProvider } from "../core/webview/ClineProvider"
-import { EditorUtils } from "../integrations/editor/EditorUtils"
 import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
-
-import { registerHumanRelayCallback, unregisterHumanRelayCallback, handleHumanRelayResponse } from "./humanRelay"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
 import { importSettingsWithFeedback } from "../core/config/importExport"
@@ -65,6 +62,25 @@ export type RegisterCommandOptions = {
 	provider: ClineProvider
 }
 
+const toContextMention = async (uri: vscode.Uri, basePath: string): Promise<string> => {
+	let relativePath = basePath ? path.relative(basePath, uri.fsPath) : uri.fsPath
+	if (!relativePath) {
+		relativePath = "."
+	}
+
+	const normalizedPath = relativePath.toPosix().replace(/ /g, "\\ ")
+	let isDirectory = false
+
+	try {
+		const stat = await vscode.workspace.fs.stat(uri)
+		isDirectory = (stat.type & vscode.FileType.Directory) !== 0
+	} catch {
+		isDirectory = false
+	}
+
+	return `@${normalizedPath}${isDirectory ? "/" : ""}`
+}
+
 export const registerCommands = (options: RegisterCommandOptions) => {
 	const { context } = options
 
@@ -103,28 +119,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// This ensures the focus happens after the view has switched
 		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
 	},
-	mcpButtonClicked: () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-
-		if (!visibleProvider) {
-			return
-		}
-
-		TelemetryService.instance.captureTitleButtonClicked("mcp")
-
-		visibleProvider.postMessageToWebview({ type: "action", action: "mcpButtonClicked" })
-	},
-	promptsButtonClicked: () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-
-		if (!visibleProvider) {
-			return
-		}
-
-		TelemetryService.instance.captureTitleButtonClicked("prompts")
-
-		visibleProvider.postMessageToWebview({ type: "action", action: "promptsButtonClicked" })
-	},
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
 
@@ -160,20 +154,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		if (!visibleProvider) return
 		visibleProvider.postMessageToWebview({ type: "action", action: "marketplaceButtonClicked" })
 	},
-	showHumanRelayDialog: (params: { requestId: string; promptText: string }) => {
-		const panel = getPanel()
-
-		if (panel) {
-			panel?.webview.postMessage({
-				type: "showHumanRelayDialog",
-				requestId: params.requestId,
-				promptText: params.promptText,
-			})
-		}
-	},
-	registerHumanRelayCallback: registerHumanRelayCallback,
-	unregisterHumanRelayCallback: unregisterHumanRelayCallback,
-	handleHumanRelayResponse: handleHumanRelayResponse,
 	newTask: handleNewTask,
 	setCustomStoragePath: async () => {
 		const { promptForCustomStoragePath } = await import("../utils/storage")
@@ -223,34 +203,38 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		visibleProvider.postMessageToWebview({ type: "acceptInput" })
 	},
-	addFilePathToContext: async (...args: any[]) => {
-		// Handle file path from explorer
-		let filePath: string
-		
-		if (args.length > 0 && args[0] && typeof args[0] === 'object' && args[0].fsPath) {
-			// Called from explorer context menu
-			const uri = args[0] as vscode.Uri
-			const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri)
-			
-			if (!workspaceFolder) {
-				// File is not in a workspace, use absolute path
-				filePath = uri.fsPath
-			} else {
-				// Get relative path from workspace root
-				const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
-				filePath = !relativePath || relativePath.startsWith("..") ? uri.fsPath : relativePath
-			}
-		} else {
-			// Fallback: try to get from active editor
-			const context = EditorUtils.getEditorContext()
-			if (!context) {
-				return
-			}
-			filePath = context.filePath
+	toggleAutoApprove: async () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
 		}
 
-		const params = { filePath }
-		await ClineProvider.handleCodeAction("addFilePathToContext", "ADD_FILE_PATH_TO_CONTEXT", params)
+		visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "toggleAutoApprove",
+		})
+	},
+	addPathsToContext: async (uri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+		const visibleProvider = await ClineProvider.getInstance()
+
+		if (!visibleProvider) {
+			outputChannel.appendLine("Cannot find any visible Roo Code instances.")
+			return
+		}
+
+		const uris = selectedUris?.length ? selectedUris : uri ? [uri] : []
+
+		if (uris.length === 0) {
+			return
+		}
+
+		const basePath = visibleProvider.cwd || ""
+		const mentionPaths = await Promise.all(uris.map((targetUri) => toContextMention(targetUri, basePath)))
+		const text = `${mentionPaths.join(" ")} `
+
+		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "setChatBoxMessage", text })
+		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
 	},
 })
 
