@@ -88,6 +88,10 @@ export async function checkAutoApproval({
 		return state.alwaysAllowBrowser === true ? { decision: "approve" } : { decision: "ask" }
 	}
 
+	if (ask === "web_search" || ask === "url_fetch") {
+		return state.alwaysAllowReadOnly === true ? { decision: "approve" } : { decision: "ask" }
+	}
+
 	if (ask === "use_mcp_server") {
 		if (!text) {
 			return { decision: "ask" }

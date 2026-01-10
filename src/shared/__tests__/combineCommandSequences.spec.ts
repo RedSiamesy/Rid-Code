@@ -141,6 +141,60 @@ describe("combineCommandSequences", () => {
 				ts: 1625097602000,
 			})
 		})
+
+		it("should combine web_search and mcp_server_response messages", () => {
+			const messages: ClineMessage[] = [
+				{
+					type: "ask",
+					ask: "web_search",
+					text: JSON.stringify({
+						query: "TypeScript 5.0 best practices",
+					}),
+					ts: 1625097600000,
+				},
+				{ type: "say", say: "mcp_server_response", text: "Search results", ts: 1625097601000 },
+			]
+
+			const result = combineCommandSequences(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				type: "ask",
+				ask: "web_search",
+				text: JSON.stringify({
+					query: "TypeScript 5.0 best practices",
+					response: "Search results",
+				}),
+				ts: 1625097600000,
+			})
+		})
+
+		it("should combine url_fetch and mcp_server_response messages", () => {
+			const messages: ClineMessage[] = [
+				{
+					type: "ask",
+					ask: "url_fetch",
+					text: JSON.stringify({
+						url: "https://example.com/docs",
+					}),
+					ts: 1625097600000,
+				},
+				{ type: "say", say: "mcp_server_response", text: "Fetched content", ts: 1625097601000 },
+			]
+
+			const result = combineCommandSequences(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				type: "ask",
+				ask: "url_fetch",
+				text: JSON.stringify({
+					url: "https://example.com/docs",
+					response: "Fetched content",
+				}),
+				ts: 1625097600000,
+			})
+		})
 	})
 
 	describe("mixed sequences", () => {

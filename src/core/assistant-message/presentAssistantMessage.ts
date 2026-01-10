@@ -43,6 +43,8 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
+import { webSearchTool } from "../tools/WebSearchTool"
+import { urlFetchTool } from "../tools/UrlFetchTool"
 
 import { formatResponse } from "../prompts/responses"
 
@@ -429,6 +431,14 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "codebase_search": // Add case for the new tool
 						return `[${block.name} for '${block.params.query}']`
+					case "web_search": {
+						const task = block.nativeArgs ? (block.nativeArgs as any).task : block.params.task ?? block.params.query
+						return `[${block.name} for '${task}']`
+					}
+					case "url_fetch": {
+						const url = block.nativeArgs ? (block.nativeArgs as any).url : block.params.url
+						return `[${block.name} for '${url}']`
+					}
 					case "update_todo_list":
 						return `[${block.name}]`
 					case "new_task": {
@@ -509,7 +519,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 			// Multiple native tool calls feature is on hold - always disabled
 			// Previously resolved from experiments.isEnabled(..., EXPERIMENT_IDS.MULTIPLE_NATIVE_TOOL_CALLS)
-			const isMultipleNativeToolCallsEnabled = false
+			const isMultipleNativeToolCallsEnabled = experiments.isEnabled(state?.experiments ?? {}, EXPERIMENT_IDS.MULTIPLE_NATIVE_TOOL_CALLS)
 
 			const pushToolResult = (content: ToolResponse) => {
 				if (toolProtocol === TOOL_PROTOCOL.NATIVE) {
@@ -944,6 +954,24 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_search":
 					await codebaseSearchTool.handle(cline, block as ToolUse<"codebase_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						removeClosingTag,
+						toolProtocol,
+					})
+					break
+				case "web_search":
+					await webSearchTool.handle(cline, block as ToolUse<"web_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						removeClosingTag,
+						toolProtocol,
+					})
+					break
+				case "url_fetch":
+					await urlFetchTool.handle(cline, block as ToolUse<"url_fetch">, {
 						askApproval,
 						handleError,
 						pushToolResult,

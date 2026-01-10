@@ -149,6 +149,40 @@ Example: Requesting to list all files in the current directory
 <recursive>false</recursive>
 </list_files>
 
+## web_search
+Description: Create a web search sub-agent that will search for the context information you need on the internet. Please describe your current task requirements in detail to help the sub-agent conduct a better web search.
+Parameters:
+- task: (required) The search task to execute. Should be a detailed description that includes context about the current task, what information is needed, and any specific requirements.
+
+Usage:
+<web_search>
+<task>search task here</task>
+</web_search>
+
+Example: Search for recent TypeScript best practices
+<web_search>
+<task>TypeScript 5.0 best practices for large scale applications 2024</task>
+</web_search>
+
+Note: The task should be comprehensive and include relevant context for better search results.
+
+## url_fetch
+Description: Fetch and extract content from a specific URL. This tool can read web pages and convert them to readable markdown format.
+Parameters:
+- url: (required) The URL of the web page to fetch and extract content from.
+
+Usage:
+<url_fetch>
+<url>https://example.com/page</url>
+</url_fetch>
+
+Example: Fetch content from a documentation page
+<url_fetch>
+<url>https://docs.microsoft.com/en-us/typescript/handbook/basic-types</url>
+</url_fetch>
+
+Note: The URL must be publicly accessible and should point to a web page with readable content.
+
 ## write_to_file
 Description: Request to write content to a file. This tool is primarily used for **creating new files** or for scenarios where a **complete rewrite of an existing file is intentionally required**. If the file exists, it will be overwritten. If it doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.
 

@@ -1411,7 +1411,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					type === "tool" ||
 					type === "command" ||
 					type === "browser_action_launch" ||
-					type === "use_mcp_server"
+					type === "use_mcp_server" ||
+					type === "web_search" ||
+					type === "url_fetch"
 				) {
 					// For tool approvals, we need to approve first, then send
 					// the message if there's text/images.
@@ -1443,7 +1445,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							type === "tool" ||
 							type === "command" ||
 							type === "browser_action_launch" ||
-							type === "use_mcp_server"
+							type === "use_mcp_server" ||
+							type === "web_search" ||
+							type === "url_fetch"
 						) {
 							this.handleWebviewAskResponse("yesButtonClicked", message.text, message.images)
 						} else {
@@ -4201,7 +4205,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Parallel tool calls are disabled - feature is on hold
 		// Previously resolved from experiments.isEnabled(..., EXPERIMENT_IDS.MULTIPLE_NATIVE_TOOL_CALLS)
-		const parallelToolCallsEnabled = false
+		const parallelToolCallsEnabled = experiments.isEnabled(state?.experiments ?? {}, EXPERIMENT_IDS.MULTIPLE_NATIVE_TOOL_CALLS)
+		// const parallelToolCallsEnabled = false
 
 		const metadata: ApiHandlerCreateMessageMetadata = {
 			mode: mode,

@@ -266,6 +266,14 @@
 		"wantsToUseTool": "Roo wants to use a tool on the {{serverName}} MCP server",
 		"wantsToAccessResource": "Roo wants to access a resource on the {{serverName}} MCP server"
 	},
+	"webSearch": {
+		"running": "Web search",
+		"complete": "Web search complete"
+	},
+	"urlFetch": {
+		"running": "URL fetch",
+		"complete": "URL fetch complete"
+	},
 	"modes": {
 		"wantsToSwitch": "Roo wants to switch to {{mode}} mode",
 		"wantsToSwitchWithReason": "Roo wants to switch to {{mode}} mode because: {{reason}}",

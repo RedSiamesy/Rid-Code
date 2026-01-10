@@ -88,6 +88,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		mode,
 		setMode,
 		alwaysAllowModeSwitch,
+		alwaysAllowReadOnly,
+		alwaysAllowMcp,
+		autoApprovalEnabled,
+		mcpServers,
 		customModes,
 		telemetrySetting,
 		hasSystemPromptOverride,
@@ -348,7 +352,41 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "use_mcp_server":
 							setSendingDisabled(isPartial)
 							setClineAsk("use_mcp_server")
-							setEnableButtons(!isPartial)
+							// Check if MCP tool will be auto-approved
+							let mcpAutoApproved = false
+							if (autoApprovalEnabled && alwaysAllowMcp && lastMessage.text) {
+								try {
+									const mcpServerUse = JSON.parse(lastMessage.text)
+									if (mcpServerUse.type === "access_mcp_resource") {
+										mcpAutoApproved = true
+									} else if (mcpServerUse.type === "use_mcp_tool" && mcpServerUse.toolName) {
+										const server = mcpServers?.find((s) => s.name === mcpServerUse.serverName)
+										const tool = server?.tools?.find((t) => t.name === mcpServerUse.toolName)
+										mcpAutoApproved = tool?.alwaysAllow || false
+									}
+								} catch {
+									// If parsing fails, don't auto-approve
+								}
+							}
+							setEnableButtons(!isPartial && !mcpAutoApproved)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
+						case "web_search":
+							setSendingDisabled(isPartial)
+							setClineAsk("web_search")
+							// Disable buttons if auto-approval is enabled
+							const webSearchAutoApproved = autoApprovalEnabled && alwaysAllowReadOnly
+							setEnableButtons(!isPartial && !webSearchAutoApproved)
+							setPrimaryButtonText(t("chat:approve.title"))
+							setSecondaryButtonText(t("chat:reject.title"))
+							break
+						case "url_fetch":
+							setSendingDisabled(isPartial)
+							setClineAsk("url_fetch")
+							// Disable buttons if auto-approval is enabled
+							const urlFetchAutoApproved = autoApprovalEnabled && alwaysAllowReadOnly
+							setEnableButtons(!isPartial && !urlFetchAutoApproved)
 							setPrimaryButtonText(t("chat:approve.title"))
 							setSecondaryButtonText(t("chat:reject.title"))
 							break
@@ -623,6 +661,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "command": // User can provide feedback to a tool or command use.
 						case "command_output": // User can send input to command stdin.
 						case "use_mcp_server":
+						case "web_search":
+						case "url_fetch":
 						case "completion_result": // If this happens then the user has feedback for the completion result.
 						case "resume_task":
 						case "resume_completed_task":
@@ -680,6 +720,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "browser_action_launch":
 				case "use_mcp_server":
+				case "web_search":
+				case "url_fetch":
 				case "mistake_limit_reached":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {

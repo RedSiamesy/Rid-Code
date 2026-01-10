@@ -27,6 +27,8 @@ import { getCodebaseSearchDescription } from "./codebase-search"
 import { getUpdateTodoListDescription } from "./update-todo-list"
 import { getRunSlashCommandDescription } from "./run-slash-command"
 import { getGenerateImageDescription } from "./generate-image"
+import { getWebSearchDescription } from "./web-search"
+import { getUrlFetchDescription } from "./url-fetch"
 
 // Map of tool names to their description functions
 const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined> = {
@@ -43,6 +45,8 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
 	use_mcp_tool: (args) => getUseMcpToolDescription(args),
 	access_mcp_resource: (args) => getAccessMcpResourceDescription(args),
 	codebase_search: (args) => getCodebaseSearchDescription(args),
+	web_search: (args) => getWebSearchDescription(args),
+	url_fetch: (args) => getUrlFetchDescription(args),
 	switch_mode: () => getSwitchModeDescription(),
 	new_task: (args) => getNewTaskDescription(args),
 	apply_diff: (args) =>
@@ -169,6 +173,8 @@ export {
 	getCodebaseSearchDescription,
 	getRunSlashCommandDescription,
 	getGenerateImageDescription,
+	getWebSearchDescription,
+	getUrlFetchDescription,
 }
 
 // Export native tool definitions (JSON schema format for OpenAI-compatible APIs)

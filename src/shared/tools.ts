@@ -108,6 +108,8 @@ export type NativeToolArgs = {
 	}
 	browser_action: BrowserActionParams
 	codebase_search: { query: string; path?: string }
+	web_search: { task: string }
+	url_fetch: { url: string }
 	fetch_instructions: { task: string }
 	generate_image: GenerateImageParams
 	grep: {
@@ -201,6 +203,16 @@ export interface CodebaseSearchToolUse extends ToolUse<"codebase_search"> {
 export interface SearchFilesToolUse extends ToolUse<"search_files"> {
 	name: "search_files"
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern">>
+}
+
+export interface WebSearchToolUse extends ToolUse<"web_search"> {
+	name: "web_search"
+	params: Partial<Pick<Record<ToolParamName, string>, "task" | "query">>
+}
+
+export interface UrlFetchToolUse extends ToolUse<"url_fetch"> {
+	name: "url_fetch"
+	params: Partial<Pick<Record<ToolParamName, string>, "url">>
 }
 
 export interface GrepToolUse extends ToolUse<"grep"> {
@@ -304,6 +316,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	switch_mode: "switch modes",
 	new_task: "create new task",
 	codebase_search: "codebase search",
+	web_search: "web search",
+	url_fetch: "fetch url content",
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
 	generate_image: "generate images",
@@ -313,7 +327,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 // Define available tool groups.
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	read: {
-		tools: ["read_file", "fetch_instructions", "grep", "glob", "list_files", "codebase_search"],
+		tools: ["read_file", "fetch_instructions", "grep", "glob", "list_files", "codebase_search", "web_search", "url_fetch"],
 	},
 	edit: {
 		tools: ["apply_diff", "write_to_file", "generate_image"],

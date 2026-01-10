@@ -146,7 +146,7 @@ async function generatePrompt(
 
 	const basePrompt = `${roleDefinition}
 
-${getPersonaSection()}	
+${getPersonaSection(experiments?.multipleNativeToolCalls ?? false)}	
 
 ${customInstructions}	
 

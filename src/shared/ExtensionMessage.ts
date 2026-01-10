@@ -469,6 +469,16 @@ export interface ClineAskUseMcpServer {
 	response?: string
 }
 
+export interface ClineAskWebSearch {
+	query: string
+	response?: string
+}
+
+export interface ClineAskUrlFetch {
+	url: string
+	response?: string
+}
+
 export interface ClineApiReqInfo {
 	request?: string
 	tokensIn?: number

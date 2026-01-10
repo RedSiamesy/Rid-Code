@@ -469,6 +469,20 @@ export class NativeToolCallParser {
 					}
 				}
 				break
+			case "web_search":
+				if (partialArgs.task !== undefined) {
+					nativeArgs = {
+						task: partialArgs.task,
+					}
+				}
+				break
+			case "url_fetch":
+				if (partialArgs.url !== undefined) {
+					nativeArgs = {
+						url: partialArgs.url,
+					}
+				}
+				break
 			case "grep":
 				if (partialArgs.path !== undefined || partialArgs.regex !== undefined) {
 					nativeArgs = {
@@ -726,6 +740,20 @@ export class NativeToolCallParser {
 					if (args.task !== undefined) {
 						nativeArgs = {
 							task: args.task,
+						} as NativeArgsFor<TName>
+					}
+					break
+				case "web_search":
+					if (args.task !== undefined) {
+						nativeArgs = {
+							task: args.task,
+						} as NativeArgsFor<TName>
+					}
+					break
+				case "url_fetch":
+					if (args.url !== undefined) {
+						nativeArgs = {
+							url: args.url,
 						} as NativeArgsFor<TName>
 					}
 					break

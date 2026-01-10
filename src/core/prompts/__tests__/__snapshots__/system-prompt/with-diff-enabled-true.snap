@@ -149,6 +149,40 @@ Example: Requesting to list all files in the current directory
 <recursive>false</recursive>
 </list_files>
 
+## web_search
+Description: Create a web search sub-agent that will search for the context information you need on the internet. Please describe your current task requirements in detail to help the sub-agent conduct a better web search.
+Parameters:
+- task: (required) The search task to execute. Should be a detailed description that includes context about the current task, what information is needed, and any specific requirements.
+
+Usage:
+<web_search>
+<task>search task here</task>
+</web_search>
+
+Example: Search for recent TypeScript best practices
+<web_search>
+<task>TypeScript 5.0 best practices for large scale applications 2024</task>
+</web_search>
+
+Note: The task should be comprehensive and include relevant context for better search results.
+
+## url_fetch
+Description: Fetch and extract content from a specific URL. This tool can read web pages and convert them to readable markdown format.
+Parameters:
+- url: (required) The URL of the web page to fetch and extract content from.
+
+Usage:
+<url_fetch>
+<url>https://example.com/page</url>
+</url_fetch>
+
+Example: Fetch content from a documentation page
+<url_fetch>
+<url>https://docs.microsoft.com/en-us/typescript/handbook/basic-types</url>
+</url_fetch>
+
+Note: The URL must be publicly accessible and should point to a web page with readable content.
+
 ## apply_diff
 Description: Request to apply PRECISE, TARGETED modifications to an existing file by searching for specific sections of content and replacing them. This tool is for SURGICAL EDITS ONLY - specific changes to existing code.
 You can perform multiple distinct search and replace operations within a single `apply_diff` call by providing multiple SEARCH/REPLACE blocks in the `diff` parameter. This is the preferred way to make several targeted changes efficiently.

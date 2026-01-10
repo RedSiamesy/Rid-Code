@@ -241,6 +241,14 @@
 		"wantsToUseTool": "Roo想在{{serverName}} MCP上使用工具",
 		"wantsToAccessResource": "Roo想访问{{serverName}} MCP服务上的资源"
 	},
+	"webSearch": {
+		"running": "网络搜索",
+		"complete": "网络搜索完成"
+	},
+	"urlFetch": {
+		"running": "获取网页内容",
+		"complete": "获取网页内容完成"
+	},
 	"modes": {
 		"wantsToSwitch": "即将切换至{{mode}}模式",
 		"wantsToSwitchWithReason": "即将切换至{{mode}}模式（原因：{{reason}}）",

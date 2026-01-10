@@ -7,7 +7,13 @@ import { VSCodeBadge } from "@vscode/webview-ui-toolkit/react"
 import type { ClineMessage, FollowUpData, SuggestionItem } from "@roo-code/types"
 import { Mode } from "@roo/modes"
 
-import { ClineApiReqInfo, ClineAskUseMcpServer, ClineSayTool } from "@roo/ExtensionMessage"
+import {
+	ClineApiReqInfo,
+	ClineAskUseMcpServer,
+	ClineAskWebSearch,
+	ClineAskUrlFetch,
+	ClineSayTool,
+} from "@roo/ExtensionMessage"
 import { COMMAND_OUTPUT_STRING } from "@roo/combineCommandSequences"
 import { safeJsonParse } from "@roo/safeJsonParse"
 
@@ -62,6 +68,7 @@ import {
 	MessageCircle,
 	Repeat2,
 	Pin,
+	ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PathTooltip } from "../ui/PathTooltip"
@@ -175,6 +182,7 @@ export const ChatRowContent = ({
 	const [editedContent, setEditedContent] = useState("")
 	const [editMode, setEditMode] = useState<Mode>(mode || "code")
 	const [editImages, setEditImages] = useState<string[]>([])
+	const [isToolResultExpanded, setIsToolResultExpanded] = useState(false)
 
 	// Handle message events for image selection during edit mode
 	useEffect(() => {
@@ -291,6 +299,32 @@ export const ChatRowContent = ({
 						{mcpServerUse.type === "use_mcp_tool"
 							? t("chat:mcp.wantsToUseTool", { serverName: mcpServerUse.serverName })
 							: t("chat:mcp.wantsToAccessResource", { serverName: mcpServerUse.serverName })}
+					</span>,
+				]
+			case "web_search":
+				return [
+					isMcpServerResponding ? (
+						<ProgressIndicator />
+					) : (
+						<span
+							className="codicon codicon-search"
+							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
+					),
+					<span style={{ color: normalColor, fontWeight: "bold" }}>
+						{isMcpServerResponding ? t("chat:webSearch.running") : t("chat:webSearch.complete")}
+					</span>,
+				]
+			case "url_fetch":
+				return [
+					isMcpServerResponding ? (
+						<ProgressIndicator />
+					) : (
+						<span
+							className="codicon codicon-globe"
+							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
+					),
+					<span style={{ color: normalColor, fontWeight: "bold" }}>
+						{isMcpServerResponding ? t("chat:urlFetch.running") : t("chat:urlFetch.complete")}
 					</span>,
 				]
 			case "completion_result":
@@ -1624,6 +1658,110 @@ export const ChatRowContent = ({
 							</div>
 						</>
 					)
+				case "web_search": {
+					const webSearch = safeJsonParse<ClineAskWebSearch>(message.text, {} as ClineAskWebSearch)
+					const query = webSearch?.query || ""
+					const response = webSearch?.response
+					const canToggle = Boolean(response)
+					const handleToggle = () => {
+						if (canToggle) {
+							setIsToolResultExpanded((prev) => !prev)
+						}
+					}
+
+					return (
+						<>
+							<div style={headerStyle}>
+								{icon}
+								{title}
+							</div>
+							<div className="pl-6 pt-1">
+								<ToolUseBlock
+									className={cn(
+										"group mt-2 border border-vscode-border/60 bg-vscode-editor-background/70 p-3",
+										canToggle ? "cursor-pointer" : "cursor-default",
+									)}
+									onClick={handleToggle}>
+									<div className="flex items-center justify-between gap-3 mb-2">
+										<div className="text-xs font-medium text-vscode-descriptionForeground">
+											Query
+										</div>
+										{canToggle && (
+											<ChevronUp
+												className={cn(
+													"w-4 transition-all opacity-0 group-hover:opacity-100",
+													!isToolResultExpanded && "-rotate-180",
+												)}
+											/>
+										)}
+									</div>
+									<div className="mt-2 rounded-sm border border-vscode-input-border bg-vscode-input-background text-vscode-input-foreground px-2 py-1.5 font-mono text-xs leading-relaxed break-words">
+										{query}
+									</div>
+									{response && isToolResultExpanded && (
+										<div
+											className="mt-4 border-t border-vscode-border/60 pt-3 text-sm max-h-[360px] overflow-y-auto"
+											onClick={(event) => event.stopPropagation()}>
+											<Markdown markdown={response} partial={message.partial} />
+										</div>
+									)}
+								</ToolUseBlock>
+							</div>
+						</>
+					)
+				}
+				case "url_fetch": {
+					const urlFetch = safeJsonParse<ClineAskUrlFetch>(message.text, {} as ClineAskUrlFetch)
+					const url = urlFetch?.url || ""
+					const response = urlFetch?.response
+					const canToggle = Boolean(response)
+					const handleToggle = () => {
+						if (canToggle) {
+							setIsToolResultExpanded((prev) => !prev)
+						}
+					}
+
+					return (
+						<>
+							<div style={headerStyle}>
+								{icon}
+								{title}
+							</div>
+							<div className="pl-6 pt-1">
+								<ToolUseBlock
+									className={cn(
+										"group mt-2 border border-vscode-border/60 bg-vscode-editor-background/70 p-3",
+										canToggle ? "cursor-pointer" : "cursor-default",
+									)}
+									onClick={handleToggle}>
+									<div className="flex items-center justify-between gap-3 mb-2">
+										<div className="text-xs font-medium text-vscode-descriptionForeground">
+											URL
+										</div>
+										{canToggle && (
+											<ChevronUp
+												className={cn(
+													"w-4 transition-all opacity-0 group-hover:opacity-100",
+													!isToolResultExpanded && "-rotate-180",
+												)}
+											/>
+										)}
+									</div>
+									<div className="mt-2 rounded-sm border border-vscode-input-border bg-vscode-input-background text-vscode-input-foreground px-2 py-1.5 font-mono text-xs leading-relaxed break-words">
+										{url}
+									</div>
+									{response && isToolResultExpanded && (
+										<div
+											className="mt-4 border-t border-vscode-border/60 pt-3 text-sm max-h-[360px] overflow-y-auto"
+											onClick={(event) => event.stopPropagation()}>
+											<Markdown markdown={response} partial={message.partial} />
+										</div>
+									)}
+								</ToolUseBlock>
+							</div>
+						</>
+					)
+				}
 				case "completion_result":
 					if (message.text) {
 						return (
