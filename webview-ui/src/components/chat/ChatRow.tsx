@@ -1679,30 +1679,30 @@ export const ChatRowContent = ({
 							</div>
 							<div className="pl-6 pt-1">
 								<ToolUseBlock
-									className={cn(
-										"group mt-2 border border-vscode-border/60 bg-vscode-editor-background/70 p-3",
-										canToggle ? "cursor-pointer" : "cursor-default",
-									)}
+									className={cn("group", canToggle ? "cursor-pointer" : "cursor-default")}
 									onClick={handleToggle}>
-									<div className="flex items-center justify-between gap-3 mb-2">
-										<div className="text-xs font-medium text-vscode-descriptionForeground">
-											Query
+									<ToolUseBlockHeader className="flex items-center justify-between gap-3">
+										<div className="flex items-center gap-2 overflow-hidden">
+											<div className="text-xs font-medium text-vscode-descriptionForeground shrink-0">
+												Query
+											</div>
+											<div className="font-mono text-xs text-vscode-foreground truncate">
+												{query}
+											</div>
 										</div>
 										{canToggle && (
 											<ChevronUp
 												className={cn(
-													"w-4 transition-all opacity-0 group-hover:opacity-100",
+													"w-4 h-4 transition-all opacity-0 group-hover:opacity-100 shrink-0",
 													!isToolResultExpanded && "-rotate-180",
 												)}
 											/>
 										)}
-									</div>
-									<div className="mt-2 rounded-sm border border-vscode-input-border bg-vscode-input-background text-vscode-input-foreground px-2 py-1.5 font-mono text-xs leading-relaxed break-words">
-										{query}
-									</div>
+									</ToolUseBlockHeader>
+
 									{response && isToolResultExpanded && (
 										<div
-											className="mt-4 border-t border-vscode-border/60 pt-3 text-sm max-h-[360px] overflow-y-auto"
+											className="mt-3 border-t border-vscode-editorGroup-border pt-3 text-sm max-h-[360px] overflow-y-auto"
 											onClick={(event) => event.stopPropagation()}>
 											<Markdown markdown={response} partial={message.partial} />
 										</div>
@@ -1731,30 +1731,30 @@ export const ChatRowContent = ({
 							</div>
 							<div className="pl-6 pt-1">
 								<ToolUseBlock
-									className={cn(
-										"group mt-2 border border-vscode-border/60 bg-vscode-editor-background/70 p-3",
-										canToggle ? "cursor-pointer" : "cursor-default",
-									)}
+									className={cn("group", canToggle ? "cursor-pointer" : "cursor-default")}
 									onClick={handleToggle}>
-									<div className="flex items-center justify-between gap-3 mb-2">
-										<div className="text-xs font-medium text-vscode-descriptionForeground">
-											URL
+									<ToolUseBlockHeader className="flex items-center justify-between gap-3">
+										<div className="flex items-center gap-2 overflow-hidden">
+											<div className="text-xs font-medium text-vscode-descriptionForeground shrink-0">
+												URL
+											</div>
+											<div className="font-mono text-xs text-vscode-foreground truncate">
+												{url}
+											</div>
 										</div>
 										{canToggle && (
 											<ChevronUp
 												className={cn(
-													"w-4 transition-all opacity-0 group-hover:opacity-100",
+													"w-4 h-4 transition-all opacity-0 group-hover:opacity-100 shrink-0",
 													!isToolResultExpanded && "-rotate-180",
 												)}
 											/>
 										)}
-									</div>
-									<div className="mt-2 rounded-sm border border-vscode-input-border bg-vscode-input-background text-vscode-input-foreground px-2 py-1.5 font-mono text-xs leading-relaxed break-words">
-										{url}
-									</div>
+									</ToolUseBlockHeader>
+
 									{response && isToolResultExpanded && (
 										<div
-											className="mt-4 border-t border-vscode-border/60 pt-3 text-sm max-h-[360px] overflow-y-auto"
+											className="mt-3 border-t border-vscode-editorGroup-border pt-3 text-sm max-h-[360px] overflow-y-auto"
 											onClick={(event) => event.stopPropagation()}>
 											<Markdown markdown={response} partial={message.partial} />
 										</div>
