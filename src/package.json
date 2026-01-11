@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.39.1",
+	"version": "3.39.2",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -586,7 +586,6 @@
 		"rimraf": "^6.0.1",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.3",
-		"typescript": "5.8.3",
 		"vitest": "^3.2.3",
 		"zod-to-ts": "^1.2.0"
 	}

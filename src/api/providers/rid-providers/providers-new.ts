@@ -6,14 +6,14 @@ import {
     type ModelInfo,
     openAiModelInfoSaneDefaults,
     NATIVE_TOOL_DEFAULTS,
+    ModelRecord,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "../../../shared/api"
+import type { ApiHandlerOptions } from "../../../shared/api"
 
 import { XmlMatcher } from "../../../utils/xml-matcher"
 
 import { convertToOpenAiMessages } from "../../transform/openai-format"
-import { convertToSimpleMessages } from "../../transform/simple-format"
 import { ApiStream, ApiStreamUsageChunk } from "../../transform/stream"
 import { getModelParams } from "../../transform/model-params"
 
@@ -62,9 +62,6 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
     ): ApiStream {
         const { info: modelInfo, reasoning } = this.getModel()
         const modelId = this.options.openAiModelId ?? ""
-        const enabledLegacyFormat = this.options.openAiLegacyFormat ?? false
-
-
         // if (this.options.openAiStreamingEnabled ?? true) {
         if (true) {
             let systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
@@ -73,50 +70,46 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
             }
             let convertedMessages
 
-            if (enabledLegacyFormat) {
-                convertedMessages = [systemMessage, ...convertToSimpleMessages(messages)]
-            } else {
-                if (modelInfo.supportsPromptCache) {
-                    systemMessage = {
-                        role: "system",
-                        content: [
-                            {
-                                type: "text",
-                                text: systemPrompt,
-                                // @ts-ignore-next-line
-                                cache_control: { type: "ephemeral" },
-                            },
-                        ],
-                    }
-                }
-
-                convertedMessages = [systemMessage, ...convertToOpenAiMessages(messages)]
-
-                if (modelInfo.supportsPromptCache) {
-                    // Note: the following logic is copied from openrouter:
-                    // Add cache_control to the last two user messages
-                    // (note: this works because we only ever add one user message at a time, but if we added multiple we'd need to mark the user message before the last assistant message)
-                    const lastTwoUserMessages = convertedMessages.filter((msg) => msg.role === "user").slice(-2)
-
-                    lastTwoUserMessages.forEach((msg) => {
-                        if (typeof msg.content === "string") {
-                            msg.content = [{ type: "text", text: msg.content }]
-                        }
-
-                        if (Array.isArray(msg.content)) {
-                            // NOTE: this is fine since env details will always be added at the end. but if it weren't there, and the user added a image_url type message, it would pop a text part before it and then move it after to the end.
-                            let lastTextPart = msg.content.filter((part) => part.type === "text").pop()
-
-                            if (!lastTextPart) {
-                                lastTextPart = { type: "text", text: "..." }
-                                msg.content.push(lastTextPart)
-                            }
-
+            if (modelInfo.supportsPromptCache) {
+                systemMessage = {
+                    role: "system",
+                    content: [
+                        {
+                            type: "text",
+                            text: systemPrompt,
                             // @ts-ignore-next-line
-                            lastTextPart["cache_control"] = { type: "ephemeral" }
-                        }
-                    })
+                            cache_control: { type: "ephemeral" },
+                        },
+                    ],
                 }
+            }
+
+            convertedMessages = [systemMessage, ...convertToOpenAiMessages(messages)]
+
+            if (modelInfo.supportsPromptCache) {
+                // Note: the following logic is copied from openrouter:
+                // Add cache_control to the last two user messages
+                // (note: this works because we only ever add one user message at a time, but if we added multiple we'd need to mark the user message before the last assistant message)
+                const lastTwoUserMessages = convertedMessages.filter((msg) => msg.role === "user").slice(-2)
+
+                lastTwoUserMessages.forEach((msg) => {
+                    if (typeof msg.content === "string") {
+                        msg.content = [{ type: "text", text: msg.content }]
+                    }
+
+                    if (Array.isArray(msg.content)) {
+                        // NOTE: this is fine since env details will always be added at the end. but if it weren't there, and the user added a image_url type message, it would pop a text part before it and then move it after to the end.
+                        let lastTextPart = msg.content.filter((part) => part.type === "text").pop()
+
+                        if (!lastTextPart) {
+                            lastTextPart = { type: "text", text: "..." }
+                            msg.content.push(lastTextPart)
+                        }
+
+                        // @ts-ignore-next-line
+                        lastTextPart["cache_control"] = { type: "ephemeral" }
+                    }
+                })
             }
 
             const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {

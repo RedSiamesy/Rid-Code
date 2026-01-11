@@ -300,6 +300,17 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		})
 	}, [])
 
+	const setDebug = useCallback((debug: boolean) => {
+		setCachedState((prevState) => {
+			if (prevState.debug === debug) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, debug }
+		})
+	}, [])
+
 	const setImageGenerationProvider = useCallback((provider: ImageGenerationProvider) => {
 		setCachedState((prevState) => {
 			if (prevState.imageGenerationProvider !== provider) {
@@ -431,6 +442,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			vscode.postMessage({ type: "updateCondensingPrompt", text: customCondensingPrompt || "" })
 			vscode.postMessage({ type: "upsertApiConfiguration", text: currentApiConfigName, apiConfiguration })
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
+			vscode.postMessage({ type: "debugSetting", bool: cachedState.debug })
 
 			setChangeDetected(false)
 		}
@@ -866,7 +878,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 					{/* About Section */}
 					{activeTab === "about" && (
-						<About telemetrySetting={telemetrySetting} setTelemetrySetting={setTelemetrySetting} />
+						<About
+							telemetrySetting={telemetrySetting}
+							setTelemetrySetting={setTelemetrySetting}
+							debug={cachedState.debug}
+							setDebug={setDebug}
+						/>
 					)}
 				</TabContent>
 			</div>

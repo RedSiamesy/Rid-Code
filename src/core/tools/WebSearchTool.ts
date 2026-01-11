@@ -1,6 +1,6 @@
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
-import { ClineAskWebSearch } from "../../shared/ExtensionMessage"
+import { ClineAskWebSearch } from "@roo-code/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 

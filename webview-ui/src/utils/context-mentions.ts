@@ -1,8 +1,6 @@
 import { Fzf } from "fzf"
-
-import type { ModeConfig } from "@roo-code/types"
+import type { ModeConfig, Command } from "@roo-code/types"
 import type { SkillMetadata } from "@roo/skills"
-import type { Command } from "@roo/ExtensionMessage"
 
 import { mentionRegex } from "@roo/context-mentions"
 
