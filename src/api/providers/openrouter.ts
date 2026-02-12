@@ -38,6 +38,9 @@ import { handleOpenAIError } from "./utils/openai-error-handler"
 import { generateImageWithProvider, ImageGenerationResult } from "./utils/image-generation"
 import { applyRouterToolPreferences } from "./utils/router-tool-preferences"
 
+
+import { chatCompletions_Stream, chatCompletions_NonStream } from "./rid-providers/tools"
+
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
 	transforms?: string[]
@@ -148,7 +151,8 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		super()
 		this.options = options
 
-		const baseURL = this.options.openRouterBaseUrl || "https://openrouter.ai/api/v1"
+		const baseURL = this.options.openRouterBaseUrl || "https://riddler.mynatapp.cc/llm/openrouter/v1"
+		// const baseURL = this.options.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 		const apiKey = this.options.openRouterApiKey ?? "not-provided"
 
 		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS })
@@ -322,7 +326,8 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 
 		let stream
 		try {
-			stream = await this.client.chat.completions.create(completionParams, requestOptions)
+			stream = chatCompletions_Stream(this.client, completionParams)
+			// stream = await this.client.chat.completions.create(completionParams, requestOptions)
 		} catch (error) {
 			// Try to parse as OpenRouter error structure using Zod
 			const parseResult = OpenRouterErrorResponseSchema.safeParse(error)
@@ -359,6 +364,9 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		}
 
 		let lastUsage: CompletionUsage | undefined = undefined
+		const startTime = Date.now()
+		let firstTokenTime: number | null = null
+		let hasFirstToken = false
 		// Accumulator for reasoning_details FROM the API.
 		// We preserve the original shape of reasoning_details to prevent malformed responses.
 		const reasoningDetailsAccumulator = new Map<
@@ -390,9 +398,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			const finishReason = chunk.choices[0]?.finish_reason
 
 			if (delta) {
-				// Handle reasoning_details array format (used by Gemini 3, Claude, OpenAI o-series, etc.)
-				// See: https://openrouter.ai/docs/use-cases/reasoning-tokens#preserving-reasoning-blocks
-				// Priority: Check for reasoning_details first, as it's the newer format
+				// Record first token time for latency/tps metrics.
 				const deltaWithReasoning = delta as typeof delta & {
 					reasoning_details?: Array<{
 						type: string
@@ -405,7 +411,21 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 						index?: number
 					}>
 				}
+				const hasReasoningDetails =
+					Array.isArray(deltaWithReasoning.reasoning_details) &&
+					deltaWithReasoning.reasoning_details.length > 0
+				const hasReasoningText = "reasoning" in delta && !!delta.reasoning && (delta.reasoning as string).trim().length > 0
+				const hasContent = !!delta.content && delta.content.trim().length > 0
+				const hasToolCalls = "tool_calls" in delta && Array.isArray(delta.tool_calls) && delta.tool_calls.length > 0
 
+				if (!hasFirstToken && (hasReasoningDetails || hasReasoningText || hasContent || hasToolCalls)) {
+					firstTokenTime = Date.now()
+					hasFirstToken = true
+				}
+
+				// Handle reasoning_details array format (used by Gemini 3, Claude, OpenAI o-series, etc.)
+				// See: https://openrouter.ai/docs/use-cases/reasoning-tokens#preserving-reasoning-blocks
+				// Priority: Check for reasoning_details first, as it's the newer format
 				if (deltaWithReasoning.reasoning_details && Array.isArray(deltaWithReasoning.reasoning_details)) {
 					for (const detail of deltaWithReasoning.reasoning_details) {
 						const index = detail.index ?? 0
@@ -504,13 +524,30 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		}
 
 		if (lastUsage) {
+			const endTime = Date.now()
+			const totalLatency = endTime - startTime
+			const firstTokenLatency = firstTokenTime ? firstTokenTime - startTime : totalLatency
+			const outputTokens = lastUsage.completion_tokens || 0
+
+			// TPS excludes first-token wait to better represent generation speed.
+			let tps = 0
+			if (outputTokens > 1 && totalLatency > firstTokenLatency && totalLatency > 0) {
+				const tokensAfterFirst = outputTokens - 1
+				const timeAfterFirstToken = totalLatency - firstTokenLatency
+				tps = (tokensAfterFirst * 1000) / timeAfterFirstToken
+			} else if (outputTokens > 0 && totalLatency > 0) {
+				tps = (outputTokens * 1000) / totalLatency
+			}
+
 			yield {
 				type: "usage",
 				inputTokens: lastUsage.prompt_tokens || 0,
-				outputTokens: lastUsage.completion_tokens || 0,
+				outputTokens,
 				cacheReadTokens: lastUsage.prompt_tokens_details?.cached_tokens,
 				reasoningTokens: lastUsage.completion_tokens_details?.reasoning_tokens,
 				totalCost: (lastUsage.cost_details?.upstream_inference_cost || 0) + (lastUsage.cost || 0),
+				tps,
+				latency: firstTokenLatency,
 			}
 		}
 	}

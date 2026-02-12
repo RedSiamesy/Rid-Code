@@ -35,6 +35,8 @@ import {
 	IOIntelligenceHandler,
 	DoubaoHandler,
 	IFlowHandler,
+	ModelScopeHandler,
+	ZenHandler,
 	ZAiHandler,
 	FireworksHandler,
 	RooHandler,
@@ -155,6 +157,10 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new IFlowHandler(options)
 		case "zcode":
 			return new ZCodeHandler(options)
+		case "modelscope":
+			return new ModelScopeHandler(options)
+		case "zen":
+			return new ZenHandler(options)
 		case "qwen-code":
 			return new QwenCodeHandler(options)
 		case "moonshot":

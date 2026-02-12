@@ -32,6 +32,8 @@ import {
 	basetenModels,
 	iFlowModels,
 	zCodeModels,
+	modelScopeModels,
+	zenModels,
 	qwenCodeModels,
 	litellmDefaultModelInfo,
 	lMStudioDefaultModelInfo,
@@ -285,6 +287,16 @@ function getSelectedModel({
 		case "zcode": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = zCodeModels[id as keyof typeof zCodeModels]
+			return { id, info }
+		}
+		case "modelscope": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = modelScopeModels[id as keyof typeof modelScopeModels]
+			return { id, info }
+		}
+		case "zen": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = zenModels[id as keyof typeof zenModels]
 			return { id, info }
 		}
 		case "openai-native": {

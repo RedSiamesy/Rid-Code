@@ -23,6 +23,8 @@ import {
 	minimaxModels,
 	basetenModels,
 	iFlowModels,
+	modelScopeModels,
+	zenModels,
 	zCodeModels,
 } from "@roo-code/types"
 
@@ -46,6 +48,8 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 	sambanova: sambaNovaModels,
 	zai: internationalZAiModels,
 	zcode: zCodeModels,
+	modelscope: modelScopeModels,
+	zen: zenModels,
 	fireworks: fireworksModels,
 	featherless: featherlessModels,
 	minimax: minimaxModels,
@@ -54,7 +58,7 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 
 export const PROVIDERS = [
 	{ value: "aicoder", label: "AiCoder" },
-	// { value: "openrouter", label: "OpenRouter" },
+	{ value: "openrouter", label: "OpenRouter" },
 	// { value: "deepinfra", label: "DeepInfra" },
 	// { value: "anthropic", label: "Anthropic" },
 	// { value: "claude-code", label: "Claude Code" },
@@ -83,6 +87,8 @@ export const PROVIDERS = [
 	// { value: "sambanova", label: "SambaNova" },
 	// { value: "zai", label: "Z.ai" },
 	{ value: "zcode", label: "ZCode" },
+	{ value: "modelscope", label: "ModelScope" },
+	{ value: "zen", label: "Zen" },
 	// { value: "fireworks", label: "Fireworks AI" },
 	// { value: "featherless", label: "Featherless AI" },
 	// { value: "io-intelligence", label: "IO Intelligence" },

@@ -102,6 +102,16 @@ function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): stri
 				return i18next.t("settings:validation.apiKey")
 			}
 			break
+		case "modelscope":
+			if (!apiConfiguration.modelScopeApiKey) {
+				return i18next.t("settings:validation.apiKey")
+			}
+			break
+		case "zen":
+			if (!apiConfiguration.zenApiKey) {
+				return i18next.t("settings:validation.apiKey")
+			}
+			break
 		case "mistral":
 			if (!apiConfiguration.mistralApiKey) {
 				return i18next.t("settings:validation.apiKey")

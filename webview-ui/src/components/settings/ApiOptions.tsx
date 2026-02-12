@@ -22,6 +22,8 @@ import {
 	deepSeekDefaultModelId,
 	iFlowDefaultModelId,
 	zCodeDefaultModelId,
+	modelScopeDefaultModelId,
+	zenDefaultModelId,
 	moonshotDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
@@ -103,6 +105,8 @@ import {
 	DeepInfra,
 	MiniMax,
 	IFlow,
+	ModelScope,
+	Zen,
 	ZCode,
 } from "./providers"
 
@@ -373,6 +377,8 @@ const ApiOptions = ({
 							: internationalZAiDefaultModelId,
 				},
 				zcode: { field: "apiModelId", default: zCodeDefaultModelId },
+				modelscope: { field: "apiModelId", default: modelScopeDefaultModelId },
+				zen: { field: "apiModelId", default: zenDefaultModelId },
 				fireworks: { field: "apiModelId", default: fireworksDefaultModelId },
 				featherless: { field: "apiModelId", default: featherlessDefaultModelId },
 				"io-intelligence": { field: "ioIntelligenceModelId", default: ioIntelligenceDefaultModelId },
@@ -739,6 +745,14 @@ const ApiOptions = ({
 
 			{selectedProvider === "zcode" && (
 				<ZCode apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
+			{selectedProvider === "modelscope" && (
+				<ModelScope apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
+			{selectedProvider === "zen" && (
+				<Zen apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "io-intelligence" && (
