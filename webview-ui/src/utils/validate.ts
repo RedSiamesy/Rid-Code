@@ -42,6 +42,11 @@ function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): stri
 				return i18next.t("settings:validation.apiKey")
 			}
 			break
+		case "aliyun":
+			if (!apiConfiguration.aliyunApiKey) {
+				return i18next.t("settings:validation.apiKey")
+			}
+			break
 		case "zcode":
 			if (!apiConfiguration.zcodeApiKey) {
 				return i18next.t("settings:validation.apiKey")
@@ -99,6 +104,11 @@ function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): stri
 			break
 		case "iflow":
 			if (!apiConfiguration.iflowApiKey) {
+				return i18next.t("settings:validation.apiKey")
+			}
+			break
+		case "infini":
+			if (!apiConfiguration.infiniApiKey) {
 				return i18next.t("settings:validation.apiKey")
 			}
 			break
@@ -168,6 +178,11 @@ function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): stri
 		case "qwen-code":
 			if (!apiConfiguration.qwenCodeOauthPath) {
 				return i18next.t("settings:validation.qwenCodeOauthPath")
+			}
+			break
+		case "qianfan":
+			if (!apiConfiguration.qianfanApiKey) {
+				return i18next.t("settings:validation.apiKey")
 			}
 			break
 		case "vercel-ai-gateway":

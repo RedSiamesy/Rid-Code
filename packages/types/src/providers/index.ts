@@ -1,5 +1,6 @@
 export * from "./anthropic.js"
 export * from "./aicoder.js"
+export * from "./aliyun.js"
 export * from "./baseten.js"
 export * from "./bedrock.js"
 export * from "./cerebras.js"
@@ -14,6 +15,7 @@ export * from "./groq.js"
 export * from "./huggingface.js"
 export * from "./io-intelligence.js"
 export * from "./iflow.js"
+export * from "./infini.js"
 export * from "./modelscope.js"
 export * from "./lite-llm.js"
 export * from "./lm-studio.js"
@@ -23,6 +25,7 @@ export * from "./ollama.js"
 export * from "./openai.js"
 export * from "./openrouter.js"
 export * from "./qwen-code.js"
+export * from "./qianfan.js"
 export * from "./requesty.js"
 export * from "./roo.js"
 export * from "./sambanova.js"
@@ -39,6 +42,7 @@ export * from "./minimax.js"
 
 import { anthropicDefaultModelId } from "./anthropic.js"
 import { aiCoderDefaultModelId } from "./aicoder.js"
+import { aliyunDefaultModelId } from "./aliyun.js"
 import { basetenDefaultModelId } from "./baseten.js"
 import { bedrockDefaultModelId } from "./bedrock.js"
 import { cerebrasDefaultModelId } from "./cerebras.js"
@@ -52,12 +56,14 @@ import { geminiDefaultModelId } from "./gemini.js"
 import { groqDefaultModelId } from "./groq.js"
 import { ioIntelligenceDefaultModelId } from "./io-intelligence.js"
 import { iFlowDefaultModelId } from "./iflow.js"
+import { infiniDefaultModelId } from "./infini.js"
 import { modelScopeDefaultModelId } from "./modelscope.js"
 import { litellmDefaultModelId } from "./lite-llm.js"
 import { mistralDefaultModelId } from "./mistral.js"
 import { moonshotDefaultModelId } from "./moonshot.js"
 import { openRouterDefaultModelId } from "./openrouter.js"
 import { qwenCodeDefaultModelId } from "./qwen-code.js"
+import { qianfanDefaultModelId } from "./qianfan.js"
 import { requestyDefaultModelId } from "./requesty.js"
 import { rooDefaultModelId } from "./roo.js"
 import { sambaNovaDefaultModelId } from "./sambanova.js"
@@ -87,10 +93,14 @@ export function getProviderDefaultModelId(
 	switch (provider) {
 		case "aicoder":
 			return aiCoderDefaultModelId
+		case "aliyun":
+			return aliyunDefaultModelId
 		case "openrouter":
 			return openRouterDefaultModelId
 		case "iflow":
 			return iFlowDefaultModelId
+		case "infini":
+			return infiniDefaultModelId
 		case "modelscope":
 			return modelScopeDefaultModelId
 		case "requesty":
@@ -159,6 +169,8 @@ export function getProviderDefaultModelId(
 			return rooDefaultModelId
 		case "qwen-code":
 			return qwenCodeDefaultModelId
+		case "qianfan":
+			return qianfanDefaultModelId
 		case "vercel-ai-gateway":
 			return vercelAiGatewayDefaultModelId
 		case "anthropic":

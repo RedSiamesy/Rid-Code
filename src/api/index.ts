@@ -8,6 +8,7 @@ import { ApiStream } from "./transform/stream"
 import {
 	AnthropicHandler,
 	AiCoderHandler,
+	AliyunHandler,
 	AwsBedrockHandler,
 	CerebrasHandler,
 	OpenRouterHandler,
@@ -31,10 +32,12 @@ import {
 	LiteLLMHandler,
 	ClaudeCodeHandler,
 	QwenCodeHandler,
+	QianfanHandler,
 	SambaNovaHandler,
 	IOIntelligenceHandler,
 	DoubaoHandler,
 	IFlowHandler,
+	InfiniHandler,
 	ModelScopeHandler,
 	ZenHandler,
 	ZAiHandler,
@@ -127,6 +130,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	switch (apiProvider) {
 		case "aicoder":
 			return new AiCoderHandler(options)
+		case "aliyun":
+			return new AliyunHandler(options)
 		case "anthropic":
 			return new AnthropicHandler(options)
 		case "claude-code":
@@ -155,6 +160,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new DoubaoHandler(options)
 		case "iflow":
 			return new IFlowHandler(options)
+		case "infini":
+			return new InfiniHandler(options)
 		case "zcode":
 			return new ZCodeHandler(options)
 		case "modelscope":
@@ -163,6 +170,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new ZenHandler(options)
 		case "qwen-code":
 			return new QwenCodeHandler(options)
+		case "qianfan":
+			return new QianfanHandler(options)
 		case "moonshot":
 			return new MoonshotHandler(options)
 		case "vscode-lm":

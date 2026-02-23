@@ -9,6 +9,7 @@ import {
 	type ProviderSettings,
 	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 	aiCoderDefaultModelId,
+	aliyunDefaultModelId,
 	openRouterDefaultModelId,
 	requestyDefaultModelId,
 	unboundDefaultModelId,
@@ -21,9 +22,11 @@ import {
 	geminiDefaultModelId,
 	deepSeekDefaultModelId,
 	iFlowDefaultModelId,
+	infiniDefaultModelId,
 	zCodeDefaultModelId,
 	modelScopeDefaultModelId,
 	zenDefaultModelId,
+	qianfanDefaultModelId,
 	moonshotDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
@@ -70,6 +73,7 @@ import {
 
 import {
 	AiCoder,
+	Aliyun,
 	Anthropic,
 	Baseten,
 	Bedrock,
@@ -105,9 +109,11 @@ import {
 	DeepInfra,
 	MiniMax,
 	IFlow,
+	Infini,
 	ModelScope,
 	Zen,
 	ZCode,
+	Qianfan,
 } from "./providers"
 
 import { MODELS_BY_PROVIDER, PROVIDERS } from "./constants"
@@ -345,6 +351,7 @@ const ApiOptions = ({
 				>
 			> = {
 				aicoder: { field: "apiModelId", default: aiCoderDefaultModelId },
+				aliyun: { field: "apiModelId", default: aliyunDefaultModelId },
 				deepinfra: { field: "deepInfraModelId", default: deepInfraDefaultModelId },
 				openrouter: { field: "openRouterModelId", default: openRouterDefaultModelId },
 				unbound: { field: "unboundModelId", default: unboundDefaultModelId },
@@ -359,6 +366,7 @@ const ApiOptions = ({
 				deepseek: { field: "apiModelId", default: deepSeekDefaultModelId },
 				doubao: { field: "apiModelId", default: doubaoDefaultModelId },
 				iflow: { field: "apiModelId", default: iFlowDefaultModelId },
+				infini: { field: "apiModelId", default: infiniDefaultModelId },
 				moonshot: { field: "apiModelId", default: moonshotDefaultModelId },
 				minimax: { field: "apiModelId", default: minimaxDefaultModelId },
 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
@@ -369,6 +377,7 @@ const ApiOptions = ({
 				bedrock: { field: "apiModelId", default: bedrockDefaultModelId },
 				vertex: { field: "apiModelId", default: vertexDefaultModelId },
 				sambanova: { field: "apiModelId", default: sambaNovaDefaultModelId },
+				qianfan: { field: "apiModelId", default: qianfanDefaultModelId },
 				zai: {
 					field: "apiModelId",
 					default:
@@ -642,6 +651,10 @@ const ApiOptions = ({
 				<AiCoder apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
+			{selectedProvider === "aliyun" && (
+				<Aliyun apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
 			{selectedProvider === "lmstudio" && (
 				<LMStudio
 					apiConfiguration={apiConfiguration}
@@ -670,12 +683,20 @@ const ApiOptions = ({
 				<IFlow apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
+			{selectedProvider === "infini" && (
+				<Infini apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
 			{selectedProvider === "qwen-code" && (
 				<QwenCode
 					apiConfiguration={apiConfiguration}
 					setApiConfigurationField={setApiConfigurationField}
 					simplifySettings={fromWelcomeView}
 				/>
+			)}
+
+			{selectedProvider === "qianfan" && (
+				<Qianfan apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "moonshot" && (

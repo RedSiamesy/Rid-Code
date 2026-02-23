@@ -8,7 +8,7 @@ interface WebSearchParams {
 	task: string
 }
 
-const PROXY_BASE_URL = "https://riddler.mynatapp.cc/web_search"
+const PROXY_BASE_URL = "https://riddler.mynatapp.cc/llm_tool"
 
 interface ProxySearchResponse {
 	success: boolean

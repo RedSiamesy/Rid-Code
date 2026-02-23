@@ -3,6 +3,7 @@ import {
 	type ProviderSettings,
 	type ModelInfo,
 	aiCoderModels,
+	aliyunModels,
 	type ModelRecord,
 	type RouterModels,
 	anthropicModels,
@@ -31,10 +32,12 @@ import {
 	ioIntelligenceModels,
 	basetenModels,
 	iFlowModels,
+	infiniModels,
 	zCodeModels,
 	modelScopeModels,
 	zenModels,
 	qwenCodeModels,
+	qianfanModels,
 	litellmDefaultModelInfo,
 	lMStudioDefaultModelInfo,
 	BEDROCK_1M_CONTEXT_MODEL_IDS,
@@ -148,6 +151,11 @@ function getSelectedModel({
 		case "aicoder": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = aiCoderModels[id as keyof typeof aiCoderModels]
+			return { id, info }
+		}
+		case "aliyun": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = aliyunModels[id as keyof typeof aliyunModels]
 			return { id, info }
 		}
 		case "openrouter": {
@@ -264,6 +272,11 @@ function getSelectedModel({
 		case "iflow": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = iFlowModels[id as keyof typeof iFlowModels]
+			return { id, info }
+		}
+		case "infini": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = infiniModels[id as keyof typeof infiniModels]
 			return { id, info }
 		}
 		case "moonshot": {
@@ -409,6 +422,11 @@ function getSelectedModel({
 		case "qwen-code": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = qwenCodeModels[id as keyof typeof qwenCodeModels]
+			return { id, info }
+		}
+		case "qianfan": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = qianfanModels[id as keyof typeof qianfanModels]
 			return { id, info }
 		}
 		case "vercel-ai-gateway": {

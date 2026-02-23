@@ -5,6 +5,7 @@ import { codebaseIndexProviderSchema } from "./codebase-index.js"
 import {
 	anthropicModels,
 	aiCoderModels,
+	aliyunModels,
 	basetenModels,
 	bedrockModels,
 	cerebrasModels,
@@ -17,7 +18,9 @@ import {
 	groqModels,
 	ioIntelligenceModels,
 	iFlowModels,
+	infiniModels,
 	modelScopeModels,
+	qianfanModels,
 	zenModels,
 	mistralModels,
 	moonshotModels,
@@ -124,6 +127,7 @@ export const providerNames = [
 	...customProviders,
 	...fauxProviders,
 	"aicoder",
+	"aliyun",
 	"anthropic",
 	"bedrock",
 	"baseten",
@@ -137,6 +141,7 @@ export const providerNames = [
 	"gemini-cli",
 	"groq",
 	"iflow",
+	"infini",
 	"modelscope",
 	"zen",
 	"mistral",
@@ -144,6 +149,7 @@ export const providerNames = [
 	"minimax",
 	"openai-native",
 	"qwen-code",
+	"qianfan",
 	"roo",
 	"sambanova",
 	"vertex",
@@ -337,6 +343,11 @@ const aiCoderSchema = apiModelIdProviderModelSchema.extend({
 	aiCoderBaseUrl: z.string().optional(),
 })
 
+const aliyunSchema = apiModelIdProviderModelSchema.extend({
+	aliyunApiKey: z.string().optional(),
+	aliyunBaseUrl: z.string().optional(),
+})
+
 const deepInfraSchema = apiModelIdProviderModelSchema.extend({
 	deepInfraBaseUrl: z.string().optional(),
 	deepInfraApiKey: z.string().optional(),
@@ -351,6 +362,11 @@ const doubaoSchema = apiModelIdProviderModelSchema.extend({
 const iflowSchema = apiModelIdProviderModelSchema.extend({
 	iflowApiKey: z.string().optional(),
 	iflowBaseUrl: z.string().optional(),
+})
+
+const infiniSchema = apiModelIdProviderModelSchema.extend({
+	infiniApiKey: z.string().optional(),
+	infiniBaseUrl: z.string().optional(),
 })
 
 const moonshotSchema = apiModelIdProviderModelSchema.extend({
@@ -441,6 +457,11 @@ const qwenCodeSchema = apiModelIdProviderModelSchema.extend({
 	qwenCodeOauthPath: z.string().optional(),
 })
 
+const qianfanSchema = apiModelIdProviderModelSchema.extend({
+	qianfanApiKey: z.string().optional(),
+	qianfanBaseUrl: z.string().optional(),
+})
+
 const rooSchema = apiModelIdProviderModelSchema.extend({
 	// Can use cloud authentication or provide an API key (cli).
 	rooApiKey: z.string().optional(),
@@ -461,6 +482,7 @@ const defaultSchema = z.object({
 
 export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProvider", [
 	aiCoderSchema.merge(z.object({ apiProvider: z.literal("aicoder") })),
+	aliyunSchema.merge(z.object({ apiProvider: z.literal("aliyun") })),
 	anthropicSchema.merge(z.object({ apiProvider: z.literal("anthropic") })),
 	claudeCodeSchema.merge(z.object({ apiProvider: z.literal("claude-code") })),
 	openRouterSchema.merge(z.object({ apiProvider: z.literal("openrouter") })),
@@ -478,6 +500,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	deepInfraSchema.merge(z.object({ apiProvider: z.literal("deepinfra") })),
 	doubaoSchema.merge(z.object({ apiProvider: z.literal("doubao") })),
 	iflowSchema.merge(z.object({ apiProvider: z.literal("iflow") })),
+	infiniSchema.merge(z.object({ apiProvider: z.literal("infini") })),
 	moonshotSchema.merge(z.object({ apiProvider: z.literal("moonshot") })),
 	minimaxSchema.merge(z.object({ apiProvider: z.literal("minimax") })),
 	unboundSchema.merge(z.object({ apiProvider: z.literal("unbound") })),
@@ -499,6 +522,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	featherlessSchema.merge(z.object({ apiProvider: z.literal("featherless") })),
 	ioIntelligenceSchema.merge(z.object({ apiProvider: z.literal("io-intelligence") })),
 	qwenCodeSchema.merge(z.object({ apiProvider: z.literal("qwen-code") })),
+	qianfanSchema.merge(z.object({ apiProvider: z.literal("qianfan") })),
 	rooSchema.merge(z.object({ apiProvider: z.literal("roo") })),
 	vercelAiGatewaySchema.merge(z.object({ apiProvider: z.literal("vercel-ai-gateway") })),
 	defaultSchema,
@@ -507,6 +531,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 export const providerSettingsSchema = z.object({
 	apiProvider: providerNamesSchema.optional(),
 	...aiCoderSchema.shape,
+	...aliyunSchema.shape,
 	...anthropicSchema.shape,
 	...claudeCodeSchema.shape,
 	...openRouterSchema.shape,
@@ -524,6 +549,7 @@ export const providerSettingsSchema = z.object({
 	...deepInfraSchema.shape,
 	...doubaoSchema.shape,
 	...iflowSchema.shape,
+	...infiniSchema.shape,
 	...moonshotSchema.shape,
 	...minimaxSchema.shape,
 	...unboundSchema.shape,
@@ -545,6 +571,7 @@ export const providerSettingsSchema = z.object({
 	...featherlessSchema.shape,
 	...ioIntelligenceSchema.shape,
 	...qwenCodeSchema.shape,
+	...qianfanSchema.shape,
 	...rooSchema.shape,
 	...vercelAiGatewaySchema.shape,
 	...codebaseIndexProviderSchema.shape,
@@ -600,6 +627,7 @@ export const isTypicalProvider = (key: unknown): key is TypicalProvider =>
 
 export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	aicoder: "apiModelId",
+	aliyun: "apiModelId",
 	anthropic: "apiModelId",
 	"claude-code": "apiModelId",
 	openrouter: "openRouterModelId",
@@ -615,9 +643,11 @@ export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	minimax: "apiModelId",
 	deepseek: "apiModelId",
 	iflow: "apiModelId",
+	infini: "apiModelId",
 	deepinfra: "deepInfraModelId",
 	doubao: "apiModelId",
 	"qwen-code": "apiModelId",
+	qianfan: "apiModelId",
 	unbound: "unboundModelId",
 	requesty: "requestyModelId",
 	xai: "apiModelId",
@@ -681,6 +711,11 @@ export const MODELS_BY_PROVIDER: Record<
 		label: "AiCoder",
 		models: Object.keys(aiCoderModels),
 	},
+	aliyun: {
+		id: "aliyun",
+		label: "Aliyun",
+		models: Object.keys(aliyunModels),
+	},
 	anthropic: {
 		id: "anthropic",
 		label: "Anthropic",
@@ -720,6 +755,7 @@ export const MODELS_BY_PROVIDER: Record<
 	},
 	groq: { id: "groq", label: "Groq", models: Object.keys(groqModels) },
 	iflow: { id: "iflow", label: "iFlow", models: Object.keys(iFlowModels) },
+	infini: { id: "infini", label: "Infini", models: Object.keys(infiniModels) },
 	"io-intelligence": {
 		id: "io-intelligence",
 		label: "IO Intelligence",
@@ -746,6 +782,7 @@ export const MODELS_BY_PROVIDER: Record<
 		models: Object.keys(openAiNativeModels),
 	},
 	"qwen-code": { id: "qwen-code", label: "Qwen Code", models: Object.keys(qwenCodeModels) },
+	qianfan: { id: "qianfan", label: "Qianfan", models: Object.keys(qianfanModels) },
 	roo: { id: "roo", label: "Roo Code Cloud", models: [] },
 	sambanova: {
 		id: "sambanova",

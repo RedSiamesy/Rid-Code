@@ -222,6 +222,7 @@ export const SECRET_STATE_KEYS = [
 	"awsSecretKey",
 	"awsSessionToken",
 	"aiCoderApiKey",
+	"aliyunApiKey",
 	"openAiApiKey",
 	"ollamaApiKey",
 	"geminiApiKey",
@@ -230,6 +231,7 @@ export const SECRET_STATE_KEYS = [
 	"deepSeekApiKey",
 	"doubaoApiKey",
 	"iflowApiKey",
+	"infiniApiKey",
 	"moonshotApiKey",
 	"mistralApiKey",
 	"minimaxApiKey",
@@ -256,6 +258,7 @@ export const SECRET_STATE_KEYS = [
 	"fireworksApiKey",
 	"featherlessApiKey",
 	"ioIntelligenceApiKey",
+	"qianfanApiKey",
 	"vercelAiGatewayApiKey",
 	"basetenApiKey",
 ] as const

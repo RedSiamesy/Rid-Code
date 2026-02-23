@@ -1,9 +1,46 @@
 import { execa, ExecaError } from "execa"
 import psTree from "ps-tree"
 import process from "process"
+import { execSync } from "child_process"
 
 import type { RooTerminal } from "./types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
+
+const WINDOWS_CODE_PAGE_TO_ENCODING: Record<string, string> = {
+	"65001": "utf-8",
+	"65000": "utf-7",
+	"936": "gbk",
+	"54936": "gb18030",
+	"950": "big5",
+	"932": "shift_jis",
+	"51932": "euc-jp",
+	"949": "euc-kr",
+	"51949": "euc-kr",
+	"866": "ibm866",
+	"874": "windows-874",
+	"1200": "utf-16le",
+	"1201": "utf-16be",
+	"1258": "windows-1258",
+	"1250": "windows-1250",
+	"1251": "windows-1251",
+	"1252": "windows-1252",
+	"1253": "windows-1253",
+	"1254": "windows-1254",
+	"1255": "windows-1255",
+	"1256": "windows-1256",
+	"1257": "windows-1257",
+	"20127": "us-ascii",
+	"28591": "iso-8859-1",
+	"28592": "iso-8859-2",
+	"28593": "iso-8859-3",
+	"28594": "iso-8859-4",
+	"28595": "iso-8859-5",
+	"28596": "iso-8859-6",
+	"28597": "iso-8859-7",
+	"28598": "iso-8859-8",
+	"28599": "iso-8859-9",
+	"28605": "iso-8859-15",
+}
 
 export class ExecaTerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<RooTerminal>
@@ -32,6 +69,39 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 		return terminal
 	}
 
+	private static getOutputEncoding(): string {
+		if (process.platform !== "win32") {
+			return "utf-8"
+		}
+
+		try {
+			const output = execSync("chcp", { encoding: "utf8", windowsHide: true })
+			// Supports localized chcp output, e.g. "Active code page: 936" or "活动代码页: 936".
+			const codePage = output.match(/(\d{3,5})/)?.[1]
+			const mappedEncoding =
+				(codePage && WINDOWS_CODE_PAGE_TO_ENCODING[codePage]) ||
+				(codePage && codePage.startsWith("125") ? `windows-${codePage}` : undefined) ||
+				undefined
+			return this.toSupportedEncoding(mappedEncoding)
+		} catch {
+			return "utf-8"
+		}
+	}
+
+	private static toSupportedEncoding(encoding: string | undefined): string {
+		if (!encoding) {
+			return "utf-8"
+		}
+
+		try {
+			// Validate that TextDecoder supports this label in current runtime.
+			new TextDecoder(encoding)
+			return encoding
+		} catch {
+			return "utf-8"
+		}
+	}
+
 	public override async run(command: string) {
 		this.command = command
 
@@ -42,6 +112,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 				shell: true,
 				cwd: this.terminal.getCurrentWorkingDirectory(),
 				all: true,
+				encoding: "buffer",
 				// Ignore stdin to ensure non-interactive mode and prevent hanging
 				stdin: "ignore",
 				env: {
@@ -75,10 +146,24 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 
 			const rawStream = this.subprocess.iterable({ from: "all", preserveNewlines: true })
 
-			// Wrap the stream to ensure all chunks are strings (execa can return Uint8Array)
+			// Decode streamed bytes using the current platform encoding.
+			const decoder = new TextDecoder(ExecaTerminalProcess.getOutputEncoding())
 			const stream = (async function* () {
 				for await (const chunk of rawStream) {
-					yield typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk)
+					if (typeof chunk === "string") {
+						yield chunk
+						continue
+					}
+
+					const decoded = decoder.decode(chunk, { stream: true })
+					if (decoded.length > 0) {
+						yield decoded
+					}
+				}
+
+				const flushed = decoder.decode()
+				if (flushed.length > 0) {
+					yield flushed
 				}
 			})()
 
