@@ -61,7 +61,6 @@ export class ProfileValidator {
 			case "mistral":
 			case "deepseek":
 			case "modelscope":
-			case "zen":
 			case "iflow":
 			case "xai":
 			case "groq":

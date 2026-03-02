@@ -254,7 +254,6 @@ export const SECRET_STATE_KEYS = [
 	"zaiApiKey",
 	"zcodeApiKey",
 	"modelScopeApiKey",
-	"zenApiKey",
 	"fireworksApiKey",
 	"featherlessApiKey",
 	"ioIntelligenceApiKey",

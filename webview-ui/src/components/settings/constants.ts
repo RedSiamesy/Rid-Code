@@ -27,7 +27,6 @@ import {
 	infiniModels,
 	modelScopeModels,
 	qianfanModels,
-	zenModels,
 	zCodeModels,
 } from "@roo-code/types"
 
@@ -55,7 +54,6 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 	zai: internationalZAiModels,
 	zcode: zCodeModels,
 	modelscope: modelScopeModels,
-	zen: zenModels,
 	fireworks: fireworksModels,
 	featherless: featherlessModels,
 	minimax: minimaxModels,
@@ -97,7 +95,6 @@ export const PROVIDERS = [
 	// { value: "zai", label: "Z.ai" },
 	{ value: "zcode", label: "ZCode" },
 	{ value: "modelscope", label: "ModelScope" },
-	{ value: "zen", label: "Zen" },
 	// { value: "fireworks", label: "Fireworks AI" },
 	// { value: "featherless", label: "Featherless AI" },
 	// { value: "io-intelligence", label: "IO Intelligence" },

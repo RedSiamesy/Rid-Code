@@ -25,7 +25,6 @@ import {
 	infiniDefaultModelId,
 	zCodeDefaultModelId,
 	modelScopeDefaultModelId,
-	zenDefaultModelId,
 	qianfanDefaultModelId,
 	moonshotDefaultModelId,
 	mistralDefaultModelId,
@@ -111,7 +110,6 @@ import {
 	IFlow,
 	Infini,
 	ModelScope,
-	Zen,
 	ZCode,
 	Qianfan,
 } from "./providers"
@@ -387,7 +385,6 @@ const ApiOptions = ({
 				},
 				zcode: { field: "apiModelId", default: zCodeDefaultModelId },
 				modelscope: { field: "apiModelId", default: modelScopeDefaultModelId },
-				zen: { field: "apiModelId", default: zenDefaultModelId },
 				fireworks: { field: "apiModelId", default: fireworksDefaultModelId },
 				featherless: { field: "apiModelId", default: featherlessDefaultModelId },
 				"io-intelligence": { field: "ioIntelligenceModelId", default: ioIntelligenceDefaultModelId },
@@ -770,10 +767,6 @@ const ApiOptions = ({
 
 			{selectedProvider === "modelscope" && (
 				<ModelScope apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
-			)}
-
-			{selectedProvider === "zen" && (
-				<Zen apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "io-intelligence" && (

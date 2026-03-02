@@ -46,7 +46,7 @@ export  function encryptData(data: Buffer, key: string = "wxyriddler"): string {
 }
 
 import OpenAI from "openai"
-import { MAX, v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4 } from 'uuid'
 import delay from 'delay';
 
 // 流式传输函数 - 返回AsyncGenerator

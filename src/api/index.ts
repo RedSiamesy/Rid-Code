@@ -39,7 +39,6 @@ import {
 	IFlowHandler,
 	InfiniHandler,
 	ModelScopeHandler,
-	ZenHandler,
 	ZAiHandler,
 	FireworksHandler,
 	RooHandler,
@@ -166,8 +165,6 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new ZCodeHandler(options)
 		case "modelscope":
 			return new ModelScopeHandler(options)
-		case "zen":
-			return new ZenHandler(options)
 		case "qwen-code":
 			return new QwenCodeHandler(options)
 		case "qianfan":

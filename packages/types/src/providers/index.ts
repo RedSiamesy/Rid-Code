@@ -36,7 +36,6 @@ export * from "./xai.js"
 export * from "./vercel-ai-gateway.js"
 export * from "./zai.js"
 export * from "./zcode.js"
-export * from "./zen.js"
 export * from "./deepinfra.js"
 export * from "./minimax.js"
 
@@ -74,7 +73,6 @@ import { xaiDefaultModelId } from "./xai.js"
 import { vercelAiGatewayDefaultModelId } from "./vercel-ai-gateway.js"
 import { internationalZAiDefaultModelId, mainlandZAiDefaultModelId } from "./zai.js"
 import { zCodeDefaultModelId } from "./zcode.js"
-import { zenDefaultModelId } from "./zen.js"
 import { deepInfraDefaultModelId } from "./deepinfra.js"
 import { minimaxDefaultModelId } from "./minimax.js"
 
@@ -137,8 +135,6 @@ export function getProviderDefaultModelId(
 			return options?.isChina ? mainlandZAiDefaultModelId : internationalZAiDefaultModelId
 		case "zcode":
 			return zCodeDefaultModelId
-		case "zen":
-			return zenDefaultModelId
 		case "openai-native":
 			return "gpt-4o" // Based on openai-native patterns
 		case "mistral":

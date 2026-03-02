@@ -35,7 +35,6 @@ import {
 	infiniModels,
 	zCodeModels,
 	modelScopeModels,
-	zenModels,
 	qwenCodeModels,
 	qianfanModels,
 	litellmDefaultModelInfo,
@@ -305,11 +304,6 @@ function getSelectedModel({
 		case "modelscope": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = modelScopeModels[id as keyof typeof modelScopeModels]
-			return { id, info }
-		}
-		case "zen": {
-			const id = apiConfiguration.apiModelId ?? defaultModelId
-			const info = zenModels[id as keyof typeof zenModels]
 			return { id, info }
 		}
 		case "openai-native": {

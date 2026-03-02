@@ -21,7 +21,6 @@ import {
 	infiniModels,
 	modelScopeModels,
 	qianfanModels,
-	zenModels,
 	mistralModels,
 	moonshotModels,
 	openAiNativeModels,
@@ -143,7 +142,6 @@ export const providerNames = [
 	"iflow",
 	"infini",
 	"modelscope",
-	"zen",
 	"mistral",
 	"moonshot",
 	"minimax",
@@ -333,11 +331,6 @@ const modelScopeSchema = apiModelIdProviderModelSchema.extend({
 	modelScopeBaseUrl: z.string().optional(),
 })
 
-const zenSchema = apiModelIdProviderModelSchema.extend({
-	zenApiKey: z.string().optional(),
-	zenBaseUrl: z.string().optional(),
-})
-
 const aiCoderSchema = apiModelIdProviderModelSchema.extend({
 	aiCoderApiKey: z.string().optional(),
 	aiCoderBaseUrl: z.string().optional(),
@@ -517,7 +510,6 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	zaiSchema.merge(z.object({ apiProvider: z.literal("zai") })),
 	zcodeSchema.merge(z.object({ apiProvider: z.literal("zcode") })),
 	modelScopeSchema.merge(z.object({ apiProvider: z.literal("modelscope") })),
-	zenSchema.merge(z.object({ apiProvider: z.literal("zen") })),
 	fireworksSchema.merge(z.object({ apiProvider: z.literal("fireworks") })),
 	featherlessSchema.merge(z.object({ apiProvider: z.literal("featherless") })),
 	ioIntelligenceSchema.merge(z.object({ apiProvider: z.literal("io-intelligence") })),
@@ -566,7 +558,6 @@ export const providerSettingsSchema = z.object({
 	...zaiSchema.shape,
 	...zcodeSchema.shape,
 	...modelScopeSchema.shape,
-	...zenSchema.shape,
 	...fireworksSchema.shape,
 	...featherlessSchema.shape,
 	...ioIntelligenceSchema.shape,
@@ -666,7 +657,6 @@ export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	"vercel-ai-gateway": "vercelAiGatewayModelId",
 	zcode: "apiModelId",
 	modelscope: "apiModelId",
-	zen: "apiModelId",
 }
 
 /**
@@ -803,7 +793,6 @@ export const MODELS_BY_PROVIDER: Record<
 	zai: { id: "zai", label: "Z.ai", models: Object.keys(internationalZAiModels) },
 	zcode: { id: "zcode", label: "ZCode", models: Object.keys(zCodeModels) },
 	modelscope: { id: "modelscope", label: "ModelScope", models: Object.keys(modelScopeModels) },
-	zen: { id: "zen", label: "Zen", models: Object.keys(zenModels) },
 	baseten: { id: "baseten", label: "Baseten", models: Object.keys(basetenModels) },
 
 	// Dynamic providers; models pulled from remote APIs.

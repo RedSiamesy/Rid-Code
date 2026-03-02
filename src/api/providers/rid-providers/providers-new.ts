@@ -117,7 +117,7 @@ export class RiddlerHandler extends BaseProvider implements SingleCompletionHand
                 temperature: this.options.modelTemperature ?? 0,
                 messages: convertedMessages,
                 stream: true as const,
-                ...(reasoning && reasoning),
+                ...(reasoning && { ...reasoning, enable_thinking: true }),
                 ...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
                 ...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
                 ...(metadata?.toolProtocol === "native" && {
