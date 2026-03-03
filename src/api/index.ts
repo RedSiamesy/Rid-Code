@@ -7,7 +7,6 @@ import { ApiStream } from "./transform/stream"
 
 import {
 	AnthropicHandler,
-	AiCoderHandler,
 	AliyunHandler,
 	AwsBedrockHandler,
 	CerebrasHandler,
@@ -127,8 +126,6 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {
-		case "aicoder":
-			return new AiCoderHandler(options)
 		case "aliyun":
 			return new AliyunHandler(options)
 		case "anthropic":

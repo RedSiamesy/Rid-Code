@@ -1,7 +1,6 @@
 import {
 	type ProviderName,
 	type ModelInfo,
-	aiCoderModels,
 	aliyunModels,
 	anthropicModels,
 	bedrockModels,
@@ -31,7 +30,6 @@ import {
 } from "@roo-code/types"
 
 export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, ModelInfo>>> = {
-	aicoder: aiCoderModels,
 	aliyun: aliyunModels,
 	anthropic: anthropicModels,
 	"claude-code": claudeCodeModels,
@@ -61,7 +59,6 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 }
 
 export const PROVIDERS = [
-	{ value: "aicoder", label: "AiCoder" },
 	{ value: "aliyun", label: "Aliyun" },
 	{ value: "openrouter", label: "OpenRouter" },
 	// { value: "deepinfra", label: "DeepInfra" },

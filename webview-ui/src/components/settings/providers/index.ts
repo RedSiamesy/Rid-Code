@@ -1,5 +1,4 @@
 export { Anthropic } from "./Anthropic"
-export { AiCoder } from "./AiCoder"
 export { Aliyun } from "./Aliyun"
 export { Bedrock } from "./Bedrock"
 export { Cerebras } from "./Cerebras"

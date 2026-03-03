@@ -4,7 +4,6 @@ import { modelInfoSchema, reasoningEffortSettingSchema, verbosityLevelsSchema, s
 import { codebaseIndexProviderSchema } from "./codebase-index.js"
 import {
 	anthropicModels,
-	aiCoderModels,
 	aliyunModels,
 	basetenModels,
 	bedrockModels,
@@ -125,7 +124,6 @@ export const providerNames = [
 	...internalProviders,
 	...customProviders,
 	...fauxProviders,
-	"aicoder",
 	"aliyun",
 	"anthropic",
 	"bedrock",
@@ -331,11 +329,6 @@ const modelScopeSchema = apiModelIdProviderModelSchema.extend({
 	modelScopeBaseUrl: z.string().optional(),
 })
 
-const aiCoderSchema = apiModelIdProviderModelSchema.extend({
-	aiCoderApiKey: z.string().optional(),
-	aiCoderBaseUrl: z.string().optional(),
-})
-
 const aliyunSchema = apiModelIdProviderModelSchema.extend({
 	aliyunApiKey: z.string().optional(),
 	aliyunBaseUrl: z.string().optional(),
@@ -474,7 +467,6 @@ const defaultSchema = z.object({
 })
 
 export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProvider", [
-	aiCoderSchema.merge(z.object({ apiProvider: z.literal("aicoder") })),
 	aliyunSchema.merge(z.object({ apiProvider: z.literal("aliyun") })),
 	anthropicSchema.merge(z.object({ apiProvider: z.literal("anthropic") })),
 	claudeCodeSchema.merge(z.object({ apiProvider: z.literal("claude-code") })),
@@ -522,7 +514,6 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 
 export const providerSettingsSchema = z.object({
 	apiProvider: providerNamesSchema.optional(),
-	...aiCoderSchema.shape,
 	...aliyunSchema.shape,
 	...anthropicSchema.shape,
 	...claudeCodeSchema.shape,
@@ -617,7 +608,6 @@ export const isTypicalProvider = (key: unknown): key is TypicalProvider =>
 	isProviderName(key) && !isInternalProvider(key) && !isCustomProvider(key) && !isFauxProvider(key)
 
 export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
-	aicoder: "apiModelId",
 	aliyun: "apiModelId",
 	anthropic: "apiModelId",
 	"claude-code": "apiModelId",
@@ -696,11 +686,6 @@ export const MODELS_BY_PROVIDER: Record<
 	Exclude<ProviderName, "fake-ai" | "gemini-cli" | "openai">,
 	{ id: ProviderName; label: string; models: string[] }
 > = {
-	aicoder: {
-		id: "aicoder",
-		label: "AiCoder",
-		models: Object.keys(aiCoderModels),
-	},
 	aliyun: {
 		id: "aliyun",
 		label: "Aliyun",

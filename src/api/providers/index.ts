@@ -1,6 +1,5 @@
 export { AnthropicVertexHandler } from "./anthropic-vertex"
 export { AnthropicHandler } from "./anthropic"
-export { AiCoderHandler } from "./aicoder"
 export { AliyunHandler } from "./aliyun"
 export { AwsBedrockHandler } from "./bedrock"
 export { CerebrasHandler } from "./cerebras"

@@ -221,7 +221,6 @@ export const SECRET_STATE_KEYS = [
 	"awsApiKey",
 	"awsSecretKey",
 	"awsSessionToken",
-	"aiCoderApiKey",
 	"aliyunApiKey",
 	"openAiApiKey",
 	"ollamaApiKey",

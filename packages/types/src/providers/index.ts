@@ -1,5 +1,4 @@
 export * from "./anthropic.js"
-export * from "./aicoder.js"
 export * from "./aliyun.js"
 export * from "./baseten.js"
 export * from "./bedrock.js"
@@ -40,7 +39,6 @@ export * from "./deepinfra.js"
 export * from "./minimax.js"
 
 import { anthropicDefaultModelId } from "./anthropic.js"
-import { aiCoderDefaultModelId } from "./aicoder.js"
 import { aliyunDefaultModelId } from "./aliyun.js"
 import { basetenDefaultModelId } from "./baseten.js"
 import { bedrockDefaultModelId } from "./bedrock.js"
@@ -89,8 +87,6 @@ export function getProviderDefaultModelId(
 	options: { isChina?: boolean } = { isChina: false },
 ): string {
 	switch (provider) {
-		case "aicoder":
-			return aiCoderDefaultModelId
 		case "aliyun":
 			return aliyunDefaultModelId
 		case "openrouter":

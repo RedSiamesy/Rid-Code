@@ -37,11 +37,6 @@ export function validateApiConfiguration(
 
 function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): string | undefined {
 	switch (apiConfiguration.apiProvider) {
-		case "aicoder":
-			if (!apiConfiguration.aiCoderApiKey) {
-				return i18next.t("settings:validation.apiKey")
-			}
-			break
 		case "aliyun":
 			if (!apiConfiguration.aliyunApiKey) {
 				return i18next.t("settings:validation.apiKey")

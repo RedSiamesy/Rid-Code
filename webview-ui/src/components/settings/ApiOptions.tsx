@@ -8,7 +8,6 @@ import {
 	type ProviderName,
 	type ProviderSettings,
 	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
-	aiCoderDefaultModelId,
 	aliyunDefaultModelId,
 	openRouterDefaultModelId,
 	requestyDefaultModelId,
@@ -71,7 +70,6 @@ import {
 } from "@src/components/ui"
 
 import {
-	AiCoder,
 	Aliyun,
 	Anthropic,
 	Baseten,
@@ -348,7 +346,6 @@ const ApiOptions = ({
 					}
 				>
 			> = {
-				aicoder: { field: "apiModelId", default: aiCoderDefaultModelId },
 				aliyun: { field: "apiModelId", default: aliyunDefaultModelId },
 				deepinfra: { field: "deepInfraModelId", default: deepInfraDefaultModelId },
 				openrouter: { field: "openRouterModelId", default: openRouterDefaultModelId },
@@ -642,10 +639,6 @@ const ApiOptions = ({
 					modelValidationError={modelValidationError}
 					simplifySettings={fromWelcomeView}
 				/>
-			)}
-
-			{selectedProvider === "aicoder" && (
-				<AiCoder apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "aliyun" && (

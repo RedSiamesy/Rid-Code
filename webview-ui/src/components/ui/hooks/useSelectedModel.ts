@@ -2,7 +2,6 @@ import {
 	type ProviderName,
 	type ProviderSettings,
 	type ModelInfo,
-	aiCoderModels,
 	aliyunModels,
 	type ModelRecord,
 	type RouterModels,
@@ -147,11 +146,6 @@ function getSelectedModel({
 	// this gives a better UX than showing the default model
 	const defaultModelId = getProviderDefaultModelId(provider)
 	switch (provider) {
-		case "aicoder": {
-			const id = apiConfiguration.apiModelId ?? defaultModelId
-			const info = aiCoderModels[id as keyof typeof aiCoderModels]
-			return { id, info }
-		}
 		case "aliyun": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = aliyunModels[id as keyof typeof aliyunModels]
